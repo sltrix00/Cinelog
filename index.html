@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cinelog — Movie Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,400&family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #07070e;
+      --surface:  #0c0c18;
+      --card:     #111122;
+      --border:   #1e1e32;
+      --border2:  #2a2a44;
+      --gold:     #c8a84a;
+      --gold-l:   #e8c870;
+      --text:     #e2ddd4;
+      --muted:    #8880a0;
+      --dim:      #5a5570;
+      --danger:   #e05555;
+      --success:  #50c878;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+    /* ---- AUTH ---- */
+    #auth-screen{
+      display:flex;align-items:center;justify-content:center;min-height:100vh;
+      background:radial-gradient(ellipse 80% 50% at 50% 0%,#18102e 0%,transparent 70%),var(--bg);
+    }
+    .auth-box{width:100%;max-width:400px;padding:48px 40px;background:var(--card);border:1px solid var(--border);}
+    .auth-logo{font-family:'Playfair Display',serif;font-size:2.2rem;color:var(--gold);text-align:center;letter-spacing:.04em;}
+    .auth-tagline{text-align:center;color:var(--dim);font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin:6px 0 36px;}
+    .auth-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:28px;}
+    .auth-tab{flex:1;padding:11px;text-align:center;cursor:pointer;font-size:.875rem;color:var(--muted);border:none;border-bottom:2px solid transparent;background:none;font-family:'Outfit',sans-serif;transition:all .2s;}
+    .auth-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+    /* ---- FORMS ---- */
+    .form-group{margin-bottom:18px;}
+    .form-group label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:7px;}
+    .form-group input,.form-group select,.form-group textarea{
+      width:100%;padding:11px 14px;background:var(--surface);border:1px solid var(--border);
+      color:var(--text);font-family:'Outfit',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s;
+    }
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--gold);}
+    .form-group select option{background:var(--card);}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+
+    .btn{padding:11px 22px;font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;border:none;}
+    .btn-primary{background:var(--gold);color:#07070e;letter-spacing:.06em;text-transform:uppercase;width:100%;}
+    .btn-primary:hover{background:var(--gold-l);}
+    .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+    .btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+    .btn-sm{padding:6px 13px;font-size:.78rem;width:auto;}
+    .btn-danger{background:transparent;border:1px solid var(--danger);color:var(--danger);}
+    .btn-icon{background:none;border:none;cursor:pointer;color:var(--dim);padding:4px 7px;font-size:.8rem;transition:color .15s;}
+    .btn-icon:hover{color:var(--danger);}
+
+    .msg{padding:10px 14px;font-size:.82rem;margin-bottom:14px;}
+    .msg-error{background:rgba(224,85,85,.1);border:1px solid rgba(224,85,85,.3);color:#ff8888;}
+    .msg-success{background:rgba(80,200,120,.1);border:1px solid rgba(80,200,120,.3);color:#80e0a0;}
+
+    /* ---- APP LAYOUT ---- */
+    #app-screen{display:none;min-height:100vh;}
+    .app-layout{display:flex;min-height:100vh;}
+
+    /* SIDEBAR */
+    #sidebar{
+      width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+      display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;
+    }
+    .sidebar-logo{padding:26px 22px 18px;font-family:'Playfair Display',serif;font-size:1.5rem;color:var(--gold);border-bottom:1px solid var(--border);}
+    .sidebar-logo span{font-size:.62rem;display:block;color:var(--dim);font-family:'Outfit',sans-serif;text-transform:uppercase;letter-spacing:.18em;margin-top:3px;}
+    .sidebar-nav{flex:1;padding:14px 0;overflow-y:auto;}
+    .nav-section{padding:8px 22px 3px;font-size:.62rem;text-transform:uppercase;letter-spacing:.16em;color:var(--dim);}
+    .nav-item{
+      display:flex;align-items:center;gap:11px;padding:9px 22px;cursor:pointer;
+      color:var(--muted);font-size:.875rem;transition:all .15s;border-left:2px solid transparent;
+    }
+    .nav-item:hover{color:var(--text);background:rgba(200,168,74,.05);}
+    .nav-item.active{color:var(--gold);border-left-color:var(--gold);background:rgba(200,168,74,.08);}
+    .nav-icon{font-size:.95rem;width:18px;text-align:center;flex-shrink:0;}
+    .sidebar-footer{padding:14px 22px;border-top:1px solid var(--border);}
+    .sidebar-email{font-size:.75rem;color:var(--dim);margin-bottom:9px;word-break:break-all;}
+
+    /* MAIN */
+    #main{margin-left:220px;flex:1;min-height:100vh;}
+    .view{display:none;padding:38px 40px;max-width:1280px;animation:fadeUp .2s ease;}
+    .view.active{display:block;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+    .page-header{margin-bottom:36px;}
+    .page-title{font-family:'Playfair Display',serif;font-size:1.9rem;color:var(--text);margin-bottom:3px;}
+    .page-subtitle{color:var(--muted);font-size:.875rem;}
+
+    /* STAT CARDS */
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-bottom:36px;}
+    .stat-card{background:var(--card);border:1px solid var(--border);padding:22px;}
+    .stat-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);margin-bottom:7px;}
+    .stat-value{font-family:'DM Mono',monospace;font-size:2rem;color:var(--gold);line-height:1;}
+    .stat-sub{font-size:.72rem;color:var(--dim);margin-top:4px;}
+
+    /* CHARTS */
+    .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:22px;}
+    .chart-full{grid-column:1 / -1;}
+    .chart-card{background:var(--card);border:1px solid var(--border);padding:24px;}
+    .chart-title{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);margin-bottom:18px;}
+    .chart-wrap{position:relative;height:270px;}
+    .chart-wrap-tall{position:relative;height:320px;}
+
+    /* TABLE */
+    .movies-controls{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;}
+    .ctrl-input{
+      padding:9px 14px;background:var(--card);border:1px solid var(--border);color:var(--text);
+      font-family:'Outfit',sans-serif;font-size:.875rem;outline:none;
+    }
+    .ctrl-input:focus{border-color:var(--gold);}
+    .ctrl-search{width:240px;}
+    .ctrl-select{min-width:130px;cursor:pointer;}
+    .movies-table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    th{text-align:left;padding:9px 14px;font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none;}
+    td{padding:11px 14px;border-bottom:1px solid rgba(30,30,50,.6);font-size:.875rem;}
+    tr:hover td{background:rgba(17,17,34,.8);}
+    .badge{font-family:'DM Mono',monospace;font-size:.75rem;padding:2px 8px;border-radius:2px;white-space:nowrap;}
+    .badge-high{background:rgba(80,200,120,.15);color:#80e0a0;border:1px solid rgba(80,200,120,.25);}
+    .badge-mid{background:rgba(200,168,74,.15);color:var(--gold-l);border:1px solid rgba(200,168,74,.25);}
+    .badge-low{background:rgba(224,85,85,.1);color:#ff8888;border:1px solid rgba(224,85,85,.2);}
+    .badge-rw{font-size:.68rem;padding:1px 6px;background:rgba(200,168,74,.08);color:var(--gold);border:1px solid rgba(200,168,74,.2);}
+    .export-row{display:flex;gap:10px;margin-bottom:14px;align-items:center;justify-content:flex-end;}
+
+    /* TOP MOVIES */
+    .top-controls{display:flex;align-items:center;gap:14px;margin-bottom:28px;background:var(--card);padding:18px 22px;border:1px solid var(--border);flex-wrap:wrap;}
+    .rating-slider{-webkit-appearance:none;width:200px;height:3px;background:var(--border);outline:none;cursor:pointer;}
+    .rating-slider::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--gold);cursor:pointer;}
+    .top-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+    .movie-card{background:var(--card);border:1px solid var(--border);padding:18px;transition:border-color .2s;}
+    .movie-card:hover{border-color:var(--border2);}
+    .movie-card-title{font-family:'Playfair Display',serif;font-size:1rem;margin-bottom:4px;line-height:1.3;}
+    .movie-card-meta{display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap;}
+    .movie-card-date{font-size:.78rem;color:var(--muted);}
+
+    /* IMPORT */
+    .drop-zone{
+      border:2px dashed var(--border);padding:52px;text-align:center;cursor:pointer;transition:all .2s;
+      margin-bottom:20px;
+    }
+    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--gold);background:rgba(200,168,74,.03);}
+    .drop-zone-icon{font-size:2.2rem;margin-bottom:10px;opacity:.6;}
+    .drop-zone-text{color:var(--muted);font-size:.875rem;line-height:1.7;}
+    .drop-zone-text strong{color:var(--gold);}
+    .format-hint{background:var(--card);border:1px solid var(--border);padding:18px 22px;margin-bottom:20px;font-size:.78rem;}
+    .format-hint code{font-family:'DM Mono',monospace;color:var(--gold-l);line-height:2;}
+    .import-preview{background:var(--card);border:1px solid var(--border);padding:18px 22px;margin-bottom:18px;}
+    .preview-list{max-height:220px;overflow-y:auto;margin-top:10px;}
+    .preview-item{padding:5px 0;border-bottom:1px solid rgba(30,30,50,.5);display:flex;justify-content:space-between;font-size:.8rem;gap:12px;}
+    .preview-item span:first-child{color:var(--text);}
+    .preview-item span:last-child{color:var(--dim);white-space:nowrap;}
+
+    /* ADD FORM */
+    .add-form-wrap{background:var(--card);border:1px solid var(--border);padding:28px;max-width:600px;}
+    .checkbox-row{display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--muted);cursor:pointer;}
+    .checkbox-row input{width:auto;cursor:pointer;}
+
+    /* UTILS */
+    .hidden{display:none!important;}
+    .text-gold{color:var(--gold);}
+    .text-muted{color:var(--muted);}
+    .text-dim{color:var(--dim);}
+    .mt-8{margin-top:8px;}
+    .mt-16{margin-top:16px;}
+    .mt-24{margin-top:24px;}
+    .empty-state{text-align:center;padding:72px 24px;color:var(--dim);font-size:.9rem;}
+    .empty-state span{color:var(--gold);cursor:pointer;}
+
+    ::-webkit-scrollbar{width:5px;height:5px;}
+    ::-webkit-scrollbar-track{background:var(--bg);}
+    ::-webkit-scrollbar-thumb{background:var(--border2);}
+
+    @media(max-width:900px){
+      #sidebar{width:190px;}
+      #main{margin-left:190px;}
+      .view{padding:24px 18px;}
+      .chart-grid{grid-template-columns:1fr;}
+      .chart-full{grid-column:1;}
+      .form-row{grid-template-columns:1fr;}
+    }
+    @media(max-width:640px){
+      #sidebar{display:none;}
+      #main{margin-left:0;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════ AUTH SCREEN ═══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">Cinelog</div>
+    <div class="auth-tagline">Your personal film journal</div>
+    <div id="auth-msg"></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login',this)">Sign In</button>
+      <button class="auth-tab" onclick="switchTab('register',this)">Register</button>
+    </div>
+
+    <div id="login-form">
+      <div class="form-group"><label>Email</label><input type="email" id="li-email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <div id="register-form" class="hidden">
+      <div class="form-group"><label>Email</label><input type="email" id="rg-email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="rg-pass" placeholder="Min 6 characters" autocomplete="new-password"></div>
+      <div class="form-group"><label>Confirm Password</label><input type="password" id="rg-pass2" placeholder="••••••••" autocomplete="new-password"></div>
+      <button class="btn btn-primary" onclick="doRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP SCREEN ═══════════════════ -->
+<div id="app-screen">
+  <div class="app-layout">
+
+    <nav id="sidebar">
+      <div class="sidebar-logo">Cinelog<span>Film Journal</span></div>
+      <div class="sidebar-nav">
+        <div class="nav-section">Overview</div>
+        <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">◈</span>Dashboard</div>
+        <div class="nav-item" data-view="movies" onclick="showView('movies')"><span class="nav-icon">▤</span>All Movies</div>
+        <div class="nav-section" style="margin-top:10px">Manage</div>
+        <div class="nav-item" data-view="add" onclick="showView('add')"><span class="nav-icon">＋</span>Add Movie</div>
+        <div class="nav-item" data-view="import" onclick="showView('import')"><span class="nav-icon">↑</span>Import File</div>
+        <div class="nav-section" style="margin-top:10px">Insights</div>
+        <div class="nav-item" data-view="stats" onclick="showView('stats')"><span class="nav-icon">◎</span>Statistics</div>
+        <div class="nav-item" data-view="top" onclick="showView('top')"><span class="nav-icon">★</span>Top Picks</div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="sidebar-email" id="sb-email"></div>
+        <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+      </div>
+    </nav>
+
+    <main id="main">
+
+      <!-- DASHBOARD -->
+      <div class="view active" id="view-dashboard">
+        <div class="page-header">
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle" id="dash-sub">Welcome back</div>
+        </div>
+        <div class="stat-grid" id="dash-stats"></div>
+        <div id="dash-recent"></div>
+      </div>
+
+      <!-- ALL MOVIES -->
+      <div class="view" id="view-movies">
+        <div class="page-header">
+          <div class="page-title">All Movies</div>
+          <div class="page-subtitle" id="mv-sub"></div>
+        </div>
+        <div class="movies-controls">
+          <input class="ctrl-input ctrl-search" type="text" id="mv-search" placeholder="🔍  Search titles…" oninput="renderTable()">
+          <select class="ctrl-input ctrl-select" id="mv-year" onchange="renderTable()">
+            <option value="">All Years</option>
+          </select>
+          <select class="ctrl-input ctrl-select" id="mv-sort" onchange="renderTable()">
+            <option value="date-d">Date: Newest</option>
+            <option value="date-a">Date: Oldest</option>
+            <option value="rate-d">Rating: High</option>
+            <option value="rate-a">Rating: Low</option>
+            <option value="az">Title: A–Z</option>
+          </select>
+          <label class="checkbox-row"><input type="checkbox" id="mv-rw" onchange="renderTable()">Rewatches only</label>
+          <button class="btn btn-outline btn-sm" onclick="exportJSON()" style="margin-left:auto">⬇ Export JSON</button>
+        </div>
+        <div class="movies-table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Title</th><th>Year</th><th>Watched</th><th>Rating</th><th>Notes</th><th></th>
+            </tr></thead>
+            <tbody id="mv-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ADD MOVIE -->
+      <div class="view" id="view-add">
+        <div class="page-header">
+          <div class="page-title">Add Movie</div>
+          <div class="page-subtitle">Log a film you've watched</div>
+        </div>
+        <div class="add-form-wrap">
+          <div id="add-msg"></div>
+          <div class="form-row">
+            <div class="form-group"><label>Movie Title *</label><input type="text" id="a-title" placeholder="e.g. Inception"></div>
+            <div class="form-group"><label>Movie Year *</label><input type="number" id="a-myear" placeholder="e.g. 2010" min="1888" max="2030"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Date Watched</label><input type="date" id="a-date"></div>
+            <div class="form-group"><label>Your Rating (0–10)</label><input type="number" id="a-rating" placeholder="e.g. 8.5" min="0" max="10" step="0.1"></div>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-row"><input type="checkbox" id="a-rw">This is a rewatch</label>
+          </div>
+          <div class="form-group"><label>Notes (optional)</label><textarea id="a-notes" rows="2" placeholder="Thoughts, emoji…" style="resize:vertical"></textarea></div>
+          <button class="btn btn-primary" onclick="doAddMovie()">Add to Journal</button>
+        </div>
+      </div>
+
+      <!-- IMPORT -->
+      <div class="view" id="view-import">
+        <div class="page-header">
+          <div class="page-title">Import</div>
+          <div class="page-subtitle">Upload .txt (Russian format), .json, or .csv</div>
+        </div>
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-inp').click()">
+          <div class="drop-zone-icon">📂</div>
+          <div class="drop-zone-text">
+            <strong>Click to choose file</strong> or drag &amp; drop<br>
+            .txt · .json · .csv &nbsp;— multiple files OK
+          </div>
+          <input type="file" id="file-inp" class="hidden" accept=".txt,.json,.csv" multiple onchange="handleFiles(event)">
+        </div>
+        <div class="format-hint">
+          <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:8px;">Expected .txt format</div>
+          <code>
+            Просмотренные фильмы 2024<br>
+            1. Movie Name (2009) - 23:30 5 января (8/10)<br>
+            2. Another Film (2018) - 03:00 3 января (7.5/10) 🔁 Пересмотрел.
+          </code>
+        </div>
+        <div id="import-preview"></div>
+        <div id="import-msg"></div>
+      </div>
+
+      <!-- STATISTICS -->
+      <div class="view" id="view-stats">
+        <div class="page-header">
+          <div class="page-title">Statistics</div>
+          <div class="page-subtitle">Visual analysis of your watching habits</div>
+        </div>
+        <div id="stats-content"></div>
+      </div>
+
+      <!-- TOP PICKS -->
+      <div class="view" id="view-top">
+        <div class="page-header">
+          <div class="page-title">Top Picks</div>
+          <div class="page-subtitle">Your highest-rated films</div>
+        </div>
+        <div class="top-controls">
+          <span style="font-size:.82rem;color:var(--muted)">Min. Rating:</span>
+          <input type="range" class="rating-slider" id="top-thresh" min="5" max="10" step="0.5" value="8" oninput="renderTop()">
+          <span style="font-family:'DM Mono',monospace;font-size:1.1rem;color:var(--gold)" id="top-thresh-lbl">8+</span>
+          <span style="font-size:.8rem;color:var(--dim)" id="top-count"></span>
+          <select class="ctrl-input ctrl-select" id="top-sort" onchange="renderTop()" style="margin-left:auto;width:auto">
+            <option value="rate">By Rating</option>
+            <option value="date">By Date</option>
+            <option value="az">A–Z</option>
+          </select>
+        </div>
+        <div class="top-grid" id="top-grid"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let CU = null;       // current user
+let MOVIES = [];     // current user's movies
+const CH = {};       // chart instances
+
+// ════════════════════════════════════════════════════════
+// STORAGE
+// ════════════════════════════════════════════════════════
+const LS = {
+  getUsers:  ()     => JSON.parse(localStorage.getItem('cl_users')  || '[]'),
+  setUsers:  (v)    => localStorage.setItem('cl_users',  JSON.stringify(v)),
+  getMovies: (uid)  => JSON.parse(localStorage.getItem(`cl_mv_${uid}`) || '[]'),
+  setMovies: (uid,v)=> localStorage.setItem(`cl_mv_${uid}`, JSON.stringify(v)),
+  getSess:   ()     => JSON.parse(sessionStorage.getItem('cl_sess')  || 'null'),
+  setSess:   (v)    => sessionStorage.setItem('cl_sess',  JSON.stringify(v)),
+  clearSess: ()     => sessionStorage.removeItem('cl_sess'),
+};
+
+// ════════════════════════════════════════════════════════
+// CRYPTO
+// ════════════════════════════════════════════════════════
+async function sha256(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════════════════
+function switchTab(tab, el) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+  document.getElementById('auth-msg').innerHTML = '';
+}
+
+async function doLogin() {
+  const email = v('li-email').trim().toLowerCase();
+  const pass  = v('li-pass');
+  if (!email || !pass) { authMsg('Please fill in all fields.', 'error'); return; }
+  const hash = await sha256(pass);
+  const user = LS.getUsers().find(u => u.email === email && u.ph === hash);
+  if (!user) { authMsg('Invalid email or password.', 'error'); return; }
+  LS.setSess(user);
+  bootApp(user);
+}
+
+async function doRegister() {
+  const email = v('rg-email').trim().toLowerCase();
+  const pass  = v('rg-pass');
+  const pass2 = v('rg-pass2');
+  if (!email || !pass) { authMsg('Please fill in all fields.', 'error'); return; }
+  if (pass.length < 6) { authMsg('Password must be at least 6 characters.', 'error'); return; }
+  if (pass !== pass2)  { authMsg('Passwords do not match.', 'error'); return; }
+  const users = LS.getUsers();
+  if (users.find(u => u.email === email)) { authMsg('Email already registered.', 'error'); return; }
+  const nu = { id: uid(), email, ph: await sha256(pass), createdAt: Date.now() };
+  LS.setUsers([...users, nu]);
+  LS.setSess(nu);
+  bootApp(nu);
+}
+
+function doLogout() {
+  LS.clearSess();
+  CU = null; MOVIES = [];
+  destroyCharts();
+  el('auth-screen').style.display = 'flex';
+  el('app-screen').style.display  = 'none';
+  el('li-email').value = ''; el('li-pass').value = '';
+}
+
+function authMsg(text, type) {
+  el('auth-msg').innerHTML = `<div class="msg msg-${type}">${esc(text)}</div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// APP BOOT
+// ════════════════════════════════════════════════════════
+function bootApp(user) {
+  CU = user; MOVIES = LS.getMovies(user.id);
+  el('auth-screen').style.display = 'none';
+  el('app-screen').style.display  = 'block';
+  el('sb-email').textContent = user.email;
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  el('dash-sub').textContent = `${g} — your film journal`;
+  el('a-date').value = today();
+  showView('dashboard');
+}
+
+// ════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const ve = el(`view-${name}`), ne = document.querySelector(`.nav-item[data-view="${name}"]`);
+  if (ve) ve.classList.add('active');
+  if (ne) ne.classList.add('active');
+  if (name === 'dashboard') renderDash();
+  if (name === 'movies')   { fillYearFilter(); renderTable(); }
+  if (name === 'stats')    renderStats();
+  if (name === 'top')      renderTop();
+}
+
+// ════════════════════════════════════════════════════════
+// MOVIE CRUD
+// ════════════════════════════════════════════════════════
+function doAddMovie() {
+  const title  = v('a-title').trim();
+  const myear  = parseInt(v('a-myear'));
+  const date   = v('a-date');
+  const rating = v('a-rating');
+  const rw     = el('a-rw').checked;
+  const notes  = v('a-notes').trim();
+  const msgEl  = el('add-msg');
+  if (!title || !myear) { msgEl.innerHTML = '<div class="msg msg-error">Title and year are required.</div>'; return; }
+  const m = {
+    id: uid(), title, movieYear: myear,
+    watchedAt: date ? new Date(date).getTime() : null,
+    rating: rating !== '' ? parseFloat(rating) : null,
+    rewatched: rw, notes
+  };
+  MOVIES.push(m);
+  LS.setMovies(CU.id, MOVIES);
+  ['a-title','a-myear','a-rating','a-notes'].forEach(id => el(id).value = '');
+  el('a-rw').checked = false;
+  el('a-date').value = today();
+  msgEl.innerHTML = '<div class="msg msg-success">✓ Added to your journal!</div>';
+  setTimeout(() => msgEl.innerHTML = '', 3000);
+}
+
+function delMovie(id) {
+  if (!confirm('Remove this film from your journal?')) return;
+  MOVIES = MOVIES.filter(m => m.id !== id);
+  LS.setMovies(CU.id, MOVIES);
+  renderTable();
+}
+
+// ════════════════════════════════════════════════════════
+// TXT PARSER — handles Russian format
+// ════════════════════════════════════════════════════════
+const MONTHS = {
+  'января':0,'февраля':1,'марта':2,'апреля':3,'мая':4,'июня':5,
+  'июля':6,'августа':7,'сентября':8,'октября':9,'ноября':10,'декабря':11
+};
+
+function parseTxt(content) {
+  const lines = content.split('\n');
+  let year = new Date().getFullYear();
+  const movies = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // Year header
+    const yh = line.match(/просмотренные фильмы\s+(\d{4})/i);
+    if (yh) { year = parseInt(yh[1]); continue; }
+
+    // Must start with a number (list entry)
+    if (!/^\d/.test(line)) continue;
+
+    // Strip leading "N.\t" or "N. "
+    const stripped = line.replace(/^\d+[\.\s\t]+/, '').trim();
+    if (!stripped) continue;
+
+    // Find split point: after last (YYYY) occurrence, then " - "
+    const sepIdx = findSep(stripped);
+    if (sepIdx < 0) continue;
+
+    const titlePart = stripped.substring(0, sepIdx).trim();
+    const infoPart  = stripped.substring(sepIdx).replace(/^\s*[-–]\s*/, '').trim();
+
+    // Extract title + movie year
+    const tm = titlePart.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+    if (!tm) continue;
+
+    const title     = tm[1].trim();
+    const movieYear = parseInt(tm[2]);
+    const rating    = parseRating(infoPart);
+    const watchedAt = parseDate(infoPart, year);
+    const rewatched = /🔁|Пересмотрел/i.test(raw);
+    const notes     = cleanNotes(infoPart).substring(0, 120);
+
+    movies.push({ id: uid(), title, movieYear, watchedAt, rating, rewatched, notes });
+  }
+  return movies;
+}
+
+function findSep(str) {
+  // Find the closing ) of the last (YYYY) followed by optional spaces then " - "
+  const re = /\(\d{4}\)\s*[-–]/g;
+  let m, last = null;
+  while ((m = re.exec(str)) !== null) last = m;
+  if (last) {
+    const closeIdx = last.index + last[0].indexOf(')');
+    return closeIdx + 1;
+  }
+  // Fallback: first " - "
+  return str.indexOf(' - ');
+}
+
+function parseRating(s) {
+  const m = s.match(/\(([~\d\.]+(?:[-–][\d\.]+)?)\s*\/\s*10\)/);
+  if (!m) return null;
+  const raw = m[1].replace('~','');
+  if (raw === '-' || !raw) return null;
+  if (raw.search(/[-–]/) > 0) {
+    const p = raw.split(/[-–]/).map(parseFloat);
+    return Math.round((p[0]+p[1])/2*10)/10;
+  }
+  return parseFloat(raw);
+}
+
+function parseDate(s, year) {
+  for (const [name, mo] of Object.entries(MONTHS)) {
+    const re = new RegExp(`(\\d{1,2})(?:[-–]\\d{1,2})?\\s+${name}`, 'i');
+    const m = s.match(re);
+    if (m) {
+      const d = parseInt(m[1]);
+      if (d >= 1 && d <= 31) return new Date(year, mo, d).getTime();
+    }
+  }
+  return null;
+}
+
+function cleanNotes(s) {
+  return s
+    .replace(/\([~\-\d\.]+\/10\)/g,'')
+    .replace(/\d{1,2}(?:[-–]\d{1,2})?\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/gi,'')
+    .replace(/\d{1,2}[:\s]\d{2}/g,'')
+    .replace(/🔁\s*Пересмотрел\.?/gi,'')
+    .replace(/🔃\s*нужно пересмотреть/gi,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+function parseCSV(content) {
+  const lines = content.split('\n').filter(l => l.trim());
+  if (!lines.length) return [];
+  const heads = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g,''));
+  return lines.slice(1).map(ln => {
+    const cols = ln.split(',').map(c => c.trim().replace(/"/g,''));
+    const o = {}; heads.forEach((h,i) => o[h] = cols[i]||'');
+    const t = o.title||o.name||o.movie||'';
+    if (!t) return null;
+    return {
+      id: uid(), title: t,
+      movieYear: parseInt(o.year||o.movieyear)||null,
+      watchedAt: (o.date||o.watched) ? new Date(o.date||o.watched).getTime() : null,
+      rating: parseFloat(o.rating)||null,
+      rewatched: o.rewatched==='true'||o.rewatched==='1',
+      notes: o.notes||''
+    };
+  }).filter(Boolean);
+}
+
+// ════════════════════════════════════════════════════════
+// FILE IMPORT
+// ════════════════════════════════════════════════════════
+let _pending = null;
+
+async function handleFiles(e) {
+  for (const f of Array.from(e.target.files)) await processFile(f);
+  e.target.value = '';
+}
+
+async function processFile(file) {
+  const content = await file.text();
+  let parsed = [];
+  if (file.name.endsWith('.txt'))  parsed = parseTxt(content);
+  else if (file.name.endsWith('.json')) {
+    try {
+      const d = JSON.parse(content);
+      parsed = (Array.isArray(d) ? d : d.movies||[]).map(normalizeImported);
+    } catch { showImportMsg('Invalid JSON.', 'error'); return; }
+  } else if (file.name.endsWith('.csv')) parsed = parseCSV(content);
+
+  if (!parsed.length) { showImportMsg('No movies found in this file.', 'error'); return; }
+  _pending = parsed;
+  showPreview(parsed, file.name);
+}
+
+function normalizeImported(m) {
+  return {
+    id: m.id || uid(),
+    title:     m.title || m.name || '',
+    movieYear: m.movieYear || m.year || null,
+    watchedAt: m.watchedAt || null,
+    rating:    m.rating    || null,
+    rewatched: m.rewatched || false,
+    notes:     m.notes     || ''
+  };
+}
+
+function showPreview(movies, fname) {
+  el('import-preview').innerHTML = `
+    <div class="import-preview">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <strong>Found <span class="text-gold">${movies.length}</span> movies in "${esc(fname)}"</strong>
+        <button class="btn btn-primary btn-sm" onclick="confirmImport()">Import All</button>
+      </div>
+      <div class="preview-list">
+        ${movies.slice(0,25).map(m =>`
+          <div class="preview-item">
+            <span>${esc(m.title)} (${m.movieYear||'?'})</span>
+            <span>${m.rating!=null?m.rating+'/10':'—'} · ${m.watchedAt?new Date(m.watchedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'no date'}</span>
+          </div>`).join('')}
+        ${movies.length>25?`<div style="padding:6px 0;color:var(--dim);font-size:.78rem;">…and ${movies.length-25} more</div>`:''}
+      </div>
+    </div>`;
+}
+
+function confirmImport() {
+  if (!_pending) return;
+  const existing = new Set(MOVIES.map(m => `${m.title}||${m.movieYear}`));
+  const add   = _pending.filter(m => !existing.has(`${m.title}||${m.movieYear}`));
+  const dupes = _pending.length - add.length;
+  MOVIES = [...MOVIES, ...add];
+  LS.setMovies(CU.id, MOVIES);
+  el('import-preview').innerHTML = '';
+  _pending = null;
+  let msg = `✓ Imported ${add.length} movies.`;
+  if (dupes) msg += ` (${dupes} duplicates skipped)`;
+  showImportMsg(msg, 'success');
+}
+
+function showImportMsg(txt, type) {
+  el('import-msg').innerHTML = `<div class="msg msg-${type}">${esc(txt)}</div>`;
+  if (type==='success') setTimeout(() => el('import-msg').innerHTML = '', 6000);
+}
+
+// Drag & drop
+{
+  const dz = el('drop-zone');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', async e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    for (const f of Array.from(e.dataTransfer.files)) await processFile(f);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// EXPORT
+// ════════════════════════════════════════════════════════
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(MOVIES, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cinelog-${CU.email.split('@')[0]}-${today()}.json`;
+  a.click();
+}
+
+// ════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════
+function renderDash() {
+  const ms     = MOVIES;
+  const rated  = ms.filter(m => m.rating != null);
+  const avg    = rated.length ? (rated.reduce((s,m)=>s+m.rating,0)/rated.length).toFixed(1) : '—';
+  const yr     = new Date().getFullYear();
+  const thisYr = ms.filter(m => m.watchedAt && new Date(m.watchedAt).getFullYear()===yr).length;
+
+  el('dash-stats').innerHTML = [
+    ['Total Films',   ms.length,                                          'in your journal'],
+    ['This Year',     thisYr,                                             yr.toString()],
+    ['Avg. Rating',   avg,                                                'out of 10'],
+    ['Rewatches',     ms.filter(m=>m.rewatched).length,                   'repeat watches'],
+    ['Favourites',    ms.filter(m=>m.rating!=null&&m.rating>=8).length,   'rated 8 or above'],
+  ].map(([l,v,s]) => `
+    <div class="stat-card">
+      <div class="stat-label">${l}</div>
+      <div class="stat-value">${v}</div>
+      <div class="stat-sub">${s}</div>
+    </div>`).join('');
+
+  const recent = [...ms].filter(m=>m.watchedAt).sort((a,b)=>b.watchedAt-a.watchedAt).slice(0,8);
+  if (!recent.length) {
+    el('dash-recent').innerHTML = `<div class="empty-state">No movies yet. <span onclick="showView('add')">Add your first →</span></div>`;
+    return;
+  }
+  el('dash-recent').innerHTML = `
+    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);margin-bottom:14px">Recently Watched</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+      ${recent.map(m=>`
+        <div class="movie-card">
+          <div class="movie-card-title">${esc(m.title)}</div>
+          <div class="movie-card-date">${m.movieYear||''} · ${fmtDate(m.watchedAt)}</div>
+          <div class="movie-card-meta">
+            ${m.rating!=null?`<span class="badge ${rCls(m.rating)}">${m.rating}/10</span>`:''}
+            ${m.rewatched?'<span class="badge badge-rw">↺ rewatch</span>':''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// MOVIES TABLE
+// ════════════════════════════════════════════════════════
+function fillYearFilter() {
+  const years = [...new Set(MOVIES.filter(m=>m.watchedAt).map(m=>new Date(m.watchedAt).getFullYear()))].sort((a,b)=>b-a);
+  const cur = el('mv-year').value;
+  el('mv-year').innerHTML = '<option value="">All Years</option>' +
+    years.map(y=>`<option value="${y}"${cur==y?' selected':''}>${y}</option>`).join('');
+}
+
+function renderTable() {
+  const q  = v('mv-search').toLowerCase();
+  const yr = v('mv-year');
+  const so = v('mv-sort');
+  const rw = el('mv-rw').checked;
+
+  let ms = [...MOVIES];
+  if (q)  ms = ms.filter(m => m.title.toLowerCase().includes(q));
+  if (yr) ms = ms.filter(m => m.watchedAt && new Date(m.watchedAt).getFullYear()===parseInt(yr));
+  if (rw) ms = ms.filter(m => m.rewatched);
+
+  if (so==='date-d') ms.sort((a,b)=>(b.watchedAt||0)-(a.watchedAt||0));
+  if (so==='date-a') ms.sort((a,b)=>(a.watchedAt||0)-(b.watchedAt||0));
+  if (so==='rate-d') ms.sort((a,b)=>(b.rating||0)-(a.rating||0));
+  if (so==='rate-a') ms.sort((a,b)=>(a.rating||0)-(b.rating||0));
+  if (so==='az')     ms.sort((a,b)=>a.title.localeCompare(b.title));
+
+  el('mv-sub').textContent = `${ms.length} of ${MOVIES.length} films`;
+  const tb = el('mv-tbody');
+  if (!ms.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty-state">No movies found.</td></tr>';
+    return;
+  }
+  tb.innerHTML = ms.map((m,i)=>`
+    <tr>
+      <td class="text-dim" style="font-family:'DM Mono',monospace;font-size:.72rem">${i+1}</td>
+      <td><span style="font-weight:500">${esc(m.title)}</span>${m.rewatched?' <span class="badge badge-rw">↺</span>':''}</td>
+      <td class="text-dim">${m.movieYear||'—'}</td>
+      <td class="text-dim" style="font-size:.82rem;white-space:nowrap">${fmtDate(m.watchedAt)}</td>
+      <td>${m.rating!=null?`<span class="badge ${rCls(m.rating)}">${m.rating}/10</span>`:'<span class="text-dim">—</span>'}</td>
+      <td style="font-size:.78rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.notes||'')}</td>
+      <td><button class="btn-icon" onclick="delMovie('${m.id}')">✕</button></td>
+    </tr>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// STATISTICS
+// ════════════════════════════════════════════════════════
+const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DNAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const YR_COLORS = ['#c8a84a','#4ecdc4','#ff6b8a','#a78bfa','#fb923c','#34d399','#60a5fa'];
+
+function destroyCharts() {
+  Object.values(CH).forEach(c => { try { c.destroy(); } catch(e){} });
+  for (const k in CH) delete CH[k];
+}
+
+function renderStats() {
+  destroyCharts();
+  const ms = MOVIES.filter(m => m.watchedAt);
+  if (!ms.length) {
+    el('stats-content').innerHTML = '<div class="empty-state">No dated movies yet. Add or import some first.</div>';
+    return;
+  }
+
+  const years = [...new Set(ms.map(m => new Date(m.watchedAt).getFullYear()))].sort();
+
+  el('stats-content').innerHTML = `
+    <div class="chart-grid">
+      <div class="chart-card chart-full">
+        <div class="chart-title">Films Watched per Month — by Year</div>
+        <div class="chart-wrap"><canvas id="c-monthly"></canvas></div>
+      </div>
+      <div class="chart-card chart-full">
+        <div class="chart-title">Cumulative Films — All Years Compared (day of year)</div>
+        <div class="chart-wrap-tall"><canvas id="c-cumul"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Day of Week</div>
+        <div class="chart-wrap"><canvas id="c-week"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Rating Distribution</div>
+        <div class="chart-wrap"><canvas id="c-rate"></canvas></div>
+      </div>
+    </div>`;
+
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color:'#8880a0', font:{family:'Outfit',size:11}, padding:14 } } },
+    scales: {
+      x: { grid:{color:'rgba(30,30,80,.5)'}, ticks:{color:'#5a5570',font:{family:'Outfit',size:11}} },
+      y: { grid:{color:'rgba(30,30,80,.5)'}, ticks:{color:'#5a5570',font:{family:'Outfit',size:11}} }
+    }
+  };
+
+  // 1. Monthly bars
+  CH.monthly = new Chart(el('c-monthly'), {
+    type:'bar',
+    data:{
+      labels: MNAMES,
+      datasets: years.map((yr,i) => {
+        const cnt = Array(12).fill(0);
+        ms.filter(m=>new Date(m.watchedAt).getFullYear()===yr).forEach(m=>cnt[new Date(m.watchedAt).getMonth()]++);
+        const c = YR_COLORS[i % YR_COLORS.length];
+        return { label:String(yr), data:cnt, backgroundColor:c+'80', borderColor:c, borderWidth:1.5, borderRadius:3 };
+      })
+    },
+    options: { ...baseOpts }
+  });
+
+  // 2. Cumulative
+  CH.cumul = new Chart(el('c-cumul'), {
+    type:'line',
+    data:{
+      datasets: years.map((yr,i)=>{
+        const yrMs = ms.filter(m=>new Date(m.watchedAt).getFullYear()===yr).sort((a,b)=>a.watchedAt-b.watchedAt);
+        const byDay = {};
+        yrMs.forEach(m=>{ const d=dayOfYear(new Date(m.watchedAt)); byDay[d]=(byDay[d]||0)+1; });
+        let cum=0; const pts=[];
+        for(let d=1;d<=366;d++){
+          if(byDay[d]) cum+=byDay[d];
+          pts.push({x:d,y:cum});
+        }
+        // Simplify: only keep change points + first & last
+        const sparse = pts.filter((p,i)=>i===0||i===pts.length-1||p.y!==pts[i-1].y);
+        const c = YR_COLORS[i%YR_COLORS.length];
+        return { label:String(yr), data:sparse, borderColor:c, backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:.1 };
+      })
+    },
+    options:{
+      ...baseOpts,
+      scales:{
+        x:{
+          type:'linear', min:1, max:366,
+          grid:{color:'rgba(30,30,80,.5)'},
+          ticks:{
+            color:'#5a5570', font:{family:'Outfit',size:11},
+            callback: val => {
+              const starts=[1,32,60,91,121,152,182,213,244,274,305,335];
+              const idx = starts.indexOf(val);
+              return idx>=0 ? MNAMES[idx] : '';
+            },
+            maxTicksLimit:13
+          }
+        },
+        y:{ grid:{color:'rgba(30,30,80,.5)'}, ticks:{color:'#5a5570',font:{family:'Outfit',size:11}} }
+      }
+    }
+  });
+
+  // 3. Weekday
+  const wkCnt = Array(7).fill(0);
+  ms.forEach(m => wkCnt[new Date(m.watchedAt).getDay()]++);
+  const maxW = Math.max(...wkCnt);
+  CH.week = new Chart(el('c-week'),{
+    type:'bar',
+    data:{
+      labels:DNAMES,
+      datasets:[{
+        data:wkCnt,
+        backgroundColor: wkCnt.map(c=>`rgba(200,168,74,${.25+(c/maxW)*.65})`),
+        borderColor:'#c8a84a', borderWidth:1, borderRadius:3
+      }]
+    },
+    options:{...baseOpts, plugins:{legend:{display:false}}}
+  });
+
+  // 4. Ratings
+  const buckets=Array(10).fill(0);
+  MOVIES.filter(m=>m.rating!=null).forEach(m=>{
+    buckets[Math.min(9,Math.max(0,Math.ceil(m.rating)-1))]++;
+  });
+  CH.rate = new Chart(el('c-rate'),{
+    type:'bar',
+    data:{
+      labels:['1','2','3','4','5','6','7','8','9','10'],
+      datasets:[{
+        data:buckets,
+        backgroundColor:['1','2','3','4','5','6','7','8','9','10'].map((_,i)=>i>=7?'rgba(80,200,120,.45)':i>=5?'rgba(200,168,74,.45)':'rgba(224,85,85,.35)'),
+        borderColor:['1','2','3','4','5','6','7','8','9','10'].map((_,i)=>i>=7?'#50c878':i>=5?'#c8a84a':'#e05555'),
+        borderWidth:1, borderRadius:3
+      }]
+    },
+    options:{...baseOpts, plugins:{legend:{display:false}}}
+  });
+}
+
+function dayOfYear(date) {
+  const s = new Date(date.getFullYear(),0,0);
+  return Math.floor((date-s)/864e5);
+}
+
+// ════════════════════════════════════════════════════════
+// TOP PICKS
+// ════════════════════════════════════════════════════════
+function renderTop() {
+  const thresh = parseFloat(el('top-thresh').value);
+  el('top-thresh-lbl').textContent = thresh + '+';
+  const sort = v('top-sort');
+
+  let ms = MOVIES.filter(m => m.rating!=null && m.rating>=thresh);
+  if (sort==='rate') ms.sort((a,b)=>b.rating-a.rating);
+  else if (sort==='date') ms.sort((a,b)=>(b.watchedAt||0)-(a.watchedAt||0));
+  else ms.sort((a,b)=>a.title.localeCompare(b.title));
+
+  el('top-count').textContent = `${ms.length} film${ms.length!==1?'s':''}`;
+  if (!ms.length) {
+    el('top-grid').innerHTML = '<div style="color:var(--dim);font-size:.875rem">No movies at this threshold.</div>';
+    return;
+  }
+  el('top-grid').innerHTML = ms.map(m=>`
+    <div class="movie-card">
+      <div class="movie-card-title">${esc(m.title)}</div>
+      <div class="movie-card-date">${m.movieYear||''} · ${fmtDate(m.watchedAt)}</div>
+      <div class="movie-card-meta">
+        <span class="badge badge-high">${m.rating}/10</span>
+        ${m.rewatched?'<span class="badge badge-rw">↺ rewatch</span>':''}
+      </div>
+      ${m.notes?`<div style="margin-top:8px;font-size:.75rem;color:var(--dim)">${esc(m.notes.substring(0,80))}</div>`:''}
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+function el(id)  { return document.getElementById(id); }
+function v(id)   { return el(id).value; }
+function esc(s)  { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function uid()   { return Date.now().toString(36)+Math.random().toString(36).substr(2,6); }
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+function rCls(r) {
+  if (r >= 8) return 'badge-high';
+  if (r >= 6) return 'badge-mid';
+  return 'badge-low';
+}
+
+// ════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  ['li-email','li-pass'].forEach(id => el(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); }));
+  ['rg-email','rg-pass','rg-pass2'].forEach(id => el(id).addEventListener('keydown', e => { if(e.key==='Enter') doRegister(); }));
+
+  const sess = LS.getSess();
+  if (sess) {
+    const user = LS.getUsers().find(u => u.id===sess.id);
+    if (user) { bootApp(user); return; }
+  }
+  el('auth-screen').style.display = 'flex';
+});
+</script>
+</body>
+</html>
