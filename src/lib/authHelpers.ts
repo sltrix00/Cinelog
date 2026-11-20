@@ -44,7 +44,7 @@ export function localizeAuthError(rawMessage: string): string {
     return 'Email ещё не подтверждён. Проверьте почту и перейдите по ссылке из письма.';
   }
   if (normalized.includes('user already registered')) {
-    return 'Пользователь с таким email уже зарегистрирован. Попробуйте войти.';
+    return 'Не удалось завершить регистрацию. Проверьте введённый email или попробуйте войти в аккаунт.';
   }
   if (normalized.includes('password should be at least')) {
     return 'Пароль должен содержать минимум 6 символов.';
@@ -88,5 +88,10 @@ export function parseAuthCallbackError(
     return null;
   }
 
-  return localizeAuthError(sanitized);
+  const localized = localizeAuthError(sanitized);
+  if (localized !== sanitized || /^[a-z0-9_]{2,40}$/.test(sanitized)) {
+    return localized;
+  }
+
+  return 'Ошибка авторизации. Попробуйте ещё раз.';
 }

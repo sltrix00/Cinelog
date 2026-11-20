@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   annotateImportBatch,
+  normalizeDateString,
   parseCsvContent,
+  parseJsonImport,
   parseRussianTxtDiary,
   parsedRowsToLocalWatchEntries,
 } from './csvImport';
@@ -162,5 +164,53 @@ describe('Smart CSV & Diary Import Pipeline', () => {
     expect(rows[0].title).toBe('Inception');
     expect(rows[0].releaseYear).toBe(2010);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it('rejects invalid calendar dates and validates JSON import fields strictly', () => {
+    expect(normalizeDateString('2026-02-31')).toBeNull();
+    expect(normalizeDateString('2025-02-29')).toBeNull();
+    expect(normalizeDateString('2024-02-29')).toBe('2024-02-29');
+
+    const json = JSON.stringify([
+      null,
+      'not-an-object',
+      42,
+      {
+        title: 'Valid Movie',
+        year: 2024,
+        watched_date: '2026-04-10',
+        watched_time: '99:99',
+        source: 'malicious_source',
+        tmdb_id: -5,
+        imdb_id: 'invalid',
+        runtime_minutes: 99999,
+      },
+      {
+        title: 'Good Entry',
+        release_year: 1999,
+        watched_date: '2026-04-11',
+        watched_time: '21:15',
+        source: 'extension',
+        tmdb_id: 603,
+        imdb_id: 'tt0133093',
+        runtime_minutes: 136,
+      },
+    ]);
+
+    const rows = parseJsonImport(json);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].title).toBe('Valid Movie');
+    expect(rows[0].watchedTime).toBeNull();
+    expect(rows[0].source).toBe('csv_letterboxd');
+    expect(rows[0].tmdbId).toBeNull();
+    expect(rows[0].imdbId).toBeNull();
+    expect(rows[0].runtimeMinutes).toBeNull();
+
+    expect(rows[1].title).toBe('Good Entry');
+    expect(rows[1].watchedTime).toBe('21:15:00');
+    expect(rows[1].source).toBe('extension');
+    expect(rows[1].tmdbId).toBe(603);
+    expect(rows[1].imdbId).toBe('tt0133093');
+    expect(rows[1].runtimeMinutes).toBe(136);
   });
 });

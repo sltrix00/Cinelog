@@ -31,11 +31,12 @@ import {
   batchUpsertImportedRows,
   deleteWatchLogById,
   fetchWatchEntries,
-  getActiveSession,
+  getVerifiedUser,
   insertManualWatchLog,
   isSupabaseConfigured,
   onAuthChanged,
   reenrichUserMovies,
+  signOutAccount,
 } from './lib/supabase';
 import type { ParsedImportRow, ReenrichSummary, WatchEntry, YearFilter } from './types/cinelog';
 
@@ -99,9 +100,9 @@ export function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    void getActiveSession().then((session) => {
-      if (session?.user) {
-        setUserEmail(session.user.email ?? null);
+    void getVerifiedUser().then((user) => {
+      if (user) {
+        setUserEmail(user.email ?? null);
         void loadCloudEntries();
       }
     });
@@ -111,6 +112,7 @@ export function App() {
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
         setAuthModalOpen(true);
+        return;
       }
       if (user) {
         void loadCloudEntries();
@@ -207,9 +209,13 @@ export function App() {
     }
 
     // Demo Mode in-memory add
+    const demoUid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : String(Date.now());
     const newEntry: WatchEntry = {
-      id: `demo-added-${Date.now()}`,
-      movie_id: `demo-custom-${Date.now()}`,
+      id: `demo-added-${demoUid}`,
+      movie_id: `demo-custom-${demoUid}`,
       tmdb_id: payload.tmdbId,
       imdb_id: null,
       title: payload.title,
@@ -228,7 +234,7 @@ export function App() {
       poster_url: null,
       import_key: null,
       created_at: new Date().toISOString(),
-      unique_key: payload.isRewatch ? payload.title : `${payload.title}__new_${Date.now()}`,
+      unique_key: payload.isRewatch ? payload.title : `${payload.title}__new_${demoUid}`,
     };
 
     setEntries((prev) => [newEntry, ...prev]);
@@ -470,7 +476,16 @@ export function App() {
         onAuthSuccess={() => {
           void loadCloudEntries();
         }}
-        onPasswordRecoveryComplete={() => setIsPasswordRecovery(false)}
+        onPasswordRecoveryComplete={() => {
+          setIsPasswordRecovery(false);
+          setAuthModalOpen(false);
+          void loadCloudEntries();
+        }}
+        onCancelPasswordRecovery={() => {
+          void signOutAccount();
+          setIsPasswordRecovery(false);
+          setAuthModalOpen(false);
+        }}
       />
     </div>
   );

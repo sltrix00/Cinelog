@@ -15,14 +15,70 @@ const MONTHS_RU_GEN: Record<string, number> = {
   'декабря': 11,
 };
 
+export const MAX_IMPORT_ROWS = 10_000;
+export const MAX_IMPORT_FILES = 20;
+
+const VALID_WATCH_SOURCES = new Set<WatchSource>([
+  'manual',
+  'csv_letterboxd',
+  'csv_imdb',
+  'extension',
+  'txt_diary',
+]);
+
 function makeTempId(): string {
-  return `imp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `imp-${crypto.randomUUID()}`;
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `imp-${hex}`;
+  }
+  return `imp-${Date.now().toString(36)}`;
 }
 
 function toIsoDate(year: number, monthIndex: number, day: number): string {
   const m = String(monthIndex + 1).padStart(2, '0');
   const d = String(day).padStart(2, '0');
   return `${year}-${m}-${d}`;
+}
+
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (year < 1888 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const check = new Date(Date.UTC(year, month - 1, day));
+  return (
+    check.getUTCFullYear() === year &&
+    check.getUTCMonth() === month - 1 &&
+    check.getUTCDate() === day
+  );
+}
+
+export function normalizeTimeString(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const h = Number.parseInt(match[1], 10);
+  const m = Number.parseInt(match[2], 10);
+  const s = match[3] ? Number.parseInt(match[3], 10) : 0;
+  if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function sanitizeMetaArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const val of raw) {
+    if (typeof val !== 'string') continue;
+    const clean = val.trim().slice(0, 100);
+    if (clean) out.push(clean);
+    if (out.length >= 10) break;
+  }
+  return out;
 }
 
 export function normalizeDateString(raw?: string | null): string | null {
@@ -36,7 +92,7 @@ export function normalizeDateString(raw?: string | null): string | null {
     const y = Number.parseInt(iso[1], 10);
     const m = Number.parseInt(iso[2], 10);
     const d = Number.parseInt(iso[3], 10);
-    if (y >= 1888 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+    if (isValidCalendarDate(y, m, d)) {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
   }
@@ -47,7 +103,7 @@ export function normalizeDateString(raw?: string | null): string | null {
     const d = Number.parseInt(dmy[1], 10);
     const m = Number.parseInt(dmy[2], 10);
     const y = Number.parseInt(dmy[3], 10);
-    if (y >= 1888 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+    if (isValidCalendarDate(y, m, d)) {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
   }
@@ -130,6 +186,9 @@ export function detectCsvSource(headers: string[]): 'csv_letterboxd' | 'csv_imdb
 export function parseCsvContent(content: string): ParsedImportRow[] {
   const matrix = parseCSVRecords(content);
   if (matrix.length < 2) return [];
+  if (matrix.length - 1 > MAX_IMPORT_ROWS) {
+    throw new Error('Слишком много записей в файле (максимум 10 000 строк).');
+  }
 
   const rawHeaders = matrix[0];
   const headers = rawHeaders.map((h) => h.toLowerCase().trim());
@@ -193,10 +252,7 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
     const rwRaw = (row['rewatch'] || row['rewatched'] || '').toLowerCase();
     const isRewatch = rwRaw === 'yes' || rwRaw === 'true' || rwRaw === '1';
     const rawTime = row['watched_time'] || row['time'] || '';
-    const timeMatch = rawTime.match(/^(\d{1,2}:\d{2})(?::(\d{2}))?$/);
-    const watchedTime = timeMatch
-      ? `${timeMatch[1].padStart(5, '0')}:${timeMatch[2] ?? '00'}`
-      : null;
+    const watchedTime = normalizeTimeString(rawTime);
 
     parsed.push({
       tempId: makeTempId(),
@@ -323,6 +379,9 @@ export function parseRussianTxtDiary(content: string): ParsedImportRow[] {
       isDuplicate: false,
       autoRewatchDetected: false,
     });
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw new Error('Слишком много записей в файле (максимум 10 000 строк).');
+    }
   }
 
   return rows;
@@ -330,24 +389,40 @@ export function parseRussianTxtDiary(content: string): ParsedImportRow[] {
 
 export function parseJsonImport(content: string): ParsedImportRow[] {
   const data = JSON.parse(content) as unknown;
-  const items: Array<Record<string, unknown>> = Array.isArray(data)
+  const rawItems: unknown[] = Array.isArray(data)
     ? data
-    : Array.isArray((data as { movies?: unknown[] })?.movies)
-      ? ((data as { movies: Array<Record<string, unknown>> }).movies)
+    : typeof data === 'object' &&
+        data !== null &&
+        Array.isArray((data as { movies?: unknown }).movies)
+      ? ((data as { movies: unknown[] }).movies)
       : [];
 
-  return items
-    .map((item): ParsedImportRow | null => {
-      const title = String(item.title ?? item.name ?? '').trim();
+  if (rawItems.length > MAX_IMPORT_ROWS) {
+    throw new Error('Слишком много записей в файле (максимум 10 000 строк).');
+  }
+
+  return rawItems
+    .map((raw): ParsedImportRow | null => {
+      if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        return null;
+      }
+      const item = raw as Record<string, unknown>;
+      const rawTitle = typeof item.title === 'string' ? item.title : typeof item.name === 'string' ? item.name : '';
+      const title = rawTitle.trim().slice(0, 500);
       if (!title) return null;
 
-      const releaseYear = Number.parseInt(String(item.release_year ?? item.movieYear ?? item.year ?? ''), 10) || null;
+      const parsedYear = Number.parseInt(String(item.release_year ?? item.movieYear ?? item.year ?? ''), 10);
+      const releaseYear =
+        Number.isInteger(parsedYear) && parsedYear >= 1870 && parsedYear <= 2100 ? parsedYear : null;
+
       let watchedDate: string | null = null;
       if (typeof item.watched_date === 'string') {
         watchedDate = normalizeDateString(item.watched_date);
-      } else if (typeof item.watchedAt === 'number') {
+      } else if (typeof item.watchedAt === 'number' && Number.isFinite(item.watchedAt)) {
         const d = new Date(item.watchedAt);
-        watchedDate = toIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
+        if (!Number.isNaN(d.getTime()) && d.getFullYear() >= 1888 && d.getFullYear() <= 2100) {
+          watchedDate = toIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
+        }
       } else if (typeof item.watchedAt === 'string') {
         watchedDate = normalizeDateString(item.watchedAt);
       }
@@ -355,7 +430,29 @@ export function parseJsonImport(content: string): ParsedImportRow[] {
       const rawRating = item.rating as string | number | null | undefined;
       const rating = normalizeFiveStarRating(rawRating, 'auto');
       const isRewatch = Boolean(item.is_rewatch ?? item.rewatched);
-      const watchedTime = typeof item.watched_time === 'string' ? item.watched_time : null;
+      const watchedTime = normalizeTimeString(item.watched_time);
+
+      const rawSource = typeof item.source === 'string' ? (item.source as WatchSource) : null;
+      const source: WatchSource = rawSource && VALID_WATCH_SOURCES.has(rawSource) ? rawSource : 'csv_letterboxd';
+
+      const imdbId =
+        typeof item.imdb_id === 'string' && /^tt\d{5,10}$/.test(item.imdb_id.trim())
+          ? item.imdb_id.trim()
+          : null;
+      const tmdbId =
+        typeof item.tmdb_id === 'number' &&
+        Number.isInteger(item.tmdb_id) &&
+        item.tmdb_id > 0 &&
+        item.tmdb_id <= 2_147_483_647
+          ? item.tmdb_id
+          : null;
+      const runtimeMinutes =
+        typeof item.runtime_minutes === 'number' &&
+        Number.isFinite(item.runtime_minutes) &&
+        item.runtime_minutes >= 1 &&
+        item.runtime_minutes <= 1500
+          ? Math.round(item.runtime_minutes)
+          : null;
 
       return {
         tempId: makeTempId(),
@@ -365,13 +462,13 @@ export function parseJsonImport(content: string): ParsedImportRow[] {
         watchedTime,
         rating,
         isRewatch,
-        source: (item.source as WatchSource) || 'csv_letterboxd',
-        imdbId: typeof item.imdb_id === 'string' ? item.imdb_id : null,
-        tmdbId: typeof item.tmdb_id === 'number' ? item.tmdb_id : null,
-        runtimeMinutes: typeof item.runtime_minutes === 'number' ? item.runtime_minutes : null,
-        genres: Array.isArray(item.genres) ? item.genres.map(String) : [],
-        directors: Array.isArray(item.directors) ? item.directors.map(String) : [],
-        countries: Array.isArray(item.countries) ? item.countries.map(String) : [],
+        source,
+        imdbId,
+        tmdbId,
+        runtimeMinutes,
+        genres: sanitizeMetaArray(item.genres),
+        directors: sanitizeMetaArray(item.directors),
+        countries: sanitizeMetaArray(item.countries),
         importKey: '',
         isDuplicate: false,
         autoRewatchDetected: false,

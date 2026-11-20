@@ -171,10 +171,14 @@ create table public.movies (
   original_title  text check (char_length(original_title) <= 500),
   release_year    smallint check (release_year between 1870 and 2100),
   runtime_minutes smallint check (runtime_minutes between 1 and 1500),
-  genres          text[] not null default '{}',
-  directors       text[] not null default '{}',
-  countries       text[] not null default '{}',
+  genres          text[] not null default '{}'
+                  check (coalesce(array_length(genres, 1), 0) <= 10),
+  directors       text[] not null default '{}'
+                  check (coalesce(array_length(directors, 1), 0) <= 10),
+  countries       text[] not null default '{}'
+                  check (coalesce(array_length(countries, 1), 0) <= 10),
   poster_url      text check (poster_url ~ '^https://image\.tmdb\.org/t/p/'),
+  created_by      uuid references auth.users (id) on delete set null,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
@@ -209,8 +213,22 @@ create policy "movies: readable by signed-in users"
 
 -- Intentionally NO insert/update/delete policies for clients.
 revoke all on table public.movies from public, anon, authenticated;
-grant select on public.movies to authenticated;
-grant all on public.movies to service_role;
+grant select (
+  id,
+  tmdb_id,
+  imdb_id,
+  title,
+  original_title,
+  release_year,
+  runtime_minutes,
+  genres,
+  directors,
+  countries,
+  poster_url,
+  created_at,
+  updated_at
+) on table public.movies to authenticated;
+grant all on table public.movies to service_role;
 
 -- -----------------------------------------------------------------------------
 -- watch_logs — individual viewing records
@@ -248,6 +266,33 @@ create index watch_logs_movie_id_idx on public.watch_logs (movie_id);
 create trigger watch_logs_set_updated_at
   before update on public.watch_logs
   for each row execute function private.set_updated_at();
+
+create or replace function private.enforce_watch_logs_quota()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_count bigint;
+begin
+  select count(*) into v_count
+  from public.watch_logs
+  where user_id = new.user_id;
+
+  if v_count >= 50000 then
+    raise exception 'Watch log quota exceeded (maximum 50,000 entries per user)'
+      using errcode = '54000';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function private.enforce_watch_logs_quota() from public, anon, authenticated;
+
+create trigger watch_logs_enforce_quota
+  before insert on public.watch_logs
+  for each row execute function private.enforce_watch_logs_quota();
 
 alter table public.watch_logs enable row level security;
 alter table public.watch_logs force row level security;

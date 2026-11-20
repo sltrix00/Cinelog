@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react';
-import { annotateImportBatch, parseImportFile } from '../lib/csvImport';
+import { annotateImportBatch, MAX_IMPORT_FILES, MAX_IMPORT_ROWS, parseImportFile } from '../lib/csvImport';
 import type { ParsedImportRow, WatchEntry } from '../types/cinelog';
 
 interface CsvImportModalProps {
@@ -36,6 +36,10 @@ export function CsvImportModal({
 
   const processFiles = async (files: File[]) => {
     if (!files.length) return;
+    if (files.length > MAX_IMPORT_FILES) {
+      setErrorMsg(`Слишком много файлов за раз (максимум ${MAX_IMPORT_FILES}).`);
+      return;
+    }
     setParsing(true);
     setErrorMsg(null);
 
@@ -48,6 +52,9 @@ export function CsvImportModal({
         if (parsed.length > 0) {
           allParsed.push(...parsed);
           names.push(file.name);
+        }
+        if (allParsed.length > MAX_IMPORT_ROWS) {
+          throw new Error(`Слишком много записей в импорте (максимум ${MAX_IMPORT_ROWS} строк).`);
         }
       }
 

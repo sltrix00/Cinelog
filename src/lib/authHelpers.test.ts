@@ -73,7 +73,9 @@ describe('localizeAuthError', () => {
       'Вход через Google ещё не включён'
     );
     expect(localizeAuthError('Invalid login credentials')).toBe('Неверный email или пароль.');
-    expect(localizeAuthError('User already registered')).toContain('уже зарегистрирован');
+    expect(localizeAuthError('User already registered')).toBe(
+      'Не удалось завершить регистрацию. Проверьте введённый email или попробуйте войти в аккаунт.'
+    );
     expect(localizeAuthError('Email not confirmed')).toContain('Email ещё не подтверждён');
     expect(localizeAuthError('Password should be at least 6 characters')).toContain(
       'минимум 6 символов'
@@ -132,13 +134,17 @@ describe('parseAuthCallbackError', () => {
     ).toBeNull();
   });
 
-  it('sanitizes phishing URLs, angle brackets, and oversized error strings from callback params', () => {
+  it('blocks arbitrary phishing text in callback error_description while allowing known OAuth codes', () => {
     const res = parseAuthCallbackError({
       search: '?error_description=Visit+https%3A%2F%2Fevil.example%2Flogin+<script>alert(1)</script>',
       hash: '',
     });
-    expect(res).not.toContain('https://evil.example');
-    expect(res).not.toContain('<script>');
-    expect(res).toContain('[link]');
+    expect(res).toBe('Ошибка авторизации. Попробуйте ещё раз.');
+    expect(
+      parseAuthCallbackError({
+        search: '?error=otp_expired',
+        hash: '',
+      })
+    ).toBe('otp_expired');
   });
 });

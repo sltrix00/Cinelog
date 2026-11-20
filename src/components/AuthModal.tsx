@@ -20,6 +20,7 @@ interface AuthModalProps {
   onEnableDemoMode: () => void;
   onAuthSuccess: () => void;
   onPasswordRecoveryComplete?: () => void;
+  onCancelPasswordRecovery?: () => void;
 }
 
 type AuthMode = 'login' | 'register' | 'reset';
@@ -56,6 +57,7 @@ export function AuthModal({
   onEnableDemoMode,
   onAuthSuccess,
   onPasswordRecoveryComplete,
+  onCancelPasswordRecovery,
 }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -78,8 +80,15 @@ export function AuthModal({
 
   const handleClose = () => {
     setMessage(null);
+    if (isPasswordRecovery) {
+      onCancelPasswordRecovery?.();
+      return;
+    }
     onClose();
   };
+
+  const hasRequiredPasswordComplexity = (pwd: string) =>
+    pwd.length >= 8 && pwd.length <= 128 && /(?=.*\p{L})(?=.*\d)/u.test(pwd);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -100,8 +109,8 @@ export function AuthModal({
         onAuthSuccess();
         handleClose();
       } else if (mode === 'register') {
-        if (password.length < 8) {
-          throw new Error('Пароль должен содержать минимум 8 символов.');
+        if (!hasRequiredPasswordComplexity(password)) {
+          throw new Error('Пароль должен быть от 8 до 128 символов и содержать буквы и цифры.');
         }
         const { data, error } = await signUpWithEmail(email.trim(), password, username);
         if (error) throw error;
@@ -135,17 +144,10 @@ export function AuthModal({
 
   const handlePasswordRecoverySubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 8) {
+    if (!hasRequiredPasswordComplexity(newPassword)) {
       setMessage({
         type: 'error',
-        text: 'Пароль должен содержать минимум 8 символов.',
-      });
-      return;
-    }
-    if (newPassword.length > 128) {
-      setMessage({
-        type: 'error',
-        text: 'Пароль слишком длинный (максимум 128 символов).',
+        text: 'Пароль должен быть от 8 до 128 символов и содержать буквы и цифры.',
       });
       return;
     }
@@ -225,7 +227,7 @@ export function AuthModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
       onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget && !isPasswordRecovery) handleClose();
       }}
     >
       <div className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
@@ -255,7 +257,7 @@ export function AuthModal({
                   autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Минимум 8 символов"
+                  placeholder="Минимум 8 символов (буквы и цифры)"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                 />
               </div>
@@ -420,7 +422,7 @@ export function AuthModal({
                       autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={mode === 'register' ? 'Минимум 8 символов' : 'Введите пароль'}
+                      placeholder={mode === 'register' ? 'Минимум 8 символов (буквы и цифры)' : 'Введите пароль'}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                     />
                   </div>

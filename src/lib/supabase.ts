@@ -115,6 +115,13 @@ export async function getActiveSession(): Promise<Session | null> {
   return data.session ?? null;
 }
 
+export async function getVerifiedUser(): Promise<User | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return null;
+  return data.user ?? null;
+}
+
 export function onAuthChanged(
   callback: (user: User | null, event?: AuthChangeEvent) => void
 ): () => void {

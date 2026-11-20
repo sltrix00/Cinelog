@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
 import {
   buildSearchAttempts,
   localizeCountries,
@@ -18,13 +18,70 @@ const CACHE_LANGUAGE = 'ru-RU';
 const ALLOWED_SEARCH_LANGUAGES = new Set(['ru-RU', 'en-US']);
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
+const HEAVY_RATE_LIMIT_MAX_REQUESTS = 35;
+const MAX_REQUEST_BODY_BYTES = 262_144; // 256 KB
+const MAX_PG_INT4 = 2_147_483_647;
 const userRequestTimestamps = new Map<string, number[]>();
+const heavyRequestTimestamps = new Map<string, number[]>();
+let warnedLegacyApiKey = false;
 
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://sltrix00.github.io',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://localhost:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+];
+
+function getAllowedOrigins(): Set<string> {
+  const extra = (Deno.env.get('ALLOWED_CORS_ORIGINS') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...extra]);
+}
+
+function getCorsContext(req: Request): { allowed: boolean; headers: Record<string, string> } {
+  const origin = req.headers.get('Origin');
+  if (!origin) {
+    return {
+      allowed: true,
+      headers: {
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      },
+    };
+  }
+
+  if (getAllowedOrigins().has(origin)) {
+    return {
+      allowed: true,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        Vary: 'Origin',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      },
+    };
+  }
+
+  return {
+    allowed: false,
+    headers: { Vary: 'Origin' },
+  };
+}
+
+function logSecurityEvent(event: string, meta: Record<string, unknown> = {}): void {
+  console.info(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      service: 'tmdb-proxy',
+      event,
+      ...meta,
+    })
+  );
+}
 
 type TmdbErrorCode =
   | 'TMDB_NOT_CONFIGURED'
@@ -99,7 +156,11 @@ interface ReenrichUnmatchedRequest {
 
 type ProxyRequest = SearchRequest | EnrichRequest | ResolveBatchRequest | ReenrichUnmatchedRequest;
 
-function jsonResponse(payload: unknown, status = 200): Response {
+function jsonResponse(
+  payload: unknown,
+  status = 200,
+  corsHeaders: Record<string, string> = {}
+): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: {
@@ -113,12 +174,44 @@ function getEnv(name: string): string {
   return Deno.env.get(name) ?? '';
 }
 
+function resolveNamedApiKey(jsonEnvName: string, fallbackEnvNames: string[]): string {
+  const rawJson = getEnv(jsonEnvName).trim();
+  if (rawJson) {
+    try {
+      const parsed = JSON.parse(rawJson) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.default === 'string' && parsed.default.trim()) {
+          return parsed.default.trim();
+        }
+        for (const value of Object.values(parsed)) {
+          if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+          }
+        }
+      }
+    } catch {
+      // Fall back to single-key env vars if JSON env var is absent/malformed
+    }
+  }
+  for (const name of fallbackEnvNames) {
+    const val = getEnv(name).trim();
+    if (val) return val;
+  }
+  return '';
+}
+
 function isTmdbConfigured(): boolean {
   return Boolean(getEnv('TMDB_READ_ACCESS_TOKEN').trim() || getEnv('TMDB_API_KEY').trim());
 }
 
 export function escapeIlikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+function parsePositiveInt4(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_PG_INT4
+    ? value
+    : null;
 }
 
 function sanitizeStringList(raw: unknown, maxItems: number, maxItemLength = 120): string[] {
@@ -142,22 +235,27 @@ function resolveSearchLanguage(lang?: unknown): string {
   return typeof lang === 'string' && ALLOWED_SEARCH_LANGUAGES.has(lang) ? lang : CACHE_LANGUAGE;
 }
 
-function isRateLimited(userId: string): boolean {
+function checkSlidingRateLimit(
+  store: Map<string, number[]>,
+  userId: string,
+  maxRequests: number,
+  windowMs = RATE_LIMIT_WINDOW_MS
+): boolean {
   const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const existing = userRequestTimestamps.get(userId) ?? [];
+  const cutoff = now - windowMs;
+  const existing = store.get(userId) ?? [];
   const recent = existing.filter((ts) => ts > cutoff);
-  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
-    userRequestTimestamps.set(userId, recent);
+  if (recent.length >= maxRequests) {
+    store.set(userId, recent);
     return true;
   }
   recent.push(now);
-  userRequestTimestamps.set(userId, recent);
-  if (userRequestTimestamps.size > 1000) {
-    for (const [uid, times] of userRequestTimestamps.entries()) {
+  store.set(userId, recent);
+  if (store.size > 1000) {
+    for (const [uid, times] of store.entries()) {
       const active = times.filter((ts) => ts > cutoff);
-      if (active.length === 0) userRequestTimestamps.delete(uid);
-      else userRequestTimestamps.set(uid, active);
+      if (active.length === 0) store.delete(uid);
+      else store.set(uid, active);
     }
   }
   return false;
@@ -189,7 +287,7 @@ async function tmdbFetch<T>(
   if (!readToken && !apiKey) {
     throw new TmdbApiError(
       'TMDB_NOT_CONFIGURED',
-      'TMDB_NOT_CONFIGURED: Set TMDB_READ_ACCESS_TOKEN or TMDB_API_KEY in Edge Function secrets.'
+      'TMDB_NOT_CONFIGURED: Сервис распознавания TMDB временно не настроен.'
     );
   }
 
@@ -200,6 +298,10 @@ async function tmdbFetch<T>(
     }
   }
   if (!readToken && apiKey) {
+    if (!warnedLegacyApiKey) {
+      warnedLegacyApiKey = true;
+      console.warn('[tmdb-proxy] Using TMDB v3 query api_key fallback; prefer v4 Bearer token.');
+    }
     url.searchParams.set('api_key', apiKey);
   }
 
@@ -225,7 +327,7 @@ async function tmdbFetch<T>(
       }
       const msg = err instanceof Error ? err.message : 'Network error';
       console.error('[tmdb-proxy] Network failure calling TMDB:', path, msg);
-      throw new TmdbApiError('TMDB_NETWORK_ERROR', `TMDB network error: ${msg}`);
+      throw new TmdbApiError('TMDB_NETWORK_ERROR', 'TMDB network error');
     }
 
     if (res.ok) {
@@ -238,7 +340,7 @@ async function tmdbFetch<T>(
       console.error('[tmdb-proxy] TMDB authentication failed:', res.status, body.slice(0, 200));
       throw new TmdbApiError(
         'TMDB_AUTH_ERROR',
-        `TMDB auth error (${res.status}): проверьте токен TMDB_READ_ACCESS_TOKEN / TMDB_API_KEY.`,
+        `TMDB auth error (${res.status}): ошибка авторизации внешнего сервиса TMDB.`,
         res.status
       );
     }
@@ -260,11 +362,11 @@ async function tmdbFetch<T>(
 
     if (res.status === 429) {
       console.error('[tmdb-proxy] TMDB rate limit exhausted:', path, body.slice(0, 200));
-      throw new TmdbApiError('TMDB_RATE_LIMITED', `TMDB rate limited (429): ${body.slice(0, 200)}`, 429);
+      throw new TmdbApiError('TMDB_RATE_LIMITED', 'TMDB rate limited (429)', 429);
     }
 
     console.error('[tmdb-proxy] TMDB HTTP error:', res.status, path, body.slice(0, 200));
-    throw new TmdbApiError('TMDB_HTTP_ERROR', `TMDB HTTP ${res.status}: ${body.slice(0, 240)}`, res.status);
+    throw new TmdbApiError('TMDB_HTTP_ERROR', `TMDB HTTP ${res.status}`, res.status);
   }
 }
 
@@ -281,53 +383,33 @@ function formatMovieLabel(title: string, year?: number | null): string {
 async function verifyCaller(req: Request): Promise<{ userId: string } | null> {
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token) return null;
+  if (!token || token.length < 20 || token.length > 4096 || token.split('.').length !== 3) {
+    return null;
+  }
 
   const supabaseUrl = getEnv('SUPABASE_URL');
-  const anonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('SUPABASE_PUBLISHABLE_KEY');
+  const anonKey = resolveNamedApiKey('SUPABASE_PUBLISHABLE_KEYS', ['SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_ANON_KEY']);
   if (!supabaseUrl || !anonKey) return null;
 
   const authClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Prefer getClaims() for asymmetric JWT signing keys; fall back to getUser() if unavailable.
-  const authAny = authClient.auth as unknown as {
-    getClaims?: (jwt?: string) => Promise<{
-      data?: { claims?: { sub?: string; role?: string; is_anonymous?: boolean } } | null;
-      error: unknown;
-    }>;
-    getUser: (jwt?: string) => Promise<{
-      data: { user: { id: string; role?: string; is_anonymous?: boolean } | null };
-      error: unknown;
-    }>;
-  };
-
-  if (typeof authAny.getClaims === 'function') {
-    const { data, error } = await authAny.getClaims(token);
-    const claims = data?.claims;
-    const sub = claims?.sub;
-    if (!error && sub) {
-      if (claims.is_anonymous === true || (claims.role && claims.role !== 'authenticated')) {
-        return null;
-      }
-      return { userId: sub };
-    }
-  }
-
+  // Server-verified session check ensures logged-out, deleted, or banned sessions are rejected immediately.
   const { data, error } = await authClient.auth.getUser(token);
   if (error || !data.user) return null;
-  if (data.user.is_anonymous === true || (data.user.role && data.user.role !== 'authenticated')) {
+  const userMeta = data.user as { id: string; role?: string; is_anonymous?: boolean };
+  if (userMeta.is_anonymous === true || (userMeta.role && userMeta.role !== 'authenticated')) {
     return null;
   }
-  return { userId: data.user.id };
+  return { userId: userMeta.id };
 }
 
 function getServiceClient() {
   const supabaseUrl = getEnv('SUPABASE_URL');
-  const serviceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const serviceKey = resolveNamedApiKey('SUPABASE_SECRET_KEYS', ['SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY']);
   if (!supabaseUrl || !serviceKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is missing in Edge Function environment.');
+    throw new Error('SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY is missing in Edge Function environment.');
   }
   return createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -512,7 +594,8 @@ async function enrichAndCacheByTmdbId(
 
 async function getOrCreateFallbackMovie(
   serviceClient: ReturnType<typeof getServiceClient>,
-  item: BatchItem
+  item: BatchItem,
+  userId: string
 ): Promise<MovieRow> {
   const cleanTitle = item.title.trim().slice(0, 500);
   const escapedTitle = escapeIlikePattern(cleanTitle);
@@ -552,6 +635,7 @@ async function getOrCreateFallbackMovie(
       genres: normalizeGenres(sanitizeStringList(item.fallbackGenres, 6, 80)),
       directors: sanitizeStringList(item.fallbackDirectors, 5, 120),
       countries: sanitizeStringList(item.fallbackCountries, 5, 80),
+      created_by: userId,
     })
     .select('*')
     .single<MovieRow>();
@@ -649,10 +733,10 @@ async function resolveSingleBatchItem(
   serviceClient: ReturnType<typeof getServiceClient>,
   item: BatchItem,
   language: string,
-  state: BatchSharedState
+  state: BatchSharedState,
+  userId: string
 ): Promise<MovieRow> {
-  const validTmdbId =
-    typeof item.tmdbId === 'number' && Number.isInteger(item.tmdbId) && item.tmdbId > 0 ? item.tmdbId : null;
+  const validTmdbId = parsePositiveInt4(item.tmdbId);
   if (validTmdbId !== null) {
     if (!state.fatalErrorCode) {
       try {
@@ -735,7 +819,7 @@ async function resolveSingleBatchItem(
     }
   }
 
-  return await getOrCreateFallbackMovie(serviceClient, item);
+  return await getOrCreateFallbackMovie(serviceClient, item, userId);
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -829,7 +913,7 @@ async function handleReenrichUnmatched(
       unmatchedCount: 0,
       tmdbConfigured: false,
       errorCode: 'TMDB_NOT_CONFIGURED' as TmdbErrorCode,
-      errorMessage: 'В секретах Supabase Edge Function не задан TMDB_READ_ACCESS_TOKEN (или TMDB_API_KEY).',
+      errorMessage: 'Сервис распознавания TMDB временно не настроен администратором.',
       unmatchedTitles: [] as string[],
     };
   }
@@ -853,9 +937,11 @@ async function handleReenrichUnmatched(
   const requestedIds = Array.isArray(reqBody.movieIds) && reqBody.movieIds.length > 0
     ? Array.from(
         new Set(
-          reqBody.movieIds.filter(
-            (id): id is string => typeof id === 'string' && UUID_REGEX.test(id) && userMovieSet.has(id)
-          )
+          reqBody.movieIds
+            .slice(0, 200)
+            .filter(
+              (id): id is string => typeof id === 'string' && UUID_REGEX.test(id) && userMovieSet.has(id)
+            )
         )
       ).slice(0, 40)
     : userMovieIds;
@@ -1029,56 +1115,94 @@ async function runWithConcurrency<T, R>(
 }
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsContext(req);
+  if (!cors.allowed) {
+    logSecurityEvent('cors_rejected', { origin: req.headers.get('Origin') ?? 'unknown' });
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: {
+        ...cors.headers,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+    });
+  }
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: cors.headers });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, 405, cors.headers);
   }
 
   const caller = await verifyCaller(req);
   if (!caller) {
-    return jsonResponse({ error: 'Unauthorized: valid Supabase session JWT required.' }, 401);
+    logSecurityEvent('auth_failed', { origin: req.headers.get('Origin') ?? null });
+    return jsonResponse({ error: 'Unauthorized: valid Supabase session required.' }, 401, cors.headers);
   }
 
-  if (isRateLimited(caller.userId)) {
-    return jsonResponse({ error: 'Too many requests. Please wait a minute and try again.' }, 429);
+  if (checkSlidingRateLimit(userRequestTimestamps, caller.userId, RATE_LIMIT_MAX_REQUESTS)) {
+    logSecurityEvent('rate_limited', { userId: caller.userId, scope: 'general' });
+    return jsonResponse({ error: 'Too many requests. Please wait a minute and try again.' }, 429, cors.headers);
+  }
+
+  const contentLengthHeader = req.headers.get('content-length');
+  if (contentLengthHeader) {
+    const declaredSize = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_REQUEST_BODY_BYTES) {
+      logSecurityEvent('payload_rejected', { userId: caller.userId, reason: 'content_length_exceeded', declaredSize });
+      return jsonResponse({ error: 'Request payload too large' }, 413, cors.headers);
+    }
   }
 
   let body: ProxyRequest;
   try {
-    const parsed = await req.json();
+    const rawText = await req.text();
+    const byteLength = new TextEncoder().encode(rawText).byteLength;
+    if (byteLength > MAX_REQUEST_BODY_BYTES) {
+      logSecurityEvent('payload_rejected', { userId: caller.userId, reason: 'body_bytes_exceeded', byteLength });
+      return jsonResponse({ error: 'Request payload too large' }, 413, cors.headers);
+    }
+    const parsed = JSON.parse(rawText);
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
       typeof (parsed as { action?: unknown }).action !== 'string'
     ) {
-      return jsonResponse({ error: 'Invalid request payload' }, 400);
+      logSecurityEvent('payload_rejected', { userId: caller.userId, reason: 'invalid_shape' });
+      return jsonResponse({ error: 'Invalid request payload' }, 400, cors.headers);
     }
     body = parsed as ProxyRequest;
   } catch (err) {
     console.warn('[tmdb-proxy] Invalid JSON request body:', err instanceof Error ? err.message : String(err));
-    return jsonResponse({ error: 'Invalid JSON request body' }, 400);
+    logSecurityEvent('payload_rejected', { userId: caller.userId, reason: 'invalid_json' });
+    return jsonResponse({ error: 'Invalid JSON request body' }, 400, cors.headers);
   }
 
   try {
     if (body.action === 'search') {
       const res = await handleSearch(body);
-      return jsonResponse(res);
+      return jsonResponse(res, 200, cors.headers);
     }
 
     const serviceClient = getServiceClient();
 
     if (body.action === 'enrich') {
-      if (!Number.isInteger(body.tmdbId) || body.tmdbId <= 0) {
-        return jsonResponse({ error: 'tmdbId must be a positive integer' }, 400);
+      const tmdbId = parsePositiveInt4(body.tmdbId);
+      if (tmdbId === null) {
+        return jsonResponse({ error: 'tmdbId must be a valid positive integer' }, 400, cors.headers);
       }
-      const movie = await enrichAndCacheByTmdbId(serviceClient, body.tmdbId, CACHE_LANGUAGE);
-      return jsonResponse({ movie });
+      const movie = await enrichAndCacheByTmdbId(serviceClient, tmdbId, CACHE_LANGUAGE);
+      logSecurityEvent('cache_write', { userId: caller.userId, action: 'enrich', tmdbId });
+      return jsonResponse({ movie }, 200, cors.headers);
     }
 
     if (body.action === 'resolve_batch') {
-      const rawItems = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
+      if (checkSlidingRateLimit(heavyRequestTimestamps, caller.userId, HEAVY_RATE_LIMIT_MAX_REQUESTS)) {
+        logSecurityEvent('rate_limited', { userId: caller.userId, scope: 'resolve_batch' });
+        return jsonResponse({ error: 'Too many batch requests. Please wait a minute and try again.' }, 429, cors.headers);
+      }
+
+      const rawItems = Array.isArray(body.items) ? body.items.slice(0, 50) : [];
       const items: BatchItem[] = rawItems
         .filter(
           (it): it is BatchItem =>
@@ -1090,7 +1214,7 @@ Deno.serve(async (req: Request) => {
         .map((it) => ({
           title: it.title.trim().slice(0, 500),
           year: typeof it.year === 'number' && Number.isInteger(it.year) ? it.year : null,
-          tmdbId: typeof it.tmdbId === 'number' && Number.isInteger(it.tmdbId) ? it.tmdbId : null,
+          tmdbId: parsePositiveInt4(it.tmdbId),
           imdbId: typeof it.imdbId === 'string' ? it.imdbId : null,
           fallbackRuntimeMinutes:
             typeof it.fallbackRuntimeMinutes === 'number' && Number.isFinite(it.fallbackRuntimeMinutes)
@@ -1102,18 +1226,22 @@ Deno.serve(async (req: Request) => {
         }));
 
       if (items.length === 0) {
-        return jsonResponse({
-          movies: [],
-          stats: {
-            total: 0,
-            matched: 0,
-            unmatched: 0,
-            tmdbConfigured: isTmdbConfigured(),
-            errorCode: null,
-            errorMessage: null,
-            unmatchedTitles: [],
+        return jsonResponse(
+          {
+            movies: [],
+            stats: {
+              total: 0,
+              matched: 0,
+              unmatched: 0,
+              tmdbConfigured: isTmdbConfigured(),
+              errorCode: null,
+              errorMessage: null,
+              unmatchedTitles: [],
+            },
           },
-        });
+          200,
+          cors.headers
+        );
       }
 
       const language = CACHE_LANGUAGE;
@@ -1122,13 +1250,13 @@ Deno.serve(async (req: Request) => {
         fatalErrorCode: configured ? null : 'TMDB_NOT_CONFIGURED',
         fatalErrorMessage: configured
           ? null
-          : 'В секретах Supabase Edge Function не задан TMDB_READ_ACCESS_TOKEN (или TMDB_API_KEY).',
+          : 'Сервис распознавания TMDB временно не настроен администратором.',
         lastErrorCode: null,
         lastErrorMessage: null,
       };
 
       const movies = await runWithConcurrency(items, BATCH_CONCURRENCY, (item) =>
-        resolveSingleBatchItem(serviceClient, item, language, sharedState)
+        resolveSingleBatchItem(serviceClient, item, language, sharedState, caller.userId)
       );
 
       let matched = 0;
@@ -1154,22 +1282,42 @@ Deno.serve(async (req: Request) => {
         unmatchedTitles,
       };
 
-      return jsonResponse({ movies, stats });
+      logSecurityEvent('cache_write', {
+        userId: caller.userId,
+        action: 'resolve_batch',
+        total: movies.length,
+        matched,
+        unmatched: movies.length - matched,
+      });
+
+      return jsonResponse({ movies, stats }, 200, cors.headers);
     }
 
     if (body.action === 'reenrich_unmatched') {
+      if (checkSlidingRateLimit(heavyRequestTimestamps, caller.userId, HEAVY_RATE_LIMIT_MAX_REQUESTS)) {
+        logSecurityEvent('rate_limited', { userId: caller.userId, scope: 'reenrich_unmatched' });
+        return jsonResponse({ error: 'Too many re-enrich requests. Please wait a minute and try again.' }, 429, cors.headers);
+      }
       const result = await handleReenrichUnmatched(serviceClient, caller.userId, body);
-      return jsonResponse(result);
+      logSecurityEvent('cache_write', {
+        userId: caller.userId,
+        action: 'reenrich_unmatched',
+        totalProcessed: result.totalProcessed,
+        matchedCount: result.matchedCount,
+        mergedCount: result.mergedCount,
+        refreshedCount: result.refreshedCount,
+      });
+      return jsonResponse(result, 200, cors.headers);
     }
 
-    return jsonResponse({ error: 'Unknown action' }, 400);
+    return jsonResponse({ error: 'Unknown action' }, 400, cors.headers);
   } catch (err) {
     if (isFatalTmdbError(err)) {
       console.error('[tmdb-proxy] Fatal TMDB error:', err.code, err.message);
-      return jsonResponse({ error: err.message, code: err.code }, err.status ?? 502);
+      return jsonResponse({ error: err.message, code: err.code }, err.status ?? 502, cors.headers);
     }
     const message = err instanceof Error ? err.message : 'Unexpected server error';
     console.error('[tmdb-proxy] Unexpected error:', message);
-    return jsonResponse({ error: 'Internal server error in tmdb-proxy' }, 500);
+    return jsonResponse({ error: 'Internal server error in tmdb-proxy' }, 500, cors.headers);
   }
 });
