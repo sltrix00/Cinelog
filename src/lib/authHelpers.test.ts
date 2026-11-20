@@ -131,4 +131,14 @@ describe('parseAuthCallbackError', () => {
       })
     ).toBeNull();
   });
+
+  it('sanitizes phishing URLs, angle brackets, and oversized error strings from callback params', () => {
+    const res = parseAuthCallbackError({
+      search: '?error_description=Visit+https%3A%2F%2Fevil.example%2Flogin+<script>alert(1)</script>',
+      hash: '',
+    });
+    expect(res).not.toContain('https://evil.example');
+    expect(res).not.toContain('<script>');
+    expect(res).toContain('[link]');
+  });
 });

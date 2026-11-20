@@ -77,5 +77,16 @@ export function parseAuthCallbackError(
     return null;
   }
 
-  return localizeAuthError(rawError);
+  const sanitized = rawError
+    .replace(/https?:\/\/\S+|www\.\S+/gi, '[link]')
+    .replace(/[\u0000-\u001F\u007F<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+
+  if (!sanitized) {
+    return null;
+  }
+
+  return localizeAuthError(sanitized);
 }

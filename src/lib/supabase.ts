@@ -34,12 +34,70 @@ export const isSupabaseConfigured = Boolean(
     !supabaseKey.includes('xxxxxxxx')
 );
 
+function createIsolatedAuthStorage() {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  // Purge residual session tokens previously persisted in shared-origin localStorage
+  try {
+    const keysToPurge: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k && /^sb-.*-auth-token$/.test(k)) {
+        keysToPurge.push(k);
+      }
+    }
+    for (const k of keysToPurge) {
+      window.localStorage.removeItem(k);
+    }
+  } catch {
+    // Ignore storage access restrictions
+  }
+
+  return {
+    getItem(key: string): string | null {
+      try {
+        const val = window.sessionStorage.getItem(key);
+        if (val !== null) return val;
+        if (key.endsWith('-code-verifier')) {
+          const legacyVal = window.localStorage.getItem(key);
+          if (legacyVal !== null) {
+            window.localStorage.removeItem(key);
+            return legacyVal;
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    setItem(key: string, value: string): void {
+      try {
+        window.sessionStorage.setItem(key, value);
+      } catch {
+        // Ignore quota / privacy mode errors
+      }
+    },
+    removeItem(key: string): void {
+      try {
+        window.sessionStorage.removeItem(key);
+        window.localStorage.removeItem(key);
+      } catch {
+        // Ignore storage errors
+      }
+    },
+  };
+}
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        flowType: 'pkce',
+        storage: createIsolatedAuthStorage(),
       },
     })
   : null;
@@ -136,9 +194,13 @@ export async function resetPasswordByEmail(email: string) {
 
 export async function updateAccountPassword(newPassword: string) {
   const client = requireClient();
-  return client.auth.updateUser({
+  const res = await client.auth.updateUser({
     password: newPassword,
   });
+  if (!res.error) {
+    await client.auth.signOut({ scope: 'others' }).catch(() => undefined);
+  }
+  return res;
 }
 
 export async function signOutAccount() {

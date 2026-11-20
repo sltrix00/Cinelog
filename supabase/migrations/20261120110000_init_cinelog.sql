@@ -50,6 +50,8 @@ begin
 end;
 $$;
 
+revoke all on function private.set_updated_at() from public, anon, authenticated;
+
 -- IANA timezone validation, e.g. 'Asia/Yekaterinburg'.
 create or replace function private.is_valid_timezone(tz text)
 returns boolean
@@ -68,6 +70,7 @@ exception when others then
 end;
 $$;
 
+revoke all on function private.is_valid_timezone(text) from public, anon;
 grant usage on schema private to authenticated, service_role;
 grant execute on function private.is_valid_timezone(text) to authenticated, service_role;
 
@@ -80,7 +83,7 @@ create table public.profiles (
   timezone    text not null default 'UTC'
               check (private.is_valid_timezone(timezone)),
   preferences jsonb not null default '{}'::jsonb
-              check (jsonb_typeof(preferences) = 'object'),
+              check (jsonb_typeof(preferences) = 'object' and octet_length(preferences::text) <= 32768),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -116,21 +119,28 @@ begin
     v_timezone := 'UTC';
   end if;
 
-  insert into public.profiles (id, username, timezone)
-  values (new.id, v_username, v_timezone)
-  on conflict (id) do nothing;
+  begin
+    insert into public.profiles (id, username, timezone)
+    values (new.id, v_username, v_timezone)
+    on conflict (id) do nothing;
+  exception when unique_violation then
+    insert into public.profiles (id, username, timezone)
+    values (new.id, null, v_timezone)
+    on conflict (id) do nothing;
+  end;
 
   return new;
 end;
 $$;
 
-revoke execute on function private.handle_new_user() from public, anon, authenticated;
+revoke all on function private.handle_new_user() from public, anon, authenticated;
 
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function private.handle_new_user();
 
 alter table public.profiles enable row level security;
+alter table public.profiles force row level security;
 
 create policy "profiles: owner can read"
   on public.profiles for select
@@ -145,6 +155,7 @@ create policy "profiles: owner can update"
 
 -- No INSERT/DELETE policies: rows are created by the trigger and removed by
 -- the auth.users cascade. Column-level grant keeps id/created_at immutable.
+revoke all on table public.profiles from public, anon, authenticated;
 grant select on public.profiles to authenticated;
 grant update (username, timezone, preferences) on public.profiles to authenticated;
 grant all on public.profiles to service_role;
@@ -163,7 +174,7 @@ create table public.movies (
   genres          text[] not null default '{}',
   directors       text[] not null default '{}',
   countries       text[] not null default '{}',
-  poster_url      text check (poster_url ~ '^https://'),
+  poster_url      text check (poster_url ~ '^https://image\.tmdb\.org/t/p/'),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
@@ -182,13 +193,22 @@ create trigger movies_set_updated_at
   for each row execute function private.set_updated_at();
 
 alter table public.movies enable row level security;
+alter table public.movies force row level security;
 
 create policy "movies: readable by signed-in users"
   on public.movies for select
   to authenticated
-  using (true);
+  using (
+    tmdb_id is not null
+    or exists (
+      select 1 from public.watch_logs w
+      where w.movie_id = public.movies.id
+        and w.user_id = (select auth.uid())
+    )
+  );
 
 -- Intentionally NO insert/update/delete policies for clients.
+revoke all on table public.movies from public, anon, authenticated;
 grant select on public.movies to authenticated;
 grant all on public.movies to service_role;
 
@@ -230,6 +250,7 @@ create trigger watch_logs_set_updated_at
   for each row execute function private.set_updated_at();
 
 alter table public.watch_logs enable row level security;
+alter table public.watch_logs force row level security;
 
 create policy "watch_logs: owner can select"
   on public.watch_logs for select
@@ -252,7 +273,29 @@ create policy "watch_logs: owner can delete"
   to authenticated
   using ((select auth.uid()) = user_id);
 
-grant select, insert, update, delete on public.watch_logs to authenticated;
+revoke all on table public.watch_logs from public, anon, authenticated;
+grant select, delete on public.watch_logs to authenticated;
+grant insert (
+  user_id,
+  movie_id,
+  watched_date,
+  watched_time,
+  rating,
+  is_rewatch,
+  source,
+  runtime_override_minutes,
+  import_key
+) on table public.watch_logs to authenticated;
+grant update (
+  movie_id,
+  watched_date,
+  watched_time,
+  rating,
+  is_rewatch,
+  source,
+  runtime_override_minutes,
+  import_key
+) on table public.watch_logs to authenticated;
 grant all on public.watch_logs to service_role;
 
 -- -----------------------------------------------------------------------------
@@ -286,8 +329,12 @@ select
 from public.watch_logs w
 join public.movies m on m.id = w.movie_id;
 
+revoke all on table public.watch_entries from public, anon, authenticated;
 grant select on public.watch_entries to authenticated;
 grant select on public.watch_entries to service_role;
 
 -- anon gets nothing: Demo Mode runs entirely client-side.
-revoke all on public.profiles, public.movies, public.watch_logs, public.watch_entries from anon;
+revoke all on public.profiles, public.movies, public.watch_logs, public.watch_entries from public, anon;
+alter default privileges in schema public revoke all on tables from public, anon, authenticated;
+alter default privileges in schema public revoke all on sequences from public, anon, authenticated;
+alter default privileges in schema public revoke all on functions from public, anon, authenticated;

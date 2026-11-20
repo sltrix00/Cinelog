@@ -5,7 +5,22 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'dev-csp-relax',
+      apply: 'serve',
+      transformIndexHtml(html) {
+        return html
+          .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+          .replace(
+            "connect-src 'self'",
+            "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*"
+          );
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       output: {

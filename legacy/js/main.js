@@ -8,7 +8,9 @@ import {
   hashPassword,
   saveMovies,
   saveSession,
-  saveUsers
+  saveUsers,
+  verifyPassword,
+  verifySessionUser
 } from './storage.js';
 import {
   destroyCharts,
@@ -68,23 +70,17 @@ async function doLogin() {
   }
 
   const users = getUsers();
-  const userExists = users.some(candidate => candidate.email === email);
-  if (!userExists) {
-    showAuthMessage(
-      'No account found with this email. Please <span class="msg-link" data-switch-tab="register">register to create an account</span> first.',
-      'error'
-    );
+  const user = users.find(candidate => candidate.email === email);
+  if (!user || !(await verifyPassword(password, user.ph))) {
+    showAuthMessage('Invalid email or password.', 'error');
     return;
   }
 
-  const passwordHash = await hashPassword(password);
-  const user = users.find(candidate =>
-    candidate.email === email && candidate.ph === passwordHash
-  );
-  if (!user) {
-    showAuthMessage('Incorrect password. Please try again.', 'error');
-    return;
+  if (!String(user.ph).startsWith('pbkdf2$')) {
+    user.ph = await hashPassword(password);
   }
+  user.sessionToken = createId();
+  saveUsers(users);
 
   saveSession(user);
   bootApp(user);
@@ -117,6 +113,7 @@ async function doRegister() {
     id: createId(),
     email,
     ph: await hashPassword(password),
+    sessionToken: createId(),
     createdAt: Date.now()
   };
   saveUsers([...users, user]);
@@ -320,7 +317,7 @@ function parseCSV(content) {
 
   return lines.slice(1).map(line => {
     const columns = parseCSVLine(line);
-    const row = {};
+    const row = Object.create(null);
     headers.forEach((header, index) => {
       row[header] = columns[index] !== undefined ? columns[index] : '';
     });
@@ -595,7 +592,7 @@ function initializeApp() {
 
   const session = getSession();
   if (session) {
-    const user = getUsers().find(candidate => candidate.id === session.id);
+    const user = verifySessionUser(session, getUsers());
     if (user) {
       bootApp(user);
       return;

@@ -150,4 +150,17 @@ describe('Smart CSV & Diary Import Pipeline', () => {
     expect(annotated[1].isRewatch).toBe(true);
     expect(annotated[1].autoRewatchDetected).toBe(true);
   });
+
+  it('handles prototype-like CSV header names safely without Object.prototype pollution', () => {
+    const csv = [
+      'Name,Year,Watched Date,__proto__,constructor,toString',
+      'Inception,2010,2026-05-01,polluted,bad,override',
+    ].join('\n');
+
+    const rows = parseCsvContent(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe('Inception');
+    expect(rows[0].releaseYear).toBe(2010);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
 });

@@ -14,6 +14,11 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const BATCH_CONCURRENCY = 4;
+const CACHE_LANGUAGE = 'ru-RU';
+const ALLOWED_SEARCH_LANGUAGES = new Set(['ru-RU', 'en-US']);
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 120;
+const userRequestTimestamps = new Map<string, number[]>();
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -112,6 +117,52 @@ function isTmdbConfigured(): boolean {
   return Boolean(getEnv('TMDB_READ_ACCESS_TOKEN').trim() || getEnv('TMDB_API_KEY').trim());
 }
 
+export function escapeIlikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+function sanitizeStringList(raw: unknown, maxItems: number, maxItemLength = 120): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const clean = item.trim().slice(0, maxItemLength);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+function resolveSearchLanguage(lang?: unknown): string {
+  return typeof lang === 'string' && ALLOWED_SEARCH_LANGUAGES.has(lang) ? lang : CACHE_LANGUAGE;
+}
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const existing = userRequestTimestamps.get(userId) ?? [];
+  const recent = existing.filter((ts) => ts > cutoff);
+  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
+    userRequestTimestamps.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  userRequestTimestamps.set(userId, recent);
+  if (userRequestTimestamps.size > 1000) {
+    for (const [uid, times] of userRequestTimestamps.entries()) {
+      const active = times.filter((ts) => ts > cutoff);
+      if (active.length === 0) userRequestTimestamps.delete(uid);
+      else userRequestTimestamps.set(uid, active);
+    }
+  }
+  return false;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -165,7 +216,7 @@ async function tmdbFetch<T>(
   while (true) {
     let res: Response;
     try {
-      res = await fetch(url.toString(), { headers });
+      res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(10_000) });
     } catch (err) {
       if (transientAttempts < 1) {
         transientAttempts += 1;
@@ -218,7 +269,7 @@ async function tmdbFetch<T>(
 }
 
 function toPosterUrl(posterPath?: string | null): string | null {
-  if (!posterPath || !posterPath.startsWith('/')) return null;
+  if (!posterPath || !/^\/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png|webp)$/i.test(posterPath)) return null;
   return `${TMDB_POSTER_BASE}${posterPath}`;
 }
 
@@ -242,20 +293,33 @@ async function verifyCaller(req: Request): Promise<{ userId: string } | null> {
 
   // Prefer getClaims() for asymmetric JWT signing keys; fall back to getUser() if unavailable.
   const authAny = authClient.auth as unknown as {
-    getClaims?: (jwt?: string) => Promise<{ data?: { claims?: { sub?: string } } | null; error: unknown }>;
-    getUser: (jwt?: string) => Promise<{ data: { user: { id: string } | null }; error: unknown }>;
+    getClaims?: (jwt?: string) => Promise<{
+      data?: { claims?: { sub?: string; role?: string; is_anonymous?: boolean } } | null;
+      error: unknown;
+    }>;
+    getUser: (jwt?: string) => Promise<{
+      data: { user: { id: string; role?: string; is_anonymous?: boolean } | null };
+      error: unknown;
+    }>;
   };
 
   if (typeof authAny.getClaims === 'function') {
     const { data, error } = await authAny.getClaims(token);
-    const sub = data?.claims?.sub;
+    const claims = data?.claims;
+    const sub = claims?.sub;
     if (!error && sub) {
+      if (claims.is_anonymous === true || (claims.role && claims.role !== 'authenticated')) {
+        return null;
+      }
       return { userId: sub };
     }
   }
 
   const { data, error } = await authClient.auth.getUser(token);
   if (error || !data.user) return null;
+  if (data.user.is_anonymous === true || (data.user.role && data.user.role !== 'authenticated')) {
+    return null;
+  }
   return { userId: data.user.id };
 }
 
@@ -279,17 +343,21 @@ interface TmdbSearchResponse {
 }
 
 async function handleSearch(reqBody: SearchRequest) {
-  const query = (reqBody.query ?? '').trim();
+  const query = typeof reqBody.query === 'string' ? reqBody.query.trim().slice(0, 200) : '';
   if (!query) {
     return { results: [], tmdbConfigured: true };
   }
   if (!isTmdbConfigured()) {
     return { results: [], tmdbConfigured: false };
   }
-  const language = reqBody.language ?? 'ru-RU';
+  const language = resolveSearchLanguage(reqBody.language);
+  const validYear =
+    typeof reqBody.year === 'number' && Number.isInteger(reqBody.year) && reqBody.year >= 1870 && reqBody.year <= 2100
+      ? reqBody.year
+      : undefined;
   const data = await tmdbFetch<TmdbSearchResponse>('/search/movie', {
     query,
-    year: reqBody.year ?? undefined,
+    year: validYear,
     include_adult: 'false',
     language,
   });
@@ -447,14 +515,18 @@ async function getOrCreateFallbackMovie(
   item: BatchItem
 ): Promise<MovieRow> {
   const cleanTitle = item.title.trim().slice(0, 500);
-  const year = item.year && item.year >= 1870 && item.year <= 2100 ? item.year : null;
+  const escapedTitle = escapeIlikePattern(cleanTitle);
+  const year =
+    typeof item.year === 'number' && Number.isInteger(item.year) && item.year >= 1870 && item.year <= 2100
+      ? item.year
+      : null;
 
   // Check if an unmatched fallback row already exists for (lower(title), coalesce(year, 0))
   const query = serviceClient
     .from('movies')
     .select('*')
     .is('tmdb_id', null)
-    .ilike('title', cleanTitle);
+    .ilike('title', escapedTitle);
 
   const { data: candidates } = await (year ? query.eq('release_year', year) : query.is('release_year', null));
   if (candidates && candidates.length > 0) {
@@ -462,7 +534,8 @@ async function getOrCreateFallbackMovie(
   }
 
   const runtime =
-    item.fallbackRuntimeMinutes &&
+    typeof item.fallbackRuntimeMinutes === 'number' &&
+    Number.isFinite(item.fallbackRuntimeMinutes) &&
     item.fallbackRuntimeMinutes >= 1 &&
     item.fallbackRuntimeMinutes <= 1500
       ? Math.round(item.fallbackRuntimeMinutes)
@@ -476,9 +549,9 @@ async function getOrCreateFallbackMovie(
       title: cleanTitle,
       release_year: year,
       runtime_minutes: runtime,
-      genres: normalizeGenres(item.fallbackGenres ?? []),
-      directors: (item.fallbackDirectors ?? []).filter(Boolean).slice(0, 5),
-      countries: (item.fallbackCountries ?? []).filter(Boolean).slice(0, 5),
+      genres: normalizeGenres(sanitizeStringList(item.fallbackGenres, 6, 80)),
+      directors: sanitizeStringList(item.fallbackDirectors, 5, 120),
+      countries: sanitizeStringList(item.fallbackCountries, 5, 80),
     })
     .select('*')
     .single<MovieRow>();
@@ -492,7 +565,7 @@ async function getOrCreateFallbackMovie(
     .from('movies')
     .select('*')
     .is('tmdb_id', null)
-    .ilike('title', cleanTitle);
+    .ilike('title', escapedTitle);
   const { data: retryRows } = await (year
     ? retryQuery.eq('release_year', year)
     : retryQuery.is('release_year', null));
@@ -508,6 +581,7 @@ async function findCachedTmdbMovieByTitle(
   cleanTitle: string,
   year?: number | null
 ): Promise<MovieRow | null> {
+  const escapedTitle = escapeIlikePattern(cleanTitle);
   const validYear =
     typeof year === 'number' && Number.isInteger(year) && year >= 1870 && year <= 2100 ? year : null;
 
@@ -515,7 +589,7 @@ async function findCachedTmdbMovieByTitle(
     .from('movies')
     .select('*')
     .not('tmdb_id', 'is', null)
-    .ilike('title', cleanTitle);
+    .ilike('title', escapedTitle);
   const { data: byTitle, error: byTitleErr } = await (validYear
     ? titleQuery.eq('release_year', validYear)
     : titleQuery
@@ -532,7 +606,7 @@ async function findCachedTmdbMovieByTitle(
     .from('movies')
     .select('*')
     .not('tmdb_id', 'is', null)
-    .ilike('original_title', cleanTitle);
+    .ilike('original_title', escapedTitle);
   const { data: byOrig, error: byOrigErr } = await (validYear
     ? origQuery.eq('release_year', validYear)
     : origQuery
@@ -577,54 +651,34 @@ async function resolveSingleBatchItem(
   language: string,
   state: BatchSharedState
 ): Promise<MovieRow> {
-  if (item.tmdbId && item.tmdbId > 0) {
+  const validTmdbId =
+    typeof item.tmdbId === 'number' && Number.isInteger(item.tmdbId) && item.tmdbId > 0 ? item.tmdbId : null;
+  if (validTmdbId !== null) {
     if (!state.fatalErrorCode) {
       try {
-        return await enrichAndCacheByTmdbId(serviceClient, item.tmdbId, language);
+        return await enrichAndCacheByTmdbId(serviceClient, validTmdbId, language);
       } catch (err) {
-        recordBatchError(state, err, `enrich by tmdbId=${item.tmdbId}`);
+        recordBatchError(state, err, `enrich by tmdbId=${validTmdbId}`);
       }
     }
 
     const { data: cachedByTmdb } = await serviceClient
       .from('movies')
       .select('*')
-      .eq('tmdb_id', item.tmdbId)
+      .eq('tmdb_id', validTmdbId)
       .maybeSingle<MovieRow>();
     if (cachedByTmdb) return cachedByTmdb;
-
-    const { data: upserted } = await serviceClient
-      .from('movies')
-      .upsert(
-        {
-          tmdb_id: item.tmdbId,
-          imdb_id: normalizeImdbId(item.imdbId),
-          title: item.title.trim().slice(0, 500),
-          release_year: item.year && item.year >= 1870 && item.year <= 2100 ? item.year : null,
-          runtime_minutes:
-            item.fallbackRuntimeMinutes &&
-            item.fallbackRuntimeMinutes >= 1 &&
-            item.fallbackRuntimeMinutes <= 1500
-              ? Math.round(item.fallbackRuntimeMinutes)
-              : null,
-          genres: normalizeGenres(item.fallbackGenres ?? []),
-          directors: (item.fallbackDirectors ?? []).filter(Boolean).slice(0, 5),
-          countries: (item.fallbackCountries ?? []).filter(Boolean).slice(0, 5),
-        },
-        { onConflict: 'tmdb_id' }
-      )
-      .select('*')
-      .maybeSingle<MovieRow>();
-    if (upserted) return upserted;
   }
 
   const imdbId = normalizeImdbId(item.imdbId);
   if (imdbId) {
-    const { data: byImdb } = await serviceClient
+    const { data: byImdbRows } = await serviceClient
       .from('movies')
       .select('*')
+      .not('tmdb_id', 'is', null)
       .eq('imdb_id', imdbId)
-      .maybeSingle<MovieRow>();
+      .limit(1);
+    const byImdb = (byImdbRows?.[0] as MovieRow | undefined) ?? null;
 
     if (byImdb) {
       if (byImdb.tmdb_id && byImdb.original_title === null && !state.fatalErrorCode) {
@@ -764,7 +818,7 @@ async function handleReenrichUnmatched(
   userId: string,
   reqBody: ReenrichUnmatchedRequest
 ) {
-  const language = reqBody.language ?? 'ru-RU';
+  const language = CACHE_LANGUAGE;
 
   if (!isTmdbConfigured()) {
     return {
@@ -987,9 +1041,21 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Unauthorized: valid Supabase session JWT required.' }, 401);
   }
 
+  if (isRateLimited(caller.userId)) {
+    return jsonResponse({ error: 'Too many requests. Please wait a minute and try again.' }, 429);
+  }
+
   let body: ProxyRequest;
   try {
-    body = (await req.json()) as ProxyRequest;
+    const parsed = await req.json();
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof (parsed as { action?: unknown }).action !== 'string'
+    ) {
+      return jsonResponse({ error: 'Invalid request payload' }, 400);
+    }
+    body = parsed as ProxyRequest;
   } catch (err) {
     console.warn('[tmdb-proxy] Invalid JSON request body:', err instanceof Error ? err.message : String(err));
     return jsonResponse({ error: 'Invalid JSON request body' }, 400);
@@ -1007,13 +1073,50 @@ Deno.serve(async (req: Request) => {
       if (!Number.isInteger(body.tmdbId) || body.tmdbId <= 0) {
         return jsonResponse({ error: 'tmdbId must be a positive integer' }, 400);
       }
-      const movie = await enrichAndCacheByTmdbId(serviceClient, body.tmdbId, body.language ?? 'ru-RU');
+      const movie = await enrichAndCacheByTmdbId(serviceClient, body.tmdbId, CACHE_LANGUAGE);
       return jsonResponse({ movie });
     }
 
     if (body.action === 'resolve_batch') {
-      const items = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
-      const language = body.language ?? 'ru-RU';
+      const rawItems = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
+      const items: BatchItem[] = rawItems
+        .filter(
+          (it): it is BatchItem =>
+            typeof it === 'object' &&
+            it !== null &&
+            typeof (it as { title?: unknown }).title === 'string' &&
+            (it as { title: string }).title.trim().length > 0
+        )
+        .map((it) => ({
+          title: it.title.trim().slice(0, 500),
+          year: typeof it.year === 'number' && Number.isInteger(it.year) ? it.year : null,
+          tmdbId: typeof it.tmdbId === 'number' && Number.isInteger(it.tmdbId) ? it.tmdbId : null,
+          imdbId: typeof it.imdbId === 'string' ? it.imdbId : null,
+          fallbackRuntimeMinutes:
+            typeof it.fallbackRuntimeMinutes === 'number' && Number.isFinite(it.fallbackRuntimeMinutes)
+              ? it.fallbackRuntimeMinutes
+              : null,
+          fallbackGenres: sanitizeStringList(it.fallbackGenres, 6, 80),
+          fallbackDirectors: sanitizeStringList(it.fallbackDirectors, 5, 120),
+          fallbackCountries: sanitizeStringList(it.fallbackCountries, 5, 80),
+        }));
+
+      if (items.length === 0) {
+        return jsonResponse({
+          movies: [],
+          stats: {
+            total: 0,
+            matched: 0,
+            unmatched: 0,
+            tmdbConfigured: isTmdbConfigured(),
+            errorCode: null,
+            errorMessage: null,
+            unmatchedTitles: [],
+          },
+        });
+      }
+
+      const language = CACHE_LANGUAGE;
       const configured = isTmdbConfigured();
       const sharedState: BatchSharedState = {
         fatalErrorCode: configured ? null : 'TMDB_NOT_CONFIGURED',
@@ -1067,6 +1170,6 @@ Deno.serve(async (req: Request) => {
     }
     const message = err instanceof Error ? err.message : 'Unexpected server error';
     console.error('[tmdb-proxy] Unexpected error:', message);
-    return jsonResponse({ error: message }, 500);
+    return jsonResponse({ error: 'Internal server error in tmdb-proxy' }, 500);
   }
 });

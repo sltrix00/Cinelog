@@ -138,7 +138,7 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
 
   for (let r = 1; r < matrix.length; r++) {
     const cols = matrix[r];
-    const row: Record<string, string> = {};
+    const row: Record<string, string> = Object.create(null);
     headers.forEach((h, idx) => {
       row[h] = cols[idx] ?? '';
     });
@@ -380,7 +380,12 @@ export function parseJsonImport(content: string): ParsedImportRow[] {
     .filter((x): x is ParsedImportRow => x !== null);
 }
 
+const MAX_IMPORT_FILE_BYTES = 15 * 1024 * 1024;
+
 export async function parseImportFile(file: File): Promise<ParsedImportRow[]> {
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    throw new Error('Файл слишком большой (максимум 15 МБ).');
+  }
   const content = await file.text();
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (ext === 'csv') return parseCsvContent(content);

@@ -100,6 +100,9 @@ export function AuthModal({
         onAuthSuccess();
         handleClose();
       } else if (mode === 'register') {
+        if (password.length < 8) {
+          throw new Error('Пароль должен содержать минимум 8 символов.');
+        }
         const { data, error } = await signUpWithEmail(email.trim(), password, username);
         if (error) throw error;
         if (data.session) {
@@ -132,10 +135,17 @@ export function AuthModal({
 
   const handlePasswordRecoverySubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       setMessage({
         type: 'error',
-        text: 'Пароль должен содержать минимум 6 символов.',
+        text: 'Пароль должен содержать минимум 8 символов.',
+      });
+      return;
+    }
+    if (newPassword.length > 128) {
+      setMessage({
+        type: 'error',
+        text: 'Пароль слишком длинный (максимум 128 символов).',
       });
       return;
     }
@@ -240,11 +250,12 @@ export function AuthModal({
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={128}
                   autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Минимум 6 символов"
+                  placeholder="Минимум 8 символов"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                 />
               </div>
@@ -254,7 +265,8 @@ export function AuthModal({
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={128}
                   autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -403,11 +415,12 @@ export function AuthModal({
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={mode === 'register' ? 8 : 6}
+                      maxLength={128}
                       autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Минимум 6 символов"
+                      placeholder={mode === 'register' ? 'Минимум 8 символов' : 'Введите пароль'}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                     />
                   </div>

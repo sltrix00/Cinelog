@@ -37,9 +37,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
   const [timeOfDayBucket, setTimeOfDayBucket] = useState<0 | 1 | 2 | 3>(2);
   const [exactTime, setExactTime] = useState<string>('');
   const [isRewatch, setIsRewatch] = useState(false);
-  const [director, setDirector] = useState('Кристофер Нолан');
-  const [country, setCountry] = useState('США');
-  const [genre, setGenre] = useState('Драма');
+  const [director, setDirector] = useState('');
+  const [country, setCountry] = useState('');
+  const [genre, setGenre] = useState('');
 
   const [suggestions, setSuggestions] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -106,9 +106,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
     );
     if (catalogHit) {
       if (catalogHit.runtime_minutes) setRuntime(String(catalogHit.runtime_minutes));
-      if (catalogHit.directors[0]) setDirector(catalogHit.directors[0]);
-      if (catalogHit.countries[0]) setCountry(catalogHit.countries[0]);
-      if (catalogHit.genres[0]) setGenre(catalogHit.genres[0]);
+      setDirector(catalogHit.directors[0] ?? '');
+      setCountry(catalogHit.countries[0] ?? '');
+      setGenre(catalogHit.genres[0] ?? '');
       return;
     }
 
@@ -118,9 +118,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
         const enriched = await enrichMovieViaProxy(item.tmdbId);
         if (enriched) {
           if (enriched.runtime_minutes) setRuntime(String(enriched.runtime_minutes));
-          if (enriched.directors[0]) setDirector(enriched.directors[0]);
-          if (enriched.countries[0]) setCountry(enriched.countries[0]);
-          if (enriched.genres[0]) setGenre(enriched.genres[0]);
+          setDirector(enriched.directors[0] ?? '');
+          setCountry(enriched.countries[0] ?? '');
+          setGenre(enriched.genres[0] ?? '');
         }
       } finally {
         setSearching(false);
@@ -161,6 +161,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
       setTmdbId(null);
       setExactTime('');
       setIsRewatch(false);
+      setDirector('');
+      setCountry('');
+      setGenre('');
       onClose();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Не удалось сохранить просмотр.');
@@ -208,6 +211,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
                 onChange={(e) => {
                   setTitle(e.target.value);
                   setTmdbId(null);
+                  setDirector('');
+                  setCountry('');
+                  setGenre('');
                 }}
                 placeholder="Например: Одиссея или Дюна"
                 className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#f06292]"

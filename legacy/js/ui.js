@@ -49,10 +49,8 @@ export function toggleSidebar(forceState) {
 }
 
 export function showAuthMessage(content, type) {
-  const inner = typeof content === 'string' && (content.includes('<') || content.includes('&'))
-    ? content
-    : escapeHTML(content);
-  getElement('auth-msg').innerHTML = `<div class="msg msg-${type}">${inner}</div>`;
+  const safeType = type === 'success' ? 'success' : 'error';
+  getElement('auth-msg').innerHTML = `<div class="msg msg-${safeType}">${escapeHTML(content)}</div>`;
 }
 
 export function showImportMessage(text, type) {
@@ -74,8 +72,8 @@ export function showImportPreview(movies, fileLabel) {
       <div class="preview-list">
         ${movies.slice(0, 25).map(movie => `
           <div class="preview-item">
-            <span>${escapeHTML(movie.title)} (${movie.movieYear || '?'})</span>
-            <span>${movie.rating != null ? `${movie.rating}/10` : '—'} · ${movie.watchedAt
+            <span>${escapeHTML(movie.title)} (${escapeHTML(movie.movieYear || '?')})</span>
+            <span>${movie.rating != null ? `${escapeHTML(movie.rating)}/10` : '—'} · ${movie.watchedAt
               ? new Date(movie.watchedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
               : 'no date'}</span>
           </div>`).join('')}
@@ -86,7 +84,10 @@ export function showImportPreview(movies, fileLabel) {
     </div>`;
 }
 
+const VALID_VIEWS = new Set(['dashboard', 'movies', 'add', 'import', 'stats', 'top']);
+
 export function showView(name) {
+  if (!VALID_VIEWS.has(name)) return;
   toggleSidebar(false);
   appState.activeView = name;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
@@ -147,9 +148,9 @@ export function renderDashboard() {
       ${recentMovies.map(movie => `
         <div class="movie-card">
           <div class="movie-card-title">${escapeHTML(movie.title)}</div>
-          <div class="movie-card-date">${movie.movieYear || ''} · ${formatDate(movie.watchedAt)}</div>
+          <div class="movie-card-date">${escapeHTML(movie.movieYear || '')} · ${formatDate(movie.watchedAt)}</div>
           <div class="movie-card-meta">
-            ${movie.rating != null ? `<span class="badge ${ratingClass(movie.rating)}">${movie.rating}/10</span>` : ''}
+            ${movie.rating != null ? `<span class="badge ${ratingClass(movie.rating)}">${escapeHTML(movie.rating)}/10</span>` : ''}
             ${movie.rewatched ? '<span class="badge badge-rw">↺ rewatch</span>' : ''}
           </div>
         </div>`).join('')}
@@ -207,10 +208,10 @@ export function renderTable() {
     <tr>
       <td class="text-dim" style="font-family:'DM Mono',monospace;font-size:.72rem">${index + 1}</td>
       <td><span style="font-weight:500">${escapeHTML(movie.title)}</span>${movie.rewatched ? ' <span class="badge badge-rw">↺</span>' : ''}</td>
-      <td class="text-dim">${movie.movieYear || '—'}</td>
+      <td class="text-dim">${escapeHTML(movie.movieYear || '—')}</td>
       <td class="text-dim" style="font-size:.82rem;white-space:nowrap">${formatDate(movie.watchedAt)}</td>
       <td>${movie.rating != null
-        ? `<span class="badge ${ratingClass(movie.rating)}">${movie.rating}/10</span>`
+        ? `<span class="badge ${ratingClass(movie.rating)}">${escapeHTML(movie.rating)}/10</span>`
         : '<span class="text-dim">—</span>'}</td>
       <td style="font-size:.78rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(movie.notes || '')}</td>
       <td><button class="btn-icon" data-action="delete-movie" data-movie-id="${escapeHTML(movie.id)}" aria-label="Remove ${escapeHTML(movie.title)}">✕</button></td>
@@ -434,9 +435,9 @@ export function renderTopPicks() {
   getElement('top-grid').innerHTML = movies.map(movie => `
     <div class="movie-card">
       <div class="movie-card-title">${escapeHTML(movie.title)}</div>
-      <div class="movie-card-date">${movie.movieYear || ''} · ${formatDate(movie.watchedAt)}</div>
+      <div class="movie-card-date">${escapeHTML(movie.movieYear || '')} · ${formatDate(movie.watchedAt)}</div>
       <div class="movie-card-meta">
-        <span class="badge badge-high">${movie.rating}/10</span>
+        <span class="badge badge-high">${escapeHTML(movie.rating)}/10</span>
         ${movie.rewatched ? '<span class="badge badge-rw">↺ rewatch</span>' : ''}
       </div>
       ${movie.notes
