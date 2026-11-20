@@ -93,3 +93,5 @@ MovieTracker2/
    * `npm run typecheck`
    * `npm test`
    * `npm run build`
+5. **Live Deployment (GitHub Pages):**
+   * Automatically builds and deploys on every push to `main` via `.github/workflows/deploy.yml` to `https://sltrix00.github.io/MovieTracker2/`.
