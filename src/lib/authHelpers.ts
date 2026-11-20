@@ -6,7 +6,7 @@
 export function getAuthRedirectUrl(
   loc: Pick<Location, 'origin' | 'pathname'> = window.location
 ): string {
-  let pathname = (loc.pathname || '/').replace(/\/index\.html$/i, '/');
+  let pathname = (loc.pathname || '/').replace(/\/index\.html$/i, '/').replace(/^\/+/, '/');
   if (!pathname.startsWith('/')) {
     pathname = `/${pathname}`;
   }

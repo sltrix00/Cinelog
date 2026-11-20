@@ -49,6 +49,15 @@ describe('getAuthRedirectUrl', () => {
       })
     ).toBe('http://localhost:5173/');
   });
+
+  it('collapses multiple leading slashes so scheme-relative paths cannot form', () => {
+    expect(
+      getAuthRedirectUrl({
+        origin: 'https://sltrix00.github.io',
+        pathname: '//evil.example/MovieTracker2',
+      })
+    ).toBe('https://sltrix00.github.io/evil.example/MovieTracker2/');
+  });
 });
 
 describe('parseGoogleProviderEnabled', () => {

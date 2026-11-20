@@ -15,6 +15,9 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const BATCH_CONCURRENCY = 4;
 const CACHE_LANGUAGE = 'ru-RU';
+const PUBLIC_MOVIE_COLUMNS =
+  'id, tmdb_id, imdb_id, title, original_title, release_year, runtime_minutes, genres, directors, countries, poster_url, created_at, updated_at';
+const INTERNAL_MOVIE_COLUMNS = `${PUBLIC_MOVIE_COLUMNS}, created_by`;
 const ALLOWED_SEARCH_LANGUAGES = new Set(['ru-RU', 'en-US']);
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
@@ -102,6 +105,13 @@ class TmdbApiError extends Error {
   }
 }
 
+class QuotaExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaExceededError';
+  }
+}
+
 interface MovieRow {
   id: string;
   tmdb_id: number | null;
@@ -115,6 +125,10 @@ interface MovieRow {
   countries: string[];
   poster_url: string | null;
   updated_at: string;
+}
+
+interface InternalMovieRow extends MovieRow {
+  created_by: string | null;
 }
 
 interface SearchRequest {
@@ -382,7 +396,8 @@ function formatMovieLabel(title: string, year?: number | null): string {
 
 async function verifyCaller(req: Request): Promise<{ userId: string } | null> {
   const authHeader = req.headers.get('Authorization') ?? '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const bearerMatch = authHeader.match(/^Bearer\s+(\S+)$/i);
+  const token = bearerMatch ? bearerMatch[1].trim() : '';
   if (!token || token.length < 20 || token.length > 4096 || token.split('.').length !== 3) {
     return null;
   }
@@ -562,7 +577,7 @@ async function enrichAndCacheByTmdbId(
 ): Promise<MovieRow> {
   const { data: cached } = await serviceClient
     .from('movies')
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .eq('tmdb_id', tmdbId)
     .maybeSingle<MovieRow>();
 
@@ -582,8 +597,8 @@ async function enrichAndCacheByTmdbId(
 
   const { data: upserted, error } = await serviceClient
     .from('movies')
-    .upsert(payload, { onConflict: 'tmdb_id' })
-    .select('*')
+    .upsert({ ...payload, created_by: null }, { onConflict: 'tmdb_id' })
+    .select(PUBLIC_MOVIE_COLUMNS)
     .single<MovieRow>();
 
   if (error || !upserted) {
@@ -598,17 +613,21 @@ async function getOrCreateFallbackMovie(
   userId: string
 ): Promise<MovieRow> {
   const cleanTitle = item.title.trim().slice(0, 500);
+  if (!cleanTitle) {
+    throw new Error('Movie title is required');
+  }
   const escapedTitle = escapeIlikePattern(cleanTitle);
   const year =
     typeof item.year === 'number' && Number.isInteger(item.year) && item.year >= 1870 && item.year <= 2100
       ? item.year
       : null;
 
-  // Check if an unmatched fallback row already exists for (lower(title), coalesce(year, 0))
+  // Check if this user's unmatched fallback row already exists for (created_by, lower(title), coalesce(year, 0))
   const query = serviceClient
     .from('movies')
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .is('tmdb_id', null)
+    .eq('created_by', userId)
     .ilike('title', escapedTitle);
 
   const { data: candidates } = await (year ? query.eq('release_year', year) : query.is('release_year', null));
@@ -637,18 +656,23 @@ async function getOrCreateFallbackMovie(
       countries: sanitizeStringList(item.fallbackCountries, 5, 80),
       created_by: userId,
     })
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .single<MovieRow>();
 
   if (!error && inserted) {
     return inserted;
   }
 
-  // Handle race on partial unique index movies_unmatched_title_year_key
+  if (error?.code === '54000') {
+    throw new QuotaExceededError('Превышен лимит нераспознанных фильмов в профиле (максимум 5 000).');
+  }
+
+  // Handle race within the same user's own unmatched fallback rows (fail-closed across tenants)
   const retryQuery = serviceClient
     .from('movies')
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .is('tmdb_id', null)
+    .eq('created_by', userId)
     .ilike('title', escapedTitle);
   const { data: retryRows } = await (year
     ? retryQuery.eq('release_year', year)
@@ -671,7 +695,7 @@ async function findCachedTmdbMovieByTitle(
 
   const titleQuery = serviceClient
     .from('movies')
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .not('tmdb_id', 'is', null)
     .ilike('title', escapedTitle);
   const { data: byTitle, error: byTitleErr } = await (validYear
@@ -688,7 +712,7 @@ async function findCachedTmdbMovieByTitle(
 
   const origQuery = serviceClient
     .from('movies')
-    .select('*')
+    .select(PUBLIC_MOVIE_COLUMNS)
     .not('tmdb_id', 'is', null)
     .ilike('original_title', escapedTitle);
   const { data: byOrig, error: byOrigErr } = await (validYear
@@ -748,7 +772,7 @@ async function resolveSingleBatchItem(
 
     const { data: cachedByTmdb } = await serviceClient
       .from('movies')
-      .select('*')
+      .select(PUBLIC_MOVIE_COLUMNS)
       .eq('tmdb_id', validTmdbId)
       .maybeSingle<MovieRow>();
     if (cachedByTmdb) return cachedByTmdb;
@@ -758,7 +782,7 @@ async function resolveSingleBatchItem(
   if (imdbId) {
     const { data: byImdbRows } = await serviceClient
       .from('movies')
-      .select('*')
+      .select(PUBLIC_MOVIE_COLUMNS)
       .not('tmdb_id', 'is', null)
       .eq('imdb_id', imdbId)
       .limit(1);
@@ -861,14 +885,16 @@ async function mergeFallbackIntoExistingTmdbMovie(
   serviceClient: ReturnType<typeof getServiceClient>,
   fallbackRow: MovieRow,
   existingRow: MovieRow,
-  payload: NormalizedTmdbPayload
+  payload: NormalizedTmdbPayload,
+  userId: string
 ): Promise<void> {
   if (existingRow.original_title === null) {
     const { error: refreshErr } = await serviceClient
       .from('movies')
       .update({
         ...payload,
-        imdb_id: payload.imdb_id ?? existingRow.imdb_id ?? fallbackRow.imdb_id,
+        imdb_id: payload.imdb_id ?? existingRow.imdb_id,
+        created_by: null,
       })
       .eq('id', existingRow.id);
 
@@ -880,7 +906,8 @@ async function mergeFallbackIntoExistingTmdbMovie(
   const { error: repointErr } = await serviceClient
     .from('watch_logs')
     .update({ movie_id: existingRow.id })
-    .eq('movie_id', fallbackRow.id);
+    .eq('movie_id', fallbackRow.id)
+    .eq('user_id', userId);
 
   if (repointErr) {
     throw new Error(`Failed to repoint watch_logs from ${fallbackRow.id} to ${existingRow.id}: ${repointErr.message}`);
@@ -890,7 +917,8 @@ async function mergeFallbackIntoExistingTmdbMovie(
     .from('movies')
     .delete()
     .eq('id', fallbackRow.id)
-    .is('tmdb_id', null);
+    .is('tmdb_id', null)
+    .eq('created_by', userId);
 
   if (deleteErr) {
     console.warn(`[tmdb-proxy] Could not delete orphan fallback movie ${fallbackRow.id}:`, deleteErr.message);
@@ -949,19 +977,22 @@ async function handleReenrichUnmatched(
   const rawLimit = typeof reqBody.limit === 'number' && Number.isFinite(reqBody.limit) ? Math.trunc(reqBody.limit) : 25;
   const effectiveLimit = Math.min(40, Math.max(1, rawLimit));
 
-  const candidateRows: MovieRow[] = [];
+  const candidateRows: InternalMovieRow[] = [];
   for (let i = 0; i < requestedIds.length; i += 100) {
     const idChunk = requestedIds.slice(i, i + 100);
     const { data, error } = await serviceClient
       .from('movies')
-      .select('*')
+      .select(INTERNAL_MOVIE_COLUMNS)
       .in('id', idChunk);
 
     if (error) {
       throw new Error(`Failed to fetch candidate movies for re-enrich: ${error.message}`);
     }
-    for (const row of (data ?? []) as MovieRow[]) {
-      if (row.tmdb_id === null || row.original_title === null) {
+    for (const row of (data ?? []) as InternalMovieRow[]) {
+      if (
+        (row.tmdb_id === null && row.created_by === userId) ||
+        (row.tmdb_id !== null && row.original_title === null)
+      ) {
         candidateRows.push(row);
       }
     }
@@ -1009,6 +1040,10 @@ async function handleReenrichUnmatched(
         return;
       }
 
+      if (movieRow.created_by !== userId) {
+        return;
+      }
+
       const bestMatch = await searchBestTmdbMovie(movieRow.title, movieRow.release_year);
       if (!bestMatch?.id) {
         unmatchedCount += 1;
@@ -1016,49 +1051,44 @@ async function handleReenrichUnmatched(
         return;
       }
 
-      const payload = await fetchNormalizedTmdbPayload(bestMatch.id, language);
-
       const { data: existingByTmdb } = await serviceClient
         .from('movies')
-        .select('*')
+        .select(PUBLIC_MOVIE_COLUMNS)
         .eq('tmdb_id', bestMatch.id)
         .maybeSingle<MovieRow>();
 
       if (existingByTmdb && existingByTmdb.id !== movieRow.id) {
-        await mergeFallbackIntoExistingTmdbMovie(serviceClient, movieRow, existingByTmdb, payload);
+        const payload = await fetchNormalizedTmdbPayload(bestMatch.id, language);
+        await mergeFallbackIntoExistingTmdbMovie(serviceClient, movieRow, existingByTmdb, payload, userId);
         mergedCount += 1;
         return;
       }
 
-      const { error: updateErr } = await serviceClient
+      const canonicalMovie = await enrichAndCacheByTmdbId(serviceClient, bestMatch.id, language);
+
+      const { error: repointErr } = await serviceClient
+        .from('watch_logs')
+        .update({ movie_id: canonicalMovie.id })
+        .eq('movie_id', movieRow.id)
+        .eq('user_id', userId);
+
+      if (repointErr) {
+        throw new Error(`Failed repointing watch_logs for movie ${movieRow.id}: ${repointErr.message}`);
+      }
+
+      const { error: cleanupErr } = await serviceClient
         .from('movies')
-        .update({
-          ...payload,
-          imdb_id: payload.imdb_id ?? movieRow.imdb_id,
-        })
-        .eq('id', movieRow.id);
+        .delete()
+        .eq('id', movieRow.id)
+        .is('tmdb_id', null)
+        .eq('created_by', userId);
 
-      if (!updateErr) {
-        matchedCount += 1;
-        return;
+      if (cleanupErr) {
+        console.warn(`[tmdb-proxy] Could not delete fallback movie ${movieRow.id}:`, cleanupErr.message);
       }
 
-      // Handle concurrent worker inserting/updating the same tmdb_id (Postgres 23505)
-      if (updateErr.code === '23505') {
-        const { data: raceExisting } = await serviceClient
-          .from('movies')
-          .select('*')
-          .eq('tmdb_id', bestMatch.id)
-          .maybeSingle<MovieRow>();
-
-        if (raceExisting && raceExisting.id !== movieRow.id) {
-          await mergeFallbackIntoExistingTmdbMovie(serviceClient, movieRow, raceExisting, payload);
-          mergedCount += 1;
-          return;
-        }
-      }
-
-      throw new Error(`Failed updating movie ${movieRow.id}: ${updateErr.message}`);
+      matchedCount += 1;
+      return;
     } catch (err) {
       if (isFatalTmdbError(err)) {
         fatalErrorCode = err.code;
@@ -1312,6 +1342,10 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ error: 'Unknown action' }, 400, cors.headers);
   } catch (err) {
+    if (err instanceof QuotaExceededError) {
+      logSecurityEvent('quota_exceeded', { userId: caller.userId, action: body.action });
+      return jsonResponse({ error: err.message, code: 'QUOTA_EXCEEDED' }, 429, cors.headers);
+    }
     if (isFatalTmdbError(err)) {
       console.error('[tmdb-proxy] Fatal TMDB error:', err.code, err.message);
       return jsonResponse({ error: err.message, code: err.code }, err.status ?? 502, cors.headers);

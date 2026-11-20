@@ -54,7 +54,8 @@ export function showAuthMessage(content, type) {
 }
 
 export function showImportMessage(text, type) {
-  getElement('import-msg').innerHTML = `<div class="msg msg-${type}">${escapeHTML(text)}</div>`;
+  const safeType = type === 'success' ? 'success' : 'error';
+  getElement('import-msg').innerHTML = `<div class="msg msg-${safeType}">${escapeHTML(text)}</div>`;
   if (type === 'success') {
     setTimeout(() => {
       getElement('import-msg').innerHTML = '';
