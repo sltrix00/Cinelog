@@ -2,8 +2,13 @@ const USERS_KEY = 'cl_users';
 const SESSION_KEY = 'cl_sess';
 
 function readJSON(storage, key, fallback) {
-  const value = storage.getItem(key);
-  return value === null ? fallback : JSON.parse(value);
+  try {
+    const value = storage.getItem(key);
+    return value === null ? fallback : JSON.parse(value);
+  } catch (error) {
+    console.error(`Error reading "${key}" from storage:`, error);
+    return fallback;
+  }
 }
 
 export function getUsers() {

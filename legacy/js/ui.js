@@ -39,8 +39,20 @@ export function ratingClass(rating) {
   return 'badge-low';
 }
 
-export function showAuthMessage(text, type) {
-  getElement('auth-msg').innerHTML = `<div class="msg msg-${type}">${escapeHTML(text)}</div>`;
+export function toggleSidebar(forceState) {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+  const isOpen = forceState !== undefined ? forceState : !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', isOpen);
+  if (backdrop) backdrop.classList.toggle('active', isOpen);
+}
+
+export function showAuthMessage(content, type) {
+  const inner = typeof content === 'string' && (content.includes('<') || content.includes('&'))
+    ? content
+    : escapeHTML(content);
+  getElement('auth-msg').innerHTML = `<div class="msg msg-${type}">${inner}</div>`;
 }
 
 export function showImportMessage(text, type) {
@@ -52,11 +64,11 @@ export function showImportMessage(text, type) {
   }
 }
 
-export function showImportPreview(movies, fileName) {
+export function showImportPreview(movies, fileLabel) {
   getElement('import-preview').innerHTML = `
     <div class="import-preview">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-        <strong>Found <span class="text-gold">${movies.length}</span> movies in "${escapeHTML(fileName)}"</strong>
+        <strong>Found <span class="text-gold">${movies.length}</span> movies in "${escapeHTML(fileLabel)}"</strong>
         <button class="btn btn-primary btn-sm" data-action="confirm-import">Import All</button>
       </div>
       <div class="preview-list">
@@ -75,6 +87,7 @@ export function showImportPreview(movies, fileName) {
 }
 
 export function showView(name) {
+  toggleSidebar(false);
   appState.activeView = name;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -143,12 +156,14 @@ export function renderDashboard() {
     </div>`;
 }
 
-function fillYearFilter() {
+export function fillYearFilter() {
+  const select = document.getElementById('mv-year');
+  if (!select) return;
+
   const years = [...new Set(appState.movies
     .filter(movie => movie.watchedAt)
     .map(movie => new Date(movie.watchedAt).getFullYear()))]
     .sort((a, b) => b - a);
-  const select = getElement('mv-year');
   const selectedYear = appState.filters.watchedYear;
 
   select.innerHTML = '<option value="">All Years</option>' +
@@ -209,7 +224,7 @@ export function destroyCharts() {
 
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
-  return Math.floor((date - start) / 864e5);
+  return Math.round((date - start) / 864e5);
 }
 
 export function renderStats() {
@@ -291,6 +306,8 @@ export function renderStats() {
     options: { ...chartOptions }
   });
 
+  const monthStarts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+
   chartInstances.cumulative = new chart(getElement('c-cumul'), {
     type: 'line',
     data: {
@@ -332,15 +349,16 @@ export function renderStats() {
           min: 1,
           max: 366,
           grid: { color: 'rgba(30,30,80,.5)' },
+          afterBuildTicks: axis => {
+            axis.ticks = monthStarts.map(v => ({ value: v }));
+          },
           ticks: {
             color: '#5a5570',
             font: { family: 'Outfit', size: 11 },
             callback: value => {
-              const starts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
-              const index = starts.indexOf(value);
+              const index = monthStarts.indexOf(value);
               return index >= 0 ? monthNames[index] : '';
-            },
-            maxTicksLimit: 13
+            }
           }
         },
         y: {
@@ -353,7 +371,7 @@ export function renderStats() {
 
   const weekdayCounts = Array(7).fill(0);
   datedMovies.forEach(movie => weekdayCounts[new Date(movie.watchedAt).getDay()]++);
-  const maxWeekdayCount = Math.max(...weekdayCounts);
+  const maxWeekdayCount = Math.max(...weekdayCounts, 1);
   chartInstances.week = new chart(getElement('c-week'), {
     type: 'bar',
     data: {

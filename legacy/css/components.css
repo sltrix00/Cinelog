@@ -162,6 +162,18 @@
   margin-bottom: 14px;
   padding: 10px 14px;
   font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.msg-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.msg-link:hover {
+  filter: brightness(1.2);
 }
 
 .msg-error {
@@ -176,9 +188,15 @@
   color: #80e0a0;
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
 .sidebar-logo {
   padding: 26px 22px 18px;
-  border-bottom: 1px solid var(--border);
   color: var(--gold);
   font-family: var(--font-display);
   font-size: 1.5rem;
@@ -192,6 +210,60 @@
   font-size: 0.62rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+.sidebar-close-btn {
+  display: none;
+  padding: 10px 18px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.sidebar-close-btn:hover {
+  color: var(--text);
+}
+
+.mobile-topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 90;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+}
+
+.mobile-menu-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  color: var(--gold);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.mobile-logo {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  color: var(--gold);
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 95;
 }
 
 .sidebar-nav {
@@ -664,11 +736,38 @@ tr:hover td {
 }
 
 @media (max-width: 640px) {
+  .mobile-topbar {
+    display: flex;
+  }
+
+  .sidebar-backdrop.active {
+    display: block;
+  }
+
+  .sidebar-close-btn {
+    display: block;
+  }
+
   #sidebar {
-    display: none;
+    display: flex;
+    left: -260px;
+    width: 250px;
+    z-index: 100;
+    transition: left 0.25s ease;
+    box-shadow: none;
+  }
+
+  #sidebar.open {
+    left: 0;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.7);
   }
 
   #main {
     margin-left: 0;
+    padding-top: 52px;
+  }
+
+  .view {
+    padding: 18px 14px;
   }
 }

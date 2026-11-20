@@ -12,6 +12,7 @@ import {
 } from './storage.js';
 import {
   destroyCharts,
+  fillYearFilter,
   getElement,
   getValue,
   renderTable,
@@ -19,20 +20,43 @@ import {
   showAuthMessage,
   showImportMessage,
   showImportPreview,
-  showView
+  showView,
+  toggleSidebar
 } from './ui.js';
 
 function today() {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function switchTab(tab) {
+function parseLocalDate(dateString) {
+  if (!dateString) return null;
+  const match = String(dateString).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10) - 1;
+    const day = Number.parseInt(match[3], 10);
+    return new Date(year, month, day).getTime();
+  }
+  const parsed = new Date(dateString).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function switchTab(tab, presetEmail = '') {
   document.querySelectorAll('.auth-tab').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === tab);
   });
   getElement('login-form').classList.toggle('hidden', tab !== 'login');
   getElement('register-form').classList.toggle('hidden', tab !== 'register');
   getElement('auth-msg').innerHTML = '';
+  if (tab === 'register' && presetEmail) {
+    const regEmailInput = getElement('rg-email');
+    regEmailInput.value = presetEmail;
+    getElement('rg-pass').focus();
+  }
 }
 
 async function doLogin() {
@@ -43,12 +67,22 @@ async function doLogin() {
     return;
   }
 
+  const users = getUsers();
+  const userExists = users.some(candidate => candidate.email === email);
+  if (!userExists) {
+    showAuthMessage(
+      'No account found with this email. Please <span class="msg-link" data-switch-tab="register">register to create an account</span> first.',
+      'error'
+    );
+    return;
+  }
+
   const passwordHash = await hashPassword(password);
-  const user = getUsers().find(candidate =>
+  const user = users.find(candidate =>
     candidate.email === email && candidate.ph === passwordHash
   );
   if (!user) {
-    showAuthMessage('Invalid email or password.', 'error');
+    showAuthMessage('Incorrect password. Please try again.', 'error');
     return;
   }
 
@@ -118,7 +152,7 @@ function doAddMovie() {
   const title = getValue('a-title').trim();
   const movieYear = Number.parseInt(getValue('a-myear'), 10);
   const date = getValue('a-date');
-  const ratingText = getValue('a-rating');
+  const ratingText = getValue('a-rating').trim();
   const notes = getValue('a-notes').trim();
   const messageElement = getElement('add-msg');
 
@@ -127,17 +161,24 @@ function doAddMovie() {
     return;
   }
 
+  let rating = null;
+  if (ratingText !== '') {
+    const parsedRating = Number.parseFloat(ratingText);
+    if (!Number.isNaN(parsedRating)) rating = parsedRating;
+  }
+
   const movie = {
     id: createId(),
     title,
     movieYear,
-    watchedAt: date ? new Date(date).getTime() : null,
-    rating: ratingText !== '' ? Number.parseFloat(ratingText) : null,
+    watchedAt: parseLocalDate(date),
+    rating,
     rewatched: getElement('a-rw').checked,
     notes
   };
   appState.movies.push(movie);
   saveMovies(appState.currentUser.id, appState.movies);
+  fillYearFilter();
 
   ['a-title', 'a-myear', 'a-rating', 'a-notes'].forEach(id => {
     getElement(id).value = '';
@@ -154,6 +195,7 @@ function deleteMovie(id) {
   if (!window.confirm('Remove this film from your journal?')) return;
   setMovies(appState.movies.filter(movie => movie.id !== id));
   saveMovies(appState.currentUser.id, appState.movies);
+  fillYearFilter();
   renderTable();
 }
 
@@ -163,7 +205,7 @@ const months = {
 };
 
 function parseTxt(content) {
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   let year = new Date().getFullYear();
   const movies = [];
 
@@ -219,7 +261,8 @@ function parseRating(text) {
     const parts = raw.split(/[-–]/).map(Number.parseFloat);
     return Math.round((parts[0] + parts[1]) / 2 * 10) / 10;
   }
-  return Number.parseFloat(raw);
+  const parsed = Number.parseFloat(raw);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function parseDate(text, year) {
@@ -235,7 +278,7 @@ function parseDate(text, year) {
 
 function cleanNotes(text) {
   return text
-    .replace(/\([~\-\d\.]+\/10\)/g, '')
+    .replace(/\([~\-\d\.]+(?:[-–][\d\.]+)?\s*\/\s*10\)/g, '')
     .replace(/\d{1,2}(?:[-–]\d{1,2})?\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/gi, '')
     .replace(/\d{1,2}[:\s]\d{2}/g, '')
     .replace(/🔁\s*Пересмотрел\.?/gi, '')
@@ -244,92 +287,172 @@ function cleanNotes(text) {
     .trim();
 }
 
+function parseCSVLine(line) {
+  const columns = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      columns.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  columns.push(current.trim());
+  return columns;
+}
+
 function parseCSV(content) {
-  const lines = content.split('\n').filter(line => line.trim());
+  const lines = content.split(/\r?\n/).filter(line => line.trim());
   if (!lines.length) return [];
-  const headers = lines[0].split(',').map(header => header.trim().toLowerCase().replace(/"/g, ''));
+  const headers = parseCSVLine(lines[0]).map(header =>
+    header.trim().toLowerCase().replace(/['"]/g, '')
+  );
 
   return lines.slice(1).map(line => {
-    const columns = line.split(',').map(column => column.trim().replace(/"/g, ''));
+    const columns = parseCSVLine(line);
     const row = {};
     headers.forEach((header, index) => {
-      row[header] = columns[index] || '';
+      row[header] = columns[index] !== undefined ? columns[index] : '';
     });
 
     const title = row.title || row.name || row.movie || '';
     if (!title) return null;
+
+    let rating = null;
+    const rawRating = row.rating;
+    if (rawRating !== undefined && rawRating !== '') {
+      const parsedRating = Number.parseFloat(rawRating);
+      if (!Number.isNaN(parsedRating)) rating = parsedRating;
+    }
+
+    const rawWatched = row.date || row.watched || row.watchedat || '';
+
     return {
       id: createId(),
       title,
       movieYear: Number.parseInt(row.year || row.movieyear, 10) || null,
-      watchedAt: (row.date || row.watched) ? new Date(row.date || row.watched).getTime() : null,
-      rating: Number.parseFloat(row.rating) || null,
-      rewatched: row.rewatched === 'true' || row.rewatched === '1',
+      watchedAt: rawWatched ? parseLocalDate(rawWatched) : null,
+      rating,
+      rewatched: row.rewatched === 'true' || row.rewatched === '1' || row.rewatched === 'yes',
       notes: row.notes || ''
     };
   }).filter(Boolean);
 }
 
 function normalizeImported(movie) {
+  let rating = null;
+  if (movie.rating !== undefined && movie.rating !== null && movie.rating !== '') {
+    const parsedRating = Number.parseFloat(movie.rating);
+    if (!Number.isNaN(parsedRating)) rating = parsedRating;
+  }
+
+  let watchedAt = null;
+  if (movie.watchedAt != null) {
+    const parsedWatched = Number(movie.watchedAt);
+    if (!Number.isNaN(parsedWatched)) {
+      watchedAt = parsedWatched;
+    } else if (typeof movie.watchedAt === 'string') {
+      watchedAt = parseLocalDate(movie.watchedAt);
+    }
+  }
+
   return {
     id: movie.id || createId(),
     title: movie.title || movie.name || '',
-    movieYear: movie.movieYear || movie.year || null,
-    watchedAt: movie.watchedAt || null,
-    rating: movie.rating || null,
-    rewatched: movie.rewatched || false,
+    movieYear: Number.parseInt(movie.movieYear || movie.year, 10) || null,
+    watchedAt,
+    rating,
+    rewatched: Boolean(movie.rewatched),
     notes: movie.notes || ''
   };
 }
 
-async function processFile(file) {
-  let content;
-  try {
-    content = await file.text();
-  } catch (error) {
-    console.error(`Could not read import file "${file.name}".`, error);
-    showImportMessage(`Could not read "${file.name}".`, 'error');
-    return;
-  }
-
-  let movies = [];
+async function parseFile(file) {
+  const content = await file.text();
   const extension = file.name.split('.').pop().toLowerCase();
   if (extension === 'txt') {
-    movies = parseTxt(content);
-  } else if (extension === 'json') {
-    try {
-      const data = JSON.parse(content);
-      movies = (Array.isArray(data) ? data : data.movies || []).map(normalizeImported);
-    } catch {
-      showImportMessage('Invalid JSON.', 'error');
-      return;
-    }
-  } else if (extension === 'csv') {
-    movies = parseCSV(content);
+    return parseTxt(content);
   }
-
-  if (!movies.length) {
-    showImportMessage('No movies found in this file.', 'error');
-    return;
+  if (extension === 'json') {
+    const data = JSON.parse(content);
+    const items = Array.isArray(data) ? data : data.movies || [];
+    return items.map(normalizeImported);
   }
-  appState.pendingImport = movies;
-  showImportPreview(movies, file.name);
+  if (extension === 'csv') {
+    return parseCSV(content);
+  }
+  return [];
 }
 
 async function handleFiles(files) {
-  for (const file of files) await processFile(file);
+  if (!files || !files.length) return;
+  const allMovies = [];
+  const successfulFiles = [];
+  const errors = [];
+
+  for (const file of files) {
+    try {
+      const movies = await parseFile(file);
+      if (movies.length) {
+        allMovies.push(...movies);
+        successfulFiles.push(file.name);
+      } else {
+        errors.push(`"${file.name}" had no recognizable movies.`);
+      }
+    } catch (err) {
+      console.error(`Error processing file "${file.name}":`, err);
+      errors.push(`Failed to parse "${file.name}".`);
+    }
+  }
+
+  if (!allMovies.length) {
+    showImportMessage(errors.join(' ') || 'No movies found in uploaded file(s).', 'error');
+    return;
+  }
+
+  appState.pendingImport = allMovies;
+  const fileLabel = successfulFiles.length === 1
+    ? successfulFiles[0]
+    : `${successfulFiles.length} files (${successfulFiles.join(', ')})`;
+  showImportPreview(allMovies, fileLabel);
+
+  if (errors.length) {
+    showImportMessage(errors.join(' '), 'error');
+  }
 }
 
 function confirmImport() {
   if (!appState.pendingImport) return;
 
-  const existing = new Set(appState.movies.map(movie => `${movie.title}||${movie.movieYear}`));
-  const moviesToAdd = appState.pendingImport.filter(movie =>
-    !existing.has(`${movie.title}||${movie.movieYear}`)
-  );
-  const duplicates = appState.pendingImport.length - moviesToAdd.length;
+  const makeKey = movie =>
+    `${(movie.title || '').trim().toLowerCase()}||${movie.movieYear || ''}||${movie.watchedAt || ''}`;
+  const existing = new Set(appState.movies.map(makeKey));
+  const moviesToAdd = [];
+  let duplicates = 0;
+
+  for (const movie of appState.pendingImport) {
+    const key = makeKey(movie);
+    if (!existing.has(key)) {
+      existing.add(key);
+      moviesToAdd.push(movie);
+    } else {
+      duplicates++;
+    }
+  }
+
   setMovies([...appState.movies, ...moviesToAdd]);
   saveMovies(appState.currentUser.id, appState.movies);
+  fillYearFilter();
   getElement('import-preview').innerHTML = '';
   appState.pendingImport = null;
 
@@ -360,6 +483,14 @@ function handleClick(event) {
     return;
   }
 
+  const switchTabLink = target.closest('[data-switch-tab]');
+  if (switchTabLink) {
+    const targetTab = switchTabLink.dataset.switchTab;
+    const emailCandidate = targetTab === 'register' ? getValue('li-email').trim() : '';
+    switchTab(targetTab, emailCandidate);
+    return;
+  }
+
   const viewLink = target.closest('[data-view]');
   if (viewLink) {
     showView(viewLink.dataset.view);
@@ -376,6 +507,14 @@ function handleClick(event) {
     if (action === 'export-json') exportJSON();
     if (action === 'confirm-import') confirmImport();
     if (action === 'delete-movie') deleteMovie(actionElement.dataset.movieId);
+    if (action === 'toggle-sidebar') toggleSidebar();
+    if (action === 'close-sidebar') toggleSidebar(false);
+    return;
+  }
+
+  const backdrop = target.closest('#sidebar-backdrop');
+  if (backdrop) {
+    toggleSidebar(false);
     return;
   }
 

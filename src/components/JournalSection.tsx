@@ -1,0 +1,239 @@
+import { useMemo, useState } from 'react';
+import { Download, RotateCcw, Search, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
+import { filmWord, filterEntriesByYear, formatShortDateRu, getEffectiveRuntime } from '../lib/analytics';
+import type { WatchEntry, YearFilter } from '../types/cinelog';
+
+interface JournalSectionProps {
+  entries: WatchEntry[];
+  selectedYear: YearFilter;
+  onDeleteEntry: (id: string) => void;
+}
+
+type SortKey = 'date-desc' | 'date-asc' | 'rating-desc' | 'rating-asc' | 'title-asc';
+
+export function JournalSection({ entries, selectedYear, onDeleteEntry }: JournalSectionProps) {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('date-desc');
+  const [rewatchesOnly, setRewatchesOnly] = useState(false);
+  const [minRating, setMinRating] = useState<number>(0);
+  const [visibleLimit, setVisibleLimit] = useState(18);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const scoped = filterEntriesByYear(entries, selectedYear);
+    const list = scoped.filter((e) => {
+      if (rewatchesOnly && !e.is_rewatch) return false;
+      if (minRating > 0 && (e.rating === null || e.rating < minRating)) return false;
+      if (q) {
+        const hay = `${e.title} ${e.directors.join(' ')} ${e.genres.join(' ')}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    return [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'date-asc':
+          return a.watched_date.localeCompare(b.watched_date);
+        case 'rating-desc':
+          return (b.rating ?? -1) - (a.rating ?? -1);
+        case 'rating-asc':
+          return (a.rating ?? 99) - (b.rating ?? 99);
+        case 'title-asc':
+          return a.title.localeCompare(b.title, 'ru');
+        case 'date-desc':
+        default:
+          return (
+            b.watched_date.localeCompare(a.watched_date) ||
+            (b.watched_time ?? '').localeCompare(a.watched_time ?? '')
+          );
+      }
+    });
+  }, [entries, selectedYear, search, sortBy, rewatchesOnly, minRating]);
+
+  const displayed = filtered.slice(0, visibleLimit);
+
+  const handleExportJson = () => {
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cinelog-export-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section id="journal" className="scroll-mt-24 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Журнал</span>
+          <span className="text-slate-700">/</span>
+          <h2 className="text-sm font-semibold text-slate-200">
+            История просмотров ({filtered.length} {filmWord(filtered.length)})
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleExportJson}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-cardElevated border border-line text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
+        >
+          <Download className="w-3.5 h-3.5 text-[#45d1c6]" />
+          Экспорт JSON
+        </button>
+      </div>
+
+      {/* Filters Toolbar */}
+      <div className="rounded-2xl bg-card border border-line p-4 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по названию, режиссёру или жанру..."
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-canvas border border-line text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+          />
+        </div>
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortKey)}
+          className="px-3 py-2 rounded-xl bg-canvas border border-line text-xs font-mono text-slate-200 focus:outline-none focus:border-[#45d1c6]"
+        >
+          <option value="date-desc">Сначала новые</option>
+          <option value="date-asc">Сначала старые</option>
+          <option value="rating-desc">Оценка: выше</option>
+          <option value="rating-asc">Оценка: ниже</option>
+          <option value="title-asc">Название: А–Я</option>
+        </select>
+
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-canvas border border-line text-xs">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-[#d6b85a]" />
+          <span className="text-slate-400">Мин:</span>
+          <input
+            type="range"
+            min="0"
+            max="5"
+            step="0.5"
+            value={minRating}
+            onChange={(e) => setMinRating(Number.parseFloat(e.target.value))}
+            className="w-20 accent-[#d6b85a] cursor-pointer"
+          />
+          <span className="font-mono text-[#d6b85a] w-9 text-right">
+            {minRating > 0 ? `${minRating.toFixed(1)}★` : 'Все'}
+          </span>
+        </div>
+
+        <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-canvas border border-line text-xs text-slate-300 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={rewatchesOnly}
+            onChange={(e) => setRewatchesOnly(e.target.checked)}
+            className="accent-[#d6b85a] rounded cursor-pointer"
+          />
+          <RotateCcw className="w-3 h-3 text-[#d6b85a]" />
+          <span>Только пересмотры</span>
+        </label>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-2xl bg-card border border-line overflow-hidden">
+        {displayed.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-line bg-canvas/50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
+                  <th className="py-3 px-4">Фильм</th>
+                  <th className="py-3 px-4 hidden sm:table-cell">Режиссёр / Жанр</th>
+                  <th className="py-3 px-4">Дата</th>
+                  <th className="py-3 px-4">Длит.</th>
+                  <th className="py-3 px-4">Оценка</th>
+                  <th className="py-3 px-4 text-right">Действие</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/70 text-xs">
+                {displayed.map((entry) => {
+                  const runtime = getEffectiveRuntime(entry);
+                  return (
+                    <tr key={entry.id} className="hover:bg-cardElevated/50 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-100">{entry.title}</span>
+                          {entry.release_year && (
+                            <span className="font-mono text-[11px] text-slate-500">
+                              ({entry.release_year})
+                            </span>
+                          )}
+                          {entry.is_rewatch && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/25">
+                              ↺
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 hidden sm:table-cell text-slate-400">
+                        <span className="truncate block max-w-[240px]">
+                          {[entry.directors[0], entry.genres[0]].filter(Boolean).join(' · ') || '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-300 whitespace-nowrap">
+                        {formatShortDateRu(entry.watched_date)}{' '}
+                        <span className="text-slate-500">{entry.watched_date.slice(0, 4)}</span>
+                        {entry.watched_time && (
+                          <span className="ml-1.5 text-[10px] text-slate-500">
+                            {entry.watched_time.slice(0, 5)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
+                        {runtime > 0 ? `${runtime} мин` : '—'}
+                      </td>
+                      <td className="py-3 px-4 font-mono whitespace-nowrap">
+                        {entry.rating !== null ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/25">
+                            <Star className="w-3 h-3 fill-[#d6b85a]" />
+                            {entry.rating.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onDeleteEntry(entry.id)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#f06292] hover:bg-[#f06292]/10 transition-colors cursor-pointer"
+                          title="Удалить запись"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="py-12 text-center text-xs text-slate-500">
+            Нет записей, соответствующих текущим фильтрам.
+          </div>
+        )}
+
+        {filtered.length > visibleLimit && (
+          <div className="p-3 border-t border-line text-center">
+            <button
+              type="button"
+              onClick={() => setVisibleLimit((n) => n + 25)}
+              className="px-4 py-1.5 rounded-xl bg-cardElevated hover:bg-lineStrong text-xs font-mono text-slate-300 transition-colors cursor-pointer"
+            >
+              Показать ещё ({filtered.length - visibleLimit} осталось)
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
