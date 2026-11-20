@@ -35,8 +35,9 @@ import {
   insertManualWatchLog,
   isSupabaseConfigured,
   onAuthChanged,
+  reenrichUserMovies,
 } from './lib/supabase';
-import type { ParsedImportRow, WatchEntry, YearFilter } from './types/cinelog';
+import type { ParsedImportRow, ReenrichSummary, WatchEntry, YearFilter } from './types/cinelog';
 
 function DashboardSkeleton() {
   return (
@@ -65,6 +66,9 @@ export function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [reenriching, setReenriching] = useState(false);
+  const [reenrichProgress, setReenrichProgress] = useState<{ done: number; total: number } | null>(null);
+  const [reenrichReport, setReenrichReport] = useState<ReenrichSummary | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -115,6 +119,9 @@ export function App() {
         setIsDemoMode(true);
         setEntries(DEMO_ENTRIES);
         setDemoWasModified(false);
+        setReenrichReport(null);
+        setReenrichProgress(null);
+        setReenriching(false);
       }
     });
   }, [loadCloudEntries, showToast]);
@@ -162,6 +169,26 @@ export function App() {
     () => computeTasteAccents(entries, selectedYear, 'genres'),
     [entries, selectedYear]
   );
+
+  const { pendingEnrichMovieIds, unmatchedMovieCount } = useMemo(() => {
+    if (isDemoMode || !isSupabaseConfigured || !userEmail) {
+      return { pendingEnrichMovieIds: [] as string[], unmatchedMovieCount: 0 };
+    }
+    const unmatched = new Set<string>();
+    const needsRefresh = new Set<string>();
+    for (const entry of entries) {
+      if (!entry.movie_id) continue;
+      if (entry.tmdb_id === null) {
+        unmatched.add(entry.movie_id);
+      } else if (entry.original_title === null) {
+        needsRefresh.add(entry.movie_id);
+      }
+    }
+    return {
+      pendingEnrichMovieIds: [...unmatched, ...needsRefresh],
+      unmatchedMovieCount: unmatched.size,
+    };
+  }, [entries, isDemoMode, userEmail]);
 
   const handleSaveWatch = async (payload: AddWatchPayload) => {
     if (!isDemoMode && isSupabaseConfigured && userEmail) {
@@ -225,7 +252,17 @@ export function App() {
     if (!isDemoMode && isSupabaseConfigured && userEmail) {
       const result = await batchUpsertImportedRows(rows, onProgress);
       await loadCloudEntries();
-      showToast(`Импортировано ${result.importedCount} просмотров (фильмов: ${result.moviesResolved}).`);
+      if (!result.tmdbConfigured || result.errorCode) {
+        showToast(
+          `Импортировано ${result.importedCount} просмотров, но TMDB недоступен: ${
+            result.errorMessage ?? result.errorCode ?? 'проверьте токен TMDB'
+          }`
+        );
+      } else {
+        showToast(
+          `Импортировано ${result.importedCount} просмотров · TMDB распознал ${result.matchedMovies} из ${result.moviesResolved} фильмов.`
+        );
+      }
       return;
     }
 
@@ -255,6 +292,35 @@ export function App() {
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setDemoWasModified(true);
     showToast('Запись удалена из демо-журнала.');
+  };
+
+  const handleReenrichMovies = async () => {
+    if (reenriching || pendingEnrichMovieIds.length === 0) return;
+    setReenriching(true);
+    setReenrichProgress({ done: 0, total: pendingEnrichMovieIds.length });
+    setReenrichReport(null);
+
+    try {
+      const report = await reenrichUserMovies(pendingEnrichMovieIds, (done, total) => {
+        setReenrichProgress({ done, total });
+      });
+      await loadCloudEntries();
+      setReenrichReport(report);
+
+      if (!report.tmdbConfigured || report.errorCode === 'TMDB_AUTH_ERROR') {
+        showToast(report.errorMessage ?? 'TMDB не настроен или вернул ошибку авторизации.');
+      } else {
+        const enrichedTotal = report.matchedCount + report.mergedCount + report.refreshedCount;
+        showToast(
+          `TMDB обработал ${report.totalProcessed}: обновлено ${enrichedTotal}, не найдено ${report.unmatchedCount}.`
+        );
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Ошибка дообогащения фильмов через TMDB.');
+    } finally {
+      setReenriching(false);
+      setReenrichProgress(null);
+    }
   };
 
   const handleResetDemo = () => {
@@ -347,6 +413,13 @@ export function App() {
             entries={entries}
             selectedYear={selectedYear}
             onDeleteEntry={(id) => void handleDeleteEntry(id)}
+            pendingEnrichCount={pendingEnrichMovieIds.length}
+            unmatchedCount={unmatchedMovieCount}
+            reenriching={reenriching}
+            reenrichProgress={reenrichProgress}
+            reenrichReport={reenrichReport}
+            onReenrichMovies={() => void handleReenrichMovies()}
+            onDismissReenrichReport={() => setReenrichReport(null)}
           />
 
           <footer className="pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">

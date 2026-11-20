@@ -14,6 +14,8 @@ import type {
   MovieRecord,
   ParsedImportRow,
   ProfileRecord,
+  ReenrichSummary,
+  TmdbBatchStats,
   TmdbSearchResult,
   WatchEntry,
   WatchSource,
@@ -324,13 +326,35 @@ export async function deleteWatchLogById(logId: string): Promise<void> {
   }
 }
 
+export interface BatchImportResult {
+  importedCount: number;
+  moviesResolved: number;
+  matchedMovies: number;
+  unmatchedMovies: number;
+  tmdbConfigured: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  unmatchedTitles: string[];
+}
+
 export async function batchUpsertImportedRows(
   rows: ParsedImportRow[],
   onProgress?: (processed: number, total: number) => void
-): Promise<{ importedCount: number; moviesResolved: number }> {
+): Promise<BatchImportResult> {
   const client = requireClient();
   const nonDuplicates = rows.filter((r) => !r.isDuplicate);
-  if (!nonDuplicates.length) return { importedCount: 0, moviesResolved: 0 };
+  if (!nonDuplicates.length) {
+    return {
+      importedCount: 0,
+      moviesResolved: 0,
+      matchedMovies: 0,
+      unmatchedMovies: 0,
+      tmdbConfigured: true,
+      errorCode: null,
+      errorMessage: null,
+      unmatchedTitles: [],
+    };
+  }
 
   // Deduplicate unique movie lookup descriptors across the import batch
   const descriptorMap = new Map<
@@ -374,12 +398,20 @@ export async function batchUpsertImportedRows(
   const descriptorItems = Array.from(descriptorMap.values());
   const resolvedMovieByKey = new Map<string, MovieRecord>();
 
+  let tmdbConfigured = true;
+  let errorCode: string | null = null;
+  let errorMessage: string | null = null;
+  const unmatchedTitles: string[] = [];
+
   // Resolve movies in chunks of 40 via tmdb-proxy Edge Function
   const CHUNK_SIZE = 40;
   for (let i = 0; i < descriptorItems.length; i += CHUNK_SIZE) {
     const chunkItems = descriptorItems.slice(i, i + CHUNK_SIZE);
     const chunkKeys = descriptorKeys.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await client.functions.invoke<{ movies: MovieRecord[] }>('tmdb-proxy', {
+    const { data, error } = await client.functions.invoke<{
+      movies: MovieRecord[];
+      stats?: TmdbBatchStats;
+    }>('tmdb-proxy', {
       body: {
         action: 'resolve_batch',
         items: chunkItems,
@@ -392,7 +424,24 @@ export async function batchUpsertImportedRows(
     data.movies.forEach((movie, idx) => {
       resolvedMovieByKey.set(chunkKeys[idx], movie);
     });
+    if (data.stats) {
+      if (!data.stats.tmdbConfigured) tmdbConfigured = false;
+      if (!errorCode && data.stats.errorCode) {
+        errorCode = data.stats.errorCode;
+        errorMessage = data.stats.errorMessage;
+      }
+      if (Array.isArray(data.stats.unmatchedTitles)) {
+        unmatchedTitles.push(...data.stats.unmatchedTitles);
+      }
+    }
     onProgress?.(Math.min(i + chunkItems.length, descriptorItems.length), descriptorItems.length);
+  }
+
+  let matchedMovies = 0;
+  let unmatchedMovies = 0;
+  for (const movie of resolvedMovieByKey.values()) {
+    if (movie.tmdb_id !== null) matchedMovies += 1;
+    else unmatchedMovies += 1;
   }
 
   const { data: userData } = await client.auth.getUser();
@@ -437,5 +486,74 @@ export async function batchUpsertImportedRows(
   return {
     importedCount: payload.length,
     moviesResolved: resolvedMovieByKey.size,
+    matchedMovies,
+    unmatchedMovies,
+    tmdbConfigured,
+    errorCode,
+    errorMessage,
+    unmatchedTitles,
   };
+}
+
+export async function reenrichUserMovies(
+  movieIds: string[],
+  onProgress?: (done: number, total: number) => void
+): Promise<ReenrichSummary> {
+  const client = requireClient();
+  const uniqueIds = Array.from(new Set(movieIds.filter((id) => typeof id === 'string' && id.trim())));
+
+  const summary: ReenrichSummary = {
+    totalProcessed: 0,
+    matchedCount: 0,
+    mergedCount: 0,
+    refreshedCount: 0,
+    unmatchedCount: 0,
+    tmdbConfigured: true,
+    errorCode: null,
+    errorMessage: null,
+    unmatchedTitles: [],
+  };
+
+  if (uniqueIds.length === 0) return summary;
+
+  const CHUNK_SIZE = 20;
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await client.functions.invoke<ReenrichSummary>('tmdb-proxy', {
+      body: {
+        action: 'reenrich_unmatched',
+        movieIds: chunk,
+        language: 'ru-RU',
+      },
+    });
+
+    if (error || !data) {
+      throw new Error(error?.message ?? 'Ошибка дообогащения метаданных через TMDB.');
+    }
+
+    summary.totalProcessed += data.totalProcessed ?? 0;
+    summary.matchedCount += data.matchedCount ?? 0;
+    summary.mergedCount += data.mergedCount ?? 0;
+    summary.refreshedCount += data.refreshedCount ?? 0;
+    summary.unmatchedCount += data.unmatchedCount ?? 0;
+    if (Array.isArray(data.unmatchedTitles) && data.unmatchedTitles.length > 0) {
+      summary.unmatchedTitles.push(...data.unmatchedTitles);
+    }
+
+    if (!data.tmdbConfigured) {
+      summary.tmdbConfigured = false;
+    }
+    if (data.errorCode) {
+      summary.errorCode = data.errorCode;
+      summary.errorMessage = data.errorMessage;
+    }
+
+    onProgress?.(Math.min(i + chunk.length, uniqueIds.length), uniqueIds.length);
+
+    if (!data.tmdbConfigured || data.errorCode === 'TMDB_AUTH_ERROR') {
+      break;
+    }
+  }
+
+  return summary;
 }

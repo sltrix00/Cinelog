@@ -1,5 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import {
+  buildSearchAttempts,
+  localizeCountries,
+  normalizeDirectors,
+  normalizeGenres,
+  parseReleaseYear,
+  pickBestCandidate,
+  type TmdbSearchCandidate,
+} from './matching.ts';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
@@ -11,6 +20,25 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+type TmdbErrorCode =
+  | 'TMDB_NOT_CONFIGURED'
+  | 'TMDB_AUTH_ERROR'
+  | 'TMDB_RATE_LIMITED'
+  | 'TMDB_HTTP_ERROR'
+  | 'TMDB_NETWORK_ERROR';
+
+class TmdbApiError extends Error {
+  code: TmdbErrorCode;
+  status?: number;
+
+  constructor(code: TmdbErrorCode, message: string, status?: number) {
+    super(message);
+    this.name = 'TmdbApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
 
 interface MovieRow {
   id: string;
@@ -57,7 +85,14 @@ interface ResolveBatchRequest {
   language?: string;
 }
 
-type ProxyRequest = SearchRequest | EnrichRequest | ResolveBatchRequest;
+interface ReenrichUnmatchedRequest {
+  action: 'reenrich_unmatched';
+  movieIds?: string[];
+  language?: string;
+  limit?: number;
+}
+
+type ProxyRequest = SearchRequest | EnrichRequest | ResolveBatchRequest | ReenrichUnmatchedRequest;
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -73,11 +108,38 @@ function getEnv(name: string): string {
   return Deno.env.get(name) ?? '';
 }
 
-async function tmdbFetch<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const readToken = getEnv('TMDB_READ_ACCESS_TOKEN');
-  const apiKey = getEnv('TMDB_API_KEY');
+function isTmdbConfigured(): boolean {
+  return Boolean(getEnv('TMDB_READ_ACCESS_TOKEN').trim() || getEnv('TMDB_API_KEY').trim());
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(headerVal: string | null): number {
+  if (!headerVal) return 750;
+  const seconds = Number.parseFloat(headerVal);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return Math.min(3000, Math.max(300, Math.round(seconds * 1000)));
+  }
+  return 750;
+}
+
+function isFatalTmdbError(err: unknown): err is TmdbApiError {
+  return err instanceof TmdbApiError && (err.code === 'TMDB_NOT_CONFIGURED' || err.code === 'TMDB_AUTH_ERROR');
+}
+
+async function tmdbFetch<T>(
+  path: string,
+  params: Record<string, string | number | undefined> = {}
+): Promise<T> {
+  const readToken = getEnv('TMDB_READ_ACCESS_TOKEN').trim();
+  const apiKey = getEnv('TMDB_API_KEY').trim();
   if (!readToken && !apiKey) {
-    throw new Error('TMDB_NOT_CONFIGURED: Set TMDB_READ_ACCESS_TOKEN or TMDB_API_KEY in Edge Function secrets.');
+    throw new TmdbApiError(
+      'TMDB_NOT_CONFIGURED',
+      'TMDB_NOT_CONFIGURED: Set TMDB_READ_ACCESS_TOKEN or TMDB_API_KEY in Edge Function secrets.'
+    );
   }
 
   const url = new URL(`${TMDB_BASE_URL}${path}`);
@@ -97,24 +159,72 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
     headers.Authorization = `Bearer ${readToken}`;
   }
 
-  const res = await fetch(url.toString(), { headers });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`TMDB HTTP ${res.status}: ${body.slice(0, 240)}`);
-  }
-  return (await res.json()) as T;
-}
+  let rateLimitAttempts = 0;
+  let transientAttempts = 0;
 
-function parseReleaseYear(releaseDate?: string | null): number | null {
-  if (!releaseDate || releaseDate.length < 4) return null;
-  const year = Number.parseInt(releaseDate.slice(0, 4), 10);
-  if (Number.isNaN(year) || year < 1870 || year > 2100) return null;
-  return year;
+  while (true) {
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), { headers });
+    } catch (err) {
+      if (transientAttempts < 1) {
+        transientAttempts += 1;
+        await sleep(500);
+        continue;
+      }
+      const msg = err instanceof Error ? err.message : 'Network error';
+      console.error('[tmdb-proxy] Network failure calling TMDB:', path, msg);
+      throw new TmdbApiError('TMDB_NETWORK_ERROR', `TMDB network error: ${msg}`);
+    }
+
+    if (res.ok) {
+      return (await res.json()) as T;
+    }
+
+    const body = await res.text().catch(() => '');
+
+    if (res.status === 401 || res.status === 403) {
+      console.error('[tmdb-proxy] TMDB authentication failed:', res.status, body.slice(0, 200));
+      throw new TmdbApiError(
+        'TMDB_AUTH_ERROR',
+        `TMDB auth error (${res.status}): проверьте токен TMDB_READ_ACCESS_TOKEN / TMDB_API_KEY.`,
+        res.status
+      );
+    }
+
+    if (res.status === 429 && rateLimitAttempts < 2) {
+      const waitMs = parseRetryAfterMs(res.headers.get('Retry-After'));
+      rateLimitAttempts += 1;
+      console.warn(`[tmdb-proxy] TMDB 429 rate limit on ${path}, retrying in ${waitMs}ms`);
+      await sleep(waitMs);
+      continue;
+    }
+
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && transientAttempts < 1) {
+      transientAttempts += 1;
+      console.warn(`[tmdb-proxy] TMDB ${res.status} on ${path}, retrying in 500ms`);
+      await sleep(500);
+      continue;
+    }
+
+    if (res.status === 429) {
+      console.error('[tmdb-proxy] TMDB rate limit exhausted:', path, body.slice(0, 200));
+      throw new TmdbApiError('TMDB_RATE_LIMITED', `TMDB rate limited (429): ${body.slice(0, 200)}`, 429);
+    }
+
+    console.error('[tmdb-proxy] TMDB HTTP error:', res.status, path, body.slice(0, 200));
+    throw new TmdbApiError('TMDB_HTTP_ERROR', `TMDB HTTP ${res.status}: ${body.slice(0, 240)}`, res.status);
+  }
 }
 
 function toPosterUrl(posterPath?: string | null): string | null {
   if (!posterPath || !posterPath.startsWith('/')) return null;
   return `${TMDB_POSTER_BASE}${posterPath}`;
+}
+
+function formatMovieLabel(title: string, year?: number | null): string {
+  const clean = title.trim();
+  return year ? `${clean} (${year})` : clean;
 }
 
 async function verifyCaller(req: Request): Promise<{ userId: string } | null> {
@@ -161,15 +271,11 @@ function getServiceClient() {
 }
 
 interface TmdbSearchResponse {
-  results: Array<{
-    id: number;
-    title: string;
-    original_title?: string;
-    release_date?: string;
-    poster_path?: string | null;
-    overview?: string;
-    popularity?: number;
-  }>;
+  results: Array<
+    TmdbSearchCandidate & {
+      title: string;
+    }
+  >;
 }
 
 async function handleSearch(reqBody: SearchRequest) {
@@ -177,7 +283,7 @@ async function handleSearch(reqBody: SearchRequest) {
   if (!query) {
     return { results: [], tmdbConfigured: true };
   }
-  if (!getEnv('TMDB_READ_ACCESS_TOKEN') && !getEnv('TMDB_API_KEY')) {
+  if (!isTmdbConfigured()) {
     return { results: [], tmdbConfigured: false };
   }
   const language = reqBody.language ?? 'ru-RU';
@@ -197,7 +303,36 @@ async function handleSearch(reqBody: SearchRequest) {
     overview: m.overview ?? '',
   }));
 
-  return { results };
+  return { results, tmdbConfigured: true };
+}
+
+async function searchBestTmdbMovie(
+  title: string,
+  year?: number | null
+): Promise<TmdbSearchCandidate | null> {
+  const attempts = buildSearchAttempts(title, year);
+  if (attempts.length === 0) return null;
+
+  const allCandidates: TmdbSearchCandidate[] = [];
+
+  for (const attempt of attempts) {
+    const data = await tmdbFetch<TmdbSearchResponse>('/search/movie', {
+      query: attempt.query,
+      year: attempt.year,
+      include_adult: 'false',
+      language: attempt.language,
+    });
+
+    if (Array.isArray(data.results) && data.results.length > 0) {
+      allCandidates.push(...data.results);
+      const currentBest = pickBestCandidate(allCandidates, title, year);
+      if (currentBest?.highConfidence) {
+        return currentBest.candidate;
+      }
+    }
+  }
+
+  return pickBestCandidate(allCandidates, title, year)?.candidate ?? null;
 }
 
 interface TmdbMovieDetails {
@@ -215,63 +350,51 @@ interface TmdbMovieDetails {
   };
 }
 
+interface NormalizedTmdbPayload {
+  tmdb_id: number;
+  imdb_id: string | null;
+  title: string;
+  original_title: string;
+  release_year: number | null;
+  runtime_minutes: number | null;
+  genres: string[];
+  directors: string[];
+  countries: string[];
+  poster_url: string | null;
+}
+
 function normalizeImdbId(raw?: string | null): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   return /^tt[0-9]{5,10}$/.test(trimmed) ? trimmed : null;
 }
 
-async function enrichAndCacheByTmdbId(
-  serviceClient: ReturnType<typeof getServiceClient>,
+async function fetchNormalizedTmdbPayload(
   tmdbId: number,
   language = 'ru-RU'
-): Promise<MovieRow> {
-  const { data: cached } = await serviceClient
-    .from('movies')
-    .select('*')
-    .eq('tmdb_id', tmdbId)
-    .maybeSingle<MovieRow>();
-
-  if (cached) {
-    const ageMs = Date.now() - new Date(cached.updated_at).getTime();
-    if (ageMs < CACHE_TTL_MS && cached.runtime_minutes !== null && cached.directors.length > 0) {
-      return cached;
-    }
-  }
-
+): Promise<NormalizedTmdbPayload> {
   const details = await tmdbFetch<TmdbMovieDetails>(`/movie/${tmdbId}`, {
     append_to_response: 'credits',
     language,
   });
 
-  const directors = Array.from(
-    new Set(
-      (details.credits?.crew ?? [])
-        .filter((c) => c.job === 'Director' && typeof c.name === 'string' && c.name.trim())
-        .map((c) => c.name!.trim())
-    )
-  ).slice(0, 5);
-
-  const genres = (details.genres ?? [])
-    .map((g) => g.name.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-
-  const countries = (details.production_countries ?? [])
-    .map((c) => c.name.trim())
-    .filter(Boolean)
-    .slice(0, 5);
+  const directors = normalizeDirectors(details.credits?.crew ?? []);
+  const genres = normalizeGenres(details.genres ?? []);
+  const countries = localizeCountries(details.production_countries ?? []);
 
   const runtimeMinutes =
     typeof details.runtime === 'number' && details.runtime >= 1 && details.runtime <= 1500
       ? Math.round(details.runtime)
       : null;
 
-  const payload = {
+  const title = (details.title || details.original_title || `TMDB #${tmdbId}`).slice(0, 500);
+  const originalTitle = (details.original_title || details.title || `TMDB #${tmdbId}`).slice(0, 500);
+
+  return {
     tmdb_id: details.id,
     imdb_id: normalizeImdbId(details.imdb_id),
-    title: (details.title || details.original_title || `TMDB #${tmdbId}`).slice(0, 500),
-    original_title: details.original_title ? details.original_title.slice(0, 500) : null,
+    title,
+    original_title: originalTitle,
     release_year: parseReleaseYear(details.release_date),
     runtime_minutes: runtimeMinutes,
     genres,
@@ -279,6 +402,33 @@ async function enrichAndCacheByTmdbId(
     countries,
     poster_url: toPosterUrl(details.poster_path),
   };
+}
+
+async function enrichAndCacheByTmdbId(
+  serviceClient: ReturnType<typeof getServiceClient>,
+  tmdbId: number,
+  language = 'ru-RU',
+  options?: { forceRefresh?: boolean }
+): Promise<MovieRow> {
+  const { data: cached } = await serviceClient
+    .from('movies')
+    .select('*')
+    .eq('tmdb_id', tmdbId)
+    .maybeSingle<MovieRow>();
+
+  if (cached && !options?.forceRefresh) {
+    const ageMs = Date.now() - new Date(cached.updated_at).getTime();
+    if (
+      ageMs < CACHE_TTL_MS &&
+      cached.runtime_minutes !== null &&
+      cached.directors.length > 0 &&
+      cached.original_title !== null
+    ) {
+      return cached;
+    }
+  }
+
+  const payload = await fetchNormalizedTmdbPayload(tmdbId, language);
 
   const { data: upserted, error } = await serviceClient
     .from('movies')
@@ -326,7 +476,7 @@ async function getOrCreateFallbackMovie(
       title: cleanTitle,
       release_year: year,
       runtime_minutes: runtime,
-      genres: (item.fallbackGenres ?? []).filter(Boolean).slice(0, 6),
+      genres: normalizeGenres(item.fallbackGenres ?? []),
       directors: (item.fallbackDirectors ?? []).filter(Boolean).slice(0, 5),
       countries: (item.fallbackCountries ?? []).filter(Boolean).slice(0, 5),
     })
@@ -353,50 +503,119 @@ async function getOrCreateFallbackMovie(
   throw new Error(`Failed to store fallback movie "${cleanTitle}": ${error?.message ?? 'unknown error'}`);
 }
 
+async function findCachedTmdbMovieByTitle(
+  serviceClient: ReturnType<typeof getServiceClient>,
+  cleanTitle: string,
+  year?: number | null
+): Promise<MovieRow | null> {
+  const validYear =
+    typeof year === 'number' && Number.isInteger(year) && year >= 1870 && year <= 2100 ? year : null;
+
+  const titleQuery = serviceClient
+    .from('movies')
+    .select('*')
+    .not('tmdb_id', 'is', null)
+    .ilike('title', cleanTitle);
+  const { data: byTitle, error: byTitleErr } = await (validYear
+    ? titleQuery.eq('release_year', validYear)
+    : titleQuery
+  ).limit(1);
+
+  if (byTitleErr) {
+    console.error('[tmdb-proxy] Cache lookup by title failed:', cleanTitle, byTitleErr.message);
+  }
+  if (byTitle && byTitle.length > 0) {
+    return byTitle[0] as MovieRow;
+  }
+
+  const origQuery = serviceClient
+    .from('movies')
+    .select('*')
+    .not('tmdb_id', 'is', null)
+    .ilike('original_title', cleanTitle);
+  const { data: byOrig, error: byOrigErr } = await (validYear
+    ? origQuery.eq('release_year', validYear)
+    : origQuery
+  ).limit(1);
+
+  if (byOrigErr) {
+    console.error('[tmdb-proxy] Cache lookup by original_title failed:', cleanTitle, byOrigErr.message);
+  }
+  if (byOrig && byOrig.length > 0) {
+    return byOrig[0] as MovieRow;
+  }
+
+  return null;
+}
+
 interface TmdbFindResponse {
   movie_results?: Array<{ id: number }>;
+}
+
+interface BatchSharedState {
+  fatalErrorCode: TmdbErrorCode | null;
+  fatalErrorMessage: string | null;
+  lastErrorCode: TmdbErrorCode | null;
+  lastErrorMessage: string | null;
+}
+
+function recordBatchError(state: BatchSharedState, err: unknown, context: string) {
+  if (isFatalTmdbError(err)) {
+    state.fatalErrorCode = err.code;
+    state.fatalErrorMessage = err.message;
+  } else if (err instanceof TmdbApiError) {
+    state.lastErrorCode = err.code;
+    state.lastErrorMessage = err.message;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`[tmdb-proxy] ${context}:`, msg);
 }
 
 async function resolveSingleBatchItem(
   serviceClient: ReturnType<typeof getServiceClient>,
   item: BatchItem,
-  language: string
+  language: string,
+  state: BatchSharedState
 ): Promise<MovieRow> {
   if (item.tmdbId && item.tmdbId > 0) {
-    try {
-      return await enrichAndCacheByTmdbId(serviceClient, item.tmdbId, language);
-    } catch {
-      const { data: cachedByTmdb } = await serviceClient
-        .from('movies')
-        .select('*')
-        .eq('tmdb_id', item.tmdbId)
-        .maybeSingle<MovieRow>();
-      if (cachedByTmdb) return cachedByTmdb;
-
-      const { data: upserted } = await serviceClient
-        .from('movies')
-        .upsert(
-          {
-            tmdb_id: item.tmdbId,
-            imdb_id: normalizeImdbId(item.imdbId),
-            title: item.title.trim().slice(0, 500),
-            release_year: item.year && item.year >= 1870 && item.year <= 2100 ? item.year : null,
-            runtime_minutes:
-              item.fallbackRuntimeMinutes &&
-              item.fallbackRuntimeMinutes >= 1 &&
-              item.fallbackRuntimeMinutes <= 1500
-                ? Math.round(item.fallbackRuntimeMinutes)
-                : null,
-            genres: (item.fallbackGenres ?? []).filter(Boolean).slice(0, 6),
-            directors: (item.fallbackDirectors ?? []).filter(Boolean).slice(0, 5),
-            countries: (item.fallbackCountries ?? []).filter(Boolean).slice(0, 5),
-          },
-          { onConflict: 'tmdb_id' }
-        )
-        .select('*')
-        .maybeSingle<MovieRow>();
-      if (upserted) return upserted;
+    if (!state.fatalErrorCode) {
+      try {
+        return await enrichAndCacheByTmdbId(serviceClient, item.tmdbId, language);
+      } catch (err) {
+        recordBatchError(state, err, `enrich by tmdbId=${item.tmdbId}`);
+      }
     }
+
+    const { data: cachedByTmdb } = await serviceClient
+      .from('movies')
+      .select('*')
+      .eq('tmdb_id', item.tmdbId)
+      .maybeSingle<MovieRow>();
+    if (cachedByTmdb) return cachedByTmdb;
+
+    const { data: upserted } = await serviceClient
+      .from('movies')
+      .upsert(
+        {
+          tmdb_id: item.tmdbId,
+          imdb_id: normalizeImdbId(item.imdbId),
+          title: item.title.trim().slice(0, 500),
+          release_year: item.year && item.year >= 1870 && item.year <= 2100 ? item.year : null,
+          runtime_minutes:
+            item.fallbackRuntimeMinutes &&
+            item.fallbackRuntimeMinutes >= 1 &&
+            item.fallbackRuntimeMinutes <= 1500
+              ? Math.round(item.fallbackRuntimeMinutes)
+              : null,
+          genres: normalizeGenres(item.fallbackGenres ?? []),
+          directors: (item.fallbackDirectors ?? []).filter(Boolean).slice(0, 5),
+          countries: (item.fallbackCountries ?? []).filter(Boolean).slice(0, 5),
+        },
+        { onConflict: 'tmdb_id' }
+      )
+      .select('*')
+      .maybeSingle<MovieRow>();
+    if (upserted) return upserted;
   }
 
   const imdbId = normalizeImdbId(item.imdbId);
@@ -406,47 +625,333 @@ async function resolveSingleBatchItem(
       .select('*')
       .eq('imdb_id', imdbId)
       .maybeSingle<MovieRow>();
-    if (byImdb) return byImdb;
 
-    try {
-      const found = await tmdbFetch<TmdbFindResponse>(`/find/${imdbId}`, {
-        external_source: 'imdb_id',
-        language,
-      });
-      const firstId = found.movie_results?.[0]?.id;
-      if (firstId) {
-        return await enrichAndCacheByTmdbId(serviceClient, firstId, language);
+    if (byImdb) {
+      if (byImdb.tmdb_id && byImdb.original_title === null && !state.fatalErrorCode) {
+        try {
+          return await enrichAndCacheByTmdbId(serviceClient, byImdb.tmdb_id, language, { forceRefresh: true });
+        } catch (err) {
+          recordBatchError(state, err, `refresh by imdb=${imdbId}`);
+        }
       }
-    } catch {
-      // Fall through to title search / fallback row
+      return byImdb;
+    }
+
+    if (!state.fatalErrorCode) {
+      try {
+        const found = await tmdbFetch<TmdbFindResponse>(`/find/${imdbId}`, {
+          external_source: 'imdb_id',
+          language,
+        });
+        const firstId = found.movie_results?.[0]?.id;
+        if (firstId) {
+          return await enrichAndCacheByTmdbId(serviceClient, firstId, language);
+        }
+      } catch (err) {
+        recordBatchError(state, err, `find by imdb=${imdbId}`);
+      }
     }
   }
 
-  // Check existing cache by title + year before hitting TMDB API
+  // Check existing cache by title / original_title + year before hitting TMDB search API
   const cleanTitle = item.title.trim();
-  const q = serviceClient.from('movies').select('*').ilike('title', cleanTitle);
-  const { data: cachedByTitle } = await (item.year ? q.eq('release_year', item.year) : q).limit(1);
-  if (cachedByTitle && cachedByTitle.length > 0 && cachedByTitle[0].tmdb_id) {
-    return cachedByTitle[0] as MovieRow;
+  const cachedByTitle = await findCachedTmdbMovieByTitle(serviceClient, cleanTitle, item.year);
+  if (cachedByTitle && cachedByTitle.tmdb_id) {
+    if (cachedByTitle.original_title === null && !state.fatalErrorCode) {
+      try {
+        return await enrichAndCacheByTmdbId(serviceClient, cachedByTitle.tmdb_id, language, {
+          forceRefresh: true,
+        });
+      } catch (err) {
+        recordBatchError(state, err, `refresh cached "${cleanTitle}"`);
+      }
+    }
+    return cachedByTitle;
   }
 
-  // Try TMDB search -> enrich
-  try {
-    const searchRes = await tmdbFetch<TmdbSearchResponse>('/search/movie', {
-      query: cleanTitle,
-      year: item.year ?? undefined,
-      include_adult: 'false',
-      language,
-    });
-    const bestMatch = searchRes.results?.[0];
-    if (bestMatch?.id) {
-      return await enrichAndCacheByTmdbId(serviceClient, bestMatch.id, language);
+  // Try multi-step TMDB search -> enrich
+  if (!state.fatalErrorCode) {
+    try {
+      const bestMatch = await searchBestTmdbMovie(cleanTitle, item.year);
+      if (bestMatch?.id) {
+        return await enrichAndCacheByTmdbId(serviceClient, bestMatch.id, language);
+      }
+    } catch (err) {
+      recordBatchError(state, err, `search/enrich "${cleanTitle}" (${item.year ?? '?'})`);
     }
-  } catch {
-    // Graceful fallback if TMDB token is missing or rate-limited
   }
 
   return await getOrCreateFallbackMovie(serviceClient, item);
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function fetchUserMovieIds(
+  serviceClient: ReturnType<typeof getServiceClient>,
+  userId: string
+): Promise<string[]> {
+  const movieIds = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await serviceClient
+      .from('watch_logs')
+      .select('movie_id')
+      .eq('user_id', userId)
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new Error(`Failed to fetch user watch_logs: ${error.message}`);
+    }
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      if (typeof row.movie_id === 'string') {
+        movieIds.add(row.movie_id);
+      }
+    }
+
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return Array.from(movieIds);
+}
+
+async function mergeFallbackIntoExistingTmdbMovie(
+  serviceClient: ReturnType<typeof getServiceClient>,
+  fallbackRow: MovieRow,
+  existingRow: MovieRow,
+  payload: NormalizedTmdbPayload
+): Promise<void> {
+  if (existingRow.original_title === null) {
+    const { error: refreshErr } = await serviceClient
+      .from('movies')
+      .update({
+        ...payload,
+        imdb_id: payload.imdb_id ?? existingRow.imdb_id ?? fallbackRow.imdb_id,
+      })
+      .eq('id', existingRow.id);
+
+    if (refreshErr) {
+      console.error('[tmdb-proxy] Failed refreshing existing TMDB movie during merge:', refreshErr.message);
+    }
+  }
+
+  const { error: repointErr } = await serviceClient
+    .from('watch_logs')
+    .update({ movie_id: existingRow.id })
+    .eq('movie_id', fallbackRow.id);
+
+  if (repointErr) {
+    throw new Error(`Failed to repoint watch_logs from ${fallbackRow.id} to ${existingRow.id}: ${repointErr.message}`);
+  }
+
+  const { error: deleteErr } = await serviceClient
+    .from('movies')
+    .delete()
+    .eq('id', fallbackRow.id)
+    .is('tmdb_id', null);
+
+  if (deleteErr) {
+    console.warn(`[tmdb-proxy] Could not delete orphan fallback movie ${fallbackRow.id}:`, deleteErr.message);
+  }
+}
+
+async function handleReenrichUnmatched(
+  serviceClient: ReturnType<typeof getServiceClient>,
+  userId: string,
+  reqBody: ReenrichUnmatchedRequest
+) {
+  const language = reqBody.language ?? 'ru-RU';
+
+  if (!isTmdbConfigured()) {
+    return {
+      totalProcessed: 0,
+      matchedCount: 0,
+      mergedCount: 0,
+      refreshedCount: 0,
+      unmatchedCount: 0,
+      tmdbConfigured: false,
+      errorCode: 'TMDB_NOT_CONFIGURED' as TmdbErrorCode,
+      errorMessage: 'В секретах Supabase Edge Function не задан TMDB_READ_ACCESS_TOKEN (или TMDB_API_KEY).',
+      unmatchedTitles: [] as string[],
+    };
+  }
+
+  const userMovieIds = await fetchUserMovieIds(serviceClient, userId);
+  if (userMovieIds.length === 0) {
+    return {
+      totalProcessed: 0,
+      matchedCount: 0,
+      mergedCount: 0,
+      refreshedCount: 0,
+      unmatchedCount: 0,
+      tmdbConfigured: true,
+      errorCode: null,
+      errorMessage: null,
+      unmatchedTitles: [] as string[],
+    };
+  }
+
+  const userMovieSet = new Set(userMovieIds);
+  const requestedIds = Array.isArray(reqBody.movieIds) && reqBody.movieIds.length > 0
+    ? Array.from(
+        new Set(
+          reqBody.movieIds.filter(
+            (id): id is string => typeof id === 'string' && UUID_REGEX.test(id) && userMovieSet.has(id)
+          )
+        )
+      ).slice(0, 40)
+    : userMovieIds;
+
+  const rawLimit = typeof reqBody.limit === 'number' && Number.isFinite(reqBody.limit) ? Math.trunc(reqBody.limit) : 25;
+  const effectiveLimit = Math.min(40, Math.max(1, rawLimit));
+
+  const candidateRows: MovieRow[] = [];
+  for (let i = 0; i < requestedIds.length; i += 100) {
+    const idChunk = requestedIds.slice(i, i + 100);
+    const { data, error } = await serviceClient
+      .from('movies')
+      .select('*')
+      .in('id', idChunk);
+
+    if (error) {
+      throw new Error(`Failed to fetch candidate movies for re-enrich: ${error.message}`);
+    }
+    for (const row of (data ?? []) as MovieRow[]) {
+      if (row.tmdb_id === null || row.original_title === null) {
+        candidateRows.push(row);
+      }
+    }
+  }
+
+  // Prioritize unmatched fallback rows (tmdb_id IS NULL) before seeded refresh rows
+  candidateRows.sort((a, b) => {
+    const aUnmatched = a.tmdb_id === null ? 0 : 1;
+    const bUnmatched = b.tmdb_id === null ? 0 : 1;
+    return aUnmatched - bUnmatched;
+  });
+
+  const targetRows = candidateRows.slice(0, effectiveLimit);
+  if (targetRows.length === 0) {
+    return {
+      totalProcessed: 0,
+      matchedCount: 0,
+      mergedCount: 0,
+      refreshedCount: 0,
+      unmatchedCount: 0,
+      tmdbConfigured: true,
+      errorCode: null,
+      errorMessage: null,
+      unmatchedTitles: [] as string[],
+    };
+  }
+
+  let matchedCount = 0;
+  let mergedCount = 0;
+  let refreshedCount = 0;
+  let unmatchedCount = 0;
+  const unmatchedTitles: string[] = [];
+  let fatalErrorCode: TmdbErrorCode | null = null;
+  let fatalErrorMessage: string | null = null;
+  let lastErrorCode: TmdbErrorCode | null = null;
+  let lastErrorMessage: string | null = null;
+
+  await runWithConcurrency(targetRows, BATCH_CONCURRENCY, async (movieRow) => {
+    if (fatalErrorCode) return;
+
+    try {
+      if (movieRow.tmdb_id !== null) {
+        await enrichAndCacheByTmdbId(serviceClient, movieRow.tmdb_id, language, { forceRefresh: true });
+        refreshedCount += 1;
+        return;
+      }
+
+      const bestMatch = await searchBestTmdbMovie(movieRow.title, movieRow.release_year);
+      if (!bestMatch?.id) {
+        unmatchedCount += 1;
+        unmatchedTitles.push(formatMovieLabel(movieRow.title, movieRow.release_year));
+        return;
+      }
+
+      const payload = await fetchNormalizedTmdbPayload(bestMatch.id, language);
+
+      const { data: existingByTmdb } = await serviceClient
+        .from('movies')
+        .select('*')
+        .eq('tmdb_id', bestMatch.id)
+        .maybeSingle<MovieRow>();
+
+      if (existingByTmdb && existingByTmdb.id !== movieRow.id) {
+        await mergeFallbackIntoExistingTmdbMovie(serviceClient, movieRow, existingByTmdb, payload);
+        mergedCount += 1;
+        return;
+      }
+
+      const { error: updateErr } = await serviceClient
+        .from('movies')
+        .update({
+          ...payload,
+          imdb_id: payload.imdb_id ?? movieRow.imdb_id,
+        })
+        .eq('id', movieRow.id);
+
+      if (!updateErr) {
+        matchedCount += 1;
+        return;
+      }
+
+      // Handle concurrent worker inserting/updating the same tmdb_id (Postgres 23505)
+      if (updateErr.code === '23505') {
+        const { data: raceExisting } = await serviceClient
+          .from('movies')
+          .select('*')
+          .eq('tmdb_id', bestMatch.id)
+          .maybeSingle<MovieRow>();
+
+        if (raceExisting && raceExisting.id !== movieRow.id) {
+          await mergeFallbackIntoExistingTmdbMovie(serviceClient, movieRow, raceExisting, payload);
+          mergedCount += 1;
+          return;
+        }
+      }
+
+      throw new Error(`Failed updating movie ${movieRow.id}: ${updateErr.message}`);
+    } catch (err) {
+      if (isFatalTmdbError(err)) {
+        fatalErrorCode = err.code;
+        fatalErrorMessage = err.message;
+        console.error('[tmdb-proxy] Fatal TMDB error during re-enrich:', err.message);
+        return;
+      }
+
+      if (err instanceof TmdbApiError) {
+        lastErrorCode = err.code;
+        lastErrorMessage = err.message;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[tmdb-proxy] Re-enrich failed for "${movieRow.title}":`, msg);
+      if (movieRow.tmdb_id === null) {
+        unmatchedCount += 1;
+        unmatchedTitles.push(formatMovieLabel(movieRow.title, movieRow.release_year));
+      }
+    }
+  });
+
+  const totalSuccess = matchedCount + mergedCount + refreshedCount;
+  return {
+    totalProcessed: targetRows.length,
+    matchedCount,
+    mergedCount,
+    refreshedCount,
+    unmatchedCount,
+    tmdbConfigured: fatalErrorCode !== 'TMDB_NOT_CONFIGURED',
+    errorCode: fatalErrorCode ?? (totalSuccess === 0 ? lastErrorCode : null),
+    errorMessage: fatalErrorMessage ?? (totalSuccess === 0 ? lastErrorMessage : null),
+    unmatchedTitles,
+  };
 }
 
 async function runWithConcurrency<T, R>(
@@ -485,7 +990,8 @@ Deno.serve(async (req: Request) => {
   let body: ProxyRequest;
   try {
     body = (await req.json()) as ProxyRequest;
-  } catch {
+  } catch (err) {
+    console.warn('[tmdb-proxy] Invalid JSON request body:', err instanceof Error ? err.message : String(err));
     return jsonResponse({ error: 'Invalid JSON request body' }, 400);
   }
 
@@ -508,15 +1014,59 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'resolve_batch') {
       const items = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
       const language = body.language ?? 'ru-RU';
+      const configured = isTmdbConfigured();
+      const sharedState: BatchSharedState = {
+        fatalErrorCode: configured ? null : 'TMDB_NOT_CONFIGURED',
+        fatalErrorMessage: configured
+          ? null
+          : 'В секретах Supabase Edge Function не задан TMDB_READ_ACCESS_TOKEN (или TMDB_API_KEY).',
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      };
+
       const movies = await runWithConcurrency(items, BATCH_CONCURRENCY, (item) =>
-        resolveSingleBatchItem(serviceClient, item, language)
+        resolveSingleBatchItem(serviceClient, item, language, sharedState)
       );
-      return jsonResponse({ movies });
+
+      let matched = 0;
+      const unmatchedTitles: string[] = [];
+      movies.forEach((movie, idx) => {
+        if (movie.tmdb_id !== null) {
+          matched += 1;
+        } else {
+          const item = items[idx];
+          unmatchedTitles.push(formatMovieLabel(item?.title ?? movie.title, item?.year ?? movie.release_year));
+        }
+      });
+
+      const stats = {
+        total: movies.length,
+        matched,
+        unmatched: movies.length - matched,
+        tmdbConfigured: sharedState.fatalErrorCode !== 'TMDB_NOT_CONFIGURED',
+        errorCode:
+          sharedState.fatalErrorCode ?? (matched === 0 && movies.length > 0 ? sharedState.lastErrorCode : null),
+        errorMessage:
+          sharedState.fatalErrorMessage ?? (matched === 0 && movies.length > 0 ? sharedState.lastErrorMessage : null),
+        unmatchedTitles,
+      };
+
+      return jsonResponse({ movies, stats });
+    }
+
+    if (body.action === 'reenrich_unmatched') {
+      const result = await handleReenrichUnmatched(serviceClient, caller.userId, body);
+      return jsonResponse(result);
     }
 
     return jsonResponse({ error: 'Unknown action' }, 400);
   } catch (err) {
+    if (isFatalTmdbError(err)) {
+      console.error('[tmdb-proxy] Fatal TMDB error:', err.code, err.message);
+      return jsonResponse({ error: err.message, code: err.code }, err.status ?? 502);
+    }
     const message = err instanceof Error ? err.message : 'Unexpected server error';
+    console.error('[tmdb-proxy] Unexpected error:', message);
     return jsonResponse({ error: message }, 500);
   }
 });

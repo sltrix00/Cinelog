@@ -243,3 +243,25 @@ export interface ReferenceDateContext {
   day: number;
   dayOfYear: number;
 }
+
+export interface TmdbBatchStats {
+  total: number;
+  matched: number;
+  unmatched: number;
+  tmdbConfigured: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  unmatchedTitles: string[];
+}
+
+export interface ReenrichSummary {
+  totalProcessed: number;
+  matchedCount: number;
+  mergedCount: number;
+  refreshedCount: number;
+  unmatchedCount: number;
+  tmdbConfigured: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  unmatchedTitles: string[];
+}

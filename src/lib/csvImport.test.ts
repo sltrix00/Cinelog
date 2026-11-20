@@ -111,4 +111,43 @@ describe('Smart CSV & Diary Import Pipeline', () => {
     const tod = computeTimeOfDayDistribution(localEntries, 2026);
     expect(tod.hasTimeData).toBe(false);
   });
+
+  it('deduplicates re-imports against existing entries using original_title when TMDB localized title', () => {
+    const existing: WatchEntry[] = [
+      {
+        id: 'old-localized-1',
+        movie_id: 'm-poor-things',
+        tmdb_id: 792307,
+        imdb_id: null,
+        title: 'Бедные-несчастные',
+        original_title: 'Poor Things',
+        release_year: 2023,
+        watched_date: '2024-03-10',
+        watched_time: '21:00:00',
+        rating: 4.5,
+        is_rewatch: false,
+        source: 'txt_diary',
+        runtime_minutes: 141,
+        runtime_override_minutes: null,
+        genres: ['Комедия', 'Драма'],
+        directors: ['Yorgos Lanthimos'],
+        countries: ['Великобритания'],
+        poster_url: null,
+        import_key: 'txt_diary:poor things:2023:2024-03-10:1',
+        created_at: '2024-03-10T21:00:00Z',
+      },
+    ];
+
+    const txt = [
+      'Просмотренные фильмы 2024',
+      '1. Poor things (2023) - 21:00 10 марта (9/10)',
+      '2. Poor things (2023) - 20:00 15 мая (9/10)',
+    ].join('\n');
+
+    const annotated = annotateImportBatch(parseRussianTxtDiary(txt), existing);
+    expect(annotated[0].isDuplicate).toBe(true);
+    expect(annotated[1].isDuplicate).toBe(false);
+    expect(annotated[1].isRewatch).toBe(true);
+    expect(annotated[1].autoRewatchDetected).toBe(true);
+  });
 });

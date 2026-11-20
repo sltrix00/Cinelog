@@ -1,17 +1,47 @@
 import { useMemo, useState } from 'react';
-import { Download, RotateCcw, Search, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Star,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { filmWord, filterEntriesByYear, formatShortDateRu, getEffectiveRuntime } from '../lib/analytics';
-import type { WatchEntry, YearFilter } from '../types/cinelog';
+import type { ReenrichSummary, WatchEntry, YearFilter } from '../types/cinelog';
 
 interface JournalSectionProps {
   entries: WatchEntry[];
   selectedYear: YearFilter;
   onDeleteEntry: (id: string) => void;
+  pendingEnrichCount?: number;
+  unmatchedCount?: number;
+  reenriching?: boolean;
+  reenrichProgress?: { done: number; total: number } | null;
+  reenrichReport?: ReenrichSummary | null;
+  onReenrichMovies?: () => void;
+  onDismissReenrichReport?: () => void;
 }
 
 type SortKey = 'date-desc' | 'date-asc' | 'rating-desc' | 'rating-asc' | 'title-asc';
 
-export function JournalSection({ entries, selectedYear, onDeleteEntry }: JournalSectionProps) {
+export function JournalSection({
+  entries,
+  selectedYear,
+  onDeleteEntry,
+  pendingEnrichCount = 0,
+  unmatchedCount = 0,
+  reenriching = false,
+  reenrichProgress = null,
+  reenrichReport = null,
+  onReenrichMovies,
+  onDismissReenrichReport,
+}: JournalSectionProps) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('date-desc');
   const [rewatchesOnly, setRewatchesOnly] = useState(false);
@@ -74,15 +104,111 @@ export function JournalSection({ entries, selectedYear, onDeleteEntry }: Journal
           </h2>
         </div>
 
-        <button
-          type="button"
-          onClick={handleExportJson}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-cardElevated border border-line text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
-        >
-          <Download className="w-3.5 h-3.5 text-[#45d1c6]" />
-          Экспорт JSON
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {pendingEnrichCount > 0 && onReenrichMovies && (
+            <button
+              type="button"
+              disabled={reenriching}
+              onClick={onReenrichMovies}
+              title={
+                unmatchedCount > 0
+                  ? `Нераспознанных фильмов: ${unmatchedCount} · Всего к обновлению: ${pendingEnrichCount}`
+                  : `Обновить метаданные для ${pendingEnrichCount} фильмов через TMDB`
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#45d1c6]/10 hover:bg-[#45d1c6]/20 disabled:opacity-60 border border-[#45d1c6]/35 text-xs font-mono text-[#45d1c6] transition-colors cursor-pointer"
+            >
+              {reenriching ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              <span>Распознать через TMDB ({pendingEnrichCount})</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleExportJson}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-cardElevated border border-line text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-[#45d1c6]" />
+            Экспорт JSON
+          </button>
+        </div>
       </div>
+
+      {reenriching && reenrichProgress && (
+        <div className="rounded-xl bg-card border border-line p-3 space-y-1.5">
+          <div className="flex justify-between text-[11px] font-mono text-slate-300">
+            <span>Распознавание через TMDB...</span>
+            <span>
+              {reenrichProgress.done} / {reenrichProgress.total}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-canvas border border-line overflow-hidden">
+            <div
+              className="h-full bg-[#45d1c6] transition-all"
+              style={{
+                width: `${Math.round((reenrichProgress.done / Math.max(1, reenrichProgress.total)) * 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {reenrichReport && (
+        <div
+          className={
+            !reenrichReport.tmdbConfigured || reenrichReport.errorCode
+              ? 'rounded-xl bg-[#f06292]/10 border border-[#f06292]/30 p-3.5 text-xs text-[#f06292] flex items-start justify-between gap-3'
+              : 'rounded-xl bg-card border border-[#45d1c6]/35 p-3.5 text-xs text-slate-200 flex items-start justify-between gap-3'
+          }
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            {!reenrichReport.tmdbConfigured || reenrichReport.errorCode ? (
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#f06292]" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#45d1c6]" />
+            )}
+            <div className="space-y-1 min-w-0">
+              {!reenrichReport.tmdbConfigured || reenrichReport.errorCode ? (
+                <p>
+                  {reenrichReport.errorMessage ??
+                    `Ошибка TMDB (${reenrichReport.errorCode ?? 'UNKNOWN'})`}
+                </p>
+              ) : (
+                <p className="font-mono text-[11px]">
+                  Распознано: {reenrichReport.matchedCount} · Объединено: {reenrichReport.mergedCount} ·
+                  Обновлено: {reenrichReport.refreshedCount} · Не найдено:{' '}
+                  {reenrichReport.unmatchedCount}
+                </p>
+              )}
+              {reenrichReport.unmatchedTitles.length > 0 && (
+                <p className="text-[11px] text-slate-400 break-words">
+                  Не найдены:{' '}
+                  <span className="font-mono text-slate-300">
+                    {reenrichReport.unmatchedTitles.slice(0, 20).join(', ')}
+                    {reenrichReport.unmatchedTitles.length > 20
+                      ? ` (+${reenrichReport.unmatchedTitles.length - 20})`
+                      : ''}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {onDismissReenrichReport && (
+            <button
+              type="button"
+              onClick={onDismissReenrichReport}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer shrink-0"
+              title="Скрыть отчёт"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filters Toolbar */}
       <div className="rounded-2xl bg-card border border-line p-4 flex flex-wrap items-center gap-3">

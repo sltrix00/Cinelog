@@ -415,6 +415,17 @@ export function annotateImportBatch(
     if (!prev || existing.watched_date < prev) {
       earliestSeenDate.set(filmKey, existing.watched_date);
     }
+
+    if (existing.original_title && existing.original_title.trim()) {
+      seenExact.add(
+        exactWatchKey(existing.original_title, existing.release_year, existing.watched_date)
+      );
+      const origFilmKey = filmIdentityKey(existing.original_title, existing.release_year);
+      const prevOrig = earliestSeenDate.get(origFilmKey);
+      if (!prevOrig || existing.watched_date < prevOrig) {
+        earliestSeenDate.set(origFilmKey, existing.watched_date);
+      }
+    }
   }
 
   // Sort a copy chronologically so earlier watches in the same CSV establish first-watch dates
