@@ -1,4 +1,15 @@
-import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
+import {
+  createClient,
+  type AuthChangeEvent,
+  type Session,
+  type SupabaseClient,
+  type User,
+} from '@supabase/supabase-js';
+import {
+  getAuthRedirectUrl,
+  localizeAuthError,
+  parseGoogleProviderEnabled,
+} from './authHelpers';
 import type {
   MovieRecord,
   ParsedImportRow,
@@ -44,10 +55,12 @@ export async function getActiveSession(): Promise<Session | null> {
   return data.session ?? null;
 }
 
-export function onAuthChanged(callback: (user: User | null) => void): () => void {
+export function onAuthChanged(
+  callback: (user: User | null, event?: AuthChangeEvent) => void
+): () => void {
   if (!supabase) return () => undefined;
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session?.user ?? null);
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    callback(session?.user ?? null, event);
   });
   return () => data.subscription.unsubscribe();
 }
@@ -64,6 +77,7 @@ export async function signUpWithEmail(email: string, password: string, username?
     email,
     password,
     options: {
+      emailRedirectTo: getAuthRedirectUrl(),
       data: {
         username: username?.trim() || undefined,
         timezone,
@@ -72,13 +86,56 @@ export async function signUpWithEmail(email: string, password: string, username?
   });
 }
 
+export async function isGoogleProviderEnabled(
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean | null> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const response = await fetchImpl(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/settings`, {
+      headers: {
+        apikey: supabaseKey,
+      },
+    });
+    if (!response.ok) return null;
+    const payload: unknown = await response.json();
+    return parseGoogleProviderEnabled(payload);
+  } catch {
+    return null;
+  }
+}
+
 export async function signInWithGoogle() {
   const client = requireClient();
+  const googleEnabled = await isGoogleProviderEnabled();
+  if (googleEnabled === false) {
+    return {
+      data: null,
+      error: new Error(localizeAuthError('Unsupported provider: provider is not enabled')),
+    };
+  }
+
   return client.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo: getAuthRedirectUrl(),
+      queryParams: {
+        prompt: 'select_account',
+      },
     },
+  });
+}
+
+export async function resetPasswordByEmail(email: string) {
+  const client = requireClient();
+  return client.auth.resetPasswordForEmail(email, {
+    redirectTo: getAuthRedirectUrl(),
+  });
+}
+
+export async function updateAccountPassword(newPassword: string) {
+  const client = requireClient();
+  return client.auth.updateUser({
+    password: newPassword,
   });
 }
 

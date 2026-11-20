@@ -24,6 +24,7 @@ import {
   DEFAULT_REFERENCE_DATE,
   getReferenceDateForToday,
 } from './lib/analytics';
+import { parseAuthCallbackError } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
 import {
@@ -62,6 +63,7 @@ export function App() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -87,6 +89,12 @@ export function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
+    const callbackError = parseAuthCallbackError(window.location);
+    if (callbackError) {
+      showToast(callbackError);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     void getActiveSession().then((session) => {
       if (session?.user) {
         setUserEmail(session.user.email ?? null);
@@ -94,17 +102,22 @@ export function App() {
       }
     });
 
-    return onAuthChanged((user) => {
+    return onAuthChanged((user, event) => {
       setUserEmail(user?.email ?? null);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+        setAuthModalOpen(true);
+      }
       if (user) {
         void loadCloudEntries();
       } else {
+        setIsPasswordRecovery(false);
         setIsDemoMode(true);
         setEntries(DEMO_ENTRIES);
         setDemoWasModified(false);
       }
     });
-  }, [loadCloudEntries]);
+  }, [loadCloudEntries, showToast]);
 
   const refDate = useMemo(
     () => (isDemoMode ? DEFAULT_REFERENCE_DATE : getReferenceDateForToday()),
@@ -375,6 +388,7 @@ export function App() {
         onClose={() => setAuthModalOpen(false)}
         userEmail={userEmail}
         isDemoMode={isDemoMode}
+        isPasswordRecovery={isPasswordRecovery}
         onEnableDemoMode={() => {
           setIsDemoMode(true);
           setEntries(DEMO_ENTRIES);
@@ -383,6 +397,7 @@ export function App() {
         onAuthSuccess={() => {
           void loadCloudEntries();
         }}
+        onPasswordRecoveryComplete={() => setIsPasswordRecovery(false)}
       />
     </div>
   );

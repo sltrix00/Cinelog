@@ -1,11 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import { Database, Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import { Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import { localizeAuthError } from '../lib/authHelpers';
 import {
   isSupabaseConfigured,
+  resetPasswordByEmail,
   signInWithEmail,
   signInWithGoogle,
   signOutAccount,
   signUpWithEmail,
+  updateAccountPassword,
 } from '../lib/supabase';
 
 interface AuthModalProps {
@@ -13,8 +16,35 @@ interface AuthModalProps {
   onClose: () => void;
   userEmail: string | null;
   isDemoMode: boolean;
+  isPasswordRecovery?: boolean;
   onEnableDemoMode: () => void;
   onAuthSuccess: () => void;
+  onPasswordRecoveryComplete?: () => void;
+}
+
+type AuthMode = 'login' | 'register' | 'reset';
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
 }
 
 export function AuthModal({
@@ -22,17 +52,34 @@ export function AuthModal({
   onClose,
   userEmail,
   isDemoMode,
+  isPasswordRecovery = false,
   onEnableDemoMode,
   onAuthSuccess,
+  onPasswordRecoveryComplete,
 }: AuthModalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   if (!open) return null;
+
+  const busy = loading || googleLoading;
+
+  const switchMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setMessage(null);
+  };
+
+  const handleClose = () => {
+    setMessage(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,24 +98,72 @@ export function AuthModal({
         const { error } = await signInWithEmail(email.trim(), password);
         if (error) throw error;
         onAuthSuccess();
-        onClose();
-      } else {
+        handleClose();
+      } else if (mode === 'register') {
         const { data, error } = await signUpWithEmail(email.trim(), password, username);
         if (error) throw error;
         if (data.session) {
           onAuthSuccess();
-          onClose();
+          handleClose();
         } else {
           setMessage({
             type: 'success',
-            text: 'Проверьте почту для подтверждения аккаунта Supabase.',
+            text: 'Проверьте почту и перейдите по ссылке из письма, чтобы подтвердить регистрацию.',
           });
         }
+      } else {
+        const { error } = await resetPasswordByEmail(email.trim());
+        if (error) throw error;
+        setMessage({
+          type: 'success',
+          text: 'Письмо со ссылкой для сброса пароля отправлено на указанный email.',
+        });
       }
     } catch (err) {
+      const raw = err instanceof Error ? err.message : '';
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Ошибка аутентификации.',
+        text: localizeAuthError(raw),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordRecoverySubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setMessage({
+        type: 'error',
+        text: 'Пароль должен содержать минимум 6 символов.',
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage({
+        type: 'error',
+        text: 'Пароли не совпадают.',
+      });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      const { error } = await updateAccountPassword(newPassword);
+      if (error) throw error;
+      setNewPassword('');
+      setConfirmPassword('');
+      setMessage({
+        type: 'success',
+        text: 'Пароль успешно обновлён.',
+      });
+      onPasswordRecoveryComplete?.();
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : '';
+      setMessage({
+        type: 'error',
+        text: localizeAuthError(raw),
       });
     } finally {
       setLoading(false);
@@ -77,52 +172,136 @@ export function AuthModal({
 
   const handleGoogle = async () => {
     if (!isSupabaseConfigured) return;
-    setLoading(true);
+    setGoogleLoading(true);
     setMessage(null);
-    const { error } = await signInWithGoogle();
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-      setLoading(false);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        setMessage({ type: 'error', text: localizeAuthError(error.message) });
+        setGoogleLoading(false);
+      }
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : '';
+      setMessage({ type: 'error', text: localizeAuthError(raw) });
+      setGoogleLoading(false);
     }
   };
 
   const handleLogout = async () => {
     await signOutAccount();
     onEnableDemoMode();
-    onClose();
+    handleClose();
   };
+
+  const modalTitle = isPasswordRecovery
+    ? 'Новый пароль'
+    : userEmail
+      ? 'Ваш аккаунт'
+      : mode === 'login'
+        ? 'Вход в аккаунт'
+        : mode === 'register'
+          ? 'Создать аккаунт'
+          : 'Восстановление пароля';
+
+  const modalSubtitle = isPasswordRecovery
+    ? 'Придумайте новый пароль для входа в Cinelog'
+    : userEmail
+      ? 'Облачная синхронизация вашего киножурнала'
+      : mode === 'reset'
+        ? 'Отправим ссылку для сброса пароля на ваш email'
+        : 'Синхронизация вашего киножурнала в облаке';
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-[#45d1c6]" />
-            <h3 className="text-sm font-semibold text-white">Аккаунт и синхронизация Supabase</h3>
-          </div>
+        <div className="relative px-6 pt-6 pb-2 text-center">
           <button
             type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+            onClick={handleClose}
+            aria-label="Закрыть"
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
+          <h3 className="text-lg font-semibold tracking-tight text-white">{modalTitle}</h3>
+          <p className="text-xs text-slate-400 mt-1">{modalSubtitle}</p>
         </div>
 
-        <div className="p-5 space-y-4">
-          {userEmail ? (
+        <div className="px-6 pb-6 pt-3 space-y-4">
+          {isPasswordRecovery ? (
+            <form onSubmit={handlePasswordRecoverySubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Новый пароль</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Минимум 6 символов"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Повторите пароль</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Введите пароль ещё раз"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                />
+              </div>
+
+              {message && (
+                <div
+                  className={`p-3 rounded-xl text-xs border leading-relaxed ${
+                    message.type === 'error'
+                      ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
+                      : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
+                  }`}
+                >
+                  {message.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Сохранить новый пароль
+              </button>
+            </form>
+          ) : userEmail ? (
             <div className="space-y-4">
+              {message && (
+                <div
+                  className={`p-3 rounded-xl text-xs border leading-relaxed ${
+                    message.type === 'error'
+                      ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
+                      : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
+                  }`}
+                >
+                  {message.text}
+                </div>
+              )}
+
               <div className="p-4 rounded-xl bg-canvas border border-line space-y-1">
                 <span className="text-[11px] font-mono uppercase text-slate-500">Вы вошли как</span>
                 <div className="text-sm font-mono font-semibold text-white">{userEmail}</div>
-                <p className="text-xs text-[#45d1c6]">
-                  Данные синхронизируются с PostgreSQL (RLS включён).
-                </p>
+                <p className="text-xs text-[#45d1c6]">Облачная синхронизация активна.</p>
               </div>
 
               <div className="flex items-center gap-2.5">
@@ -131,7 +310,7 @@ export function AuthModal({
                     type="button"
                     onClick={() => {
                       onEnableDemoMode();
-                      onClose();
+                      handleClose();
                     }}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-cardElevated hover:bg-lineStrong border border-line text-xs font-medium text-slate-200 transition-colors cursor-pointer"
                   >
@@ -155,46 +334,52 @@ export function AuthModal({
                 <div className="p-3 rounded-xl bg-[#d6b85a]/10 border border-[#d6b85a]/30 text-xs text-[#d6b85a] leading-relaxed">
                   Сейчас активен автономный <strong>Demo Mode</strong>. Чтобы включить облачную
                   синхронизацию, добавьте <span className="font-mono">VITE_SUPABASE_URL</span> и{' '}
-                  <span className="font-mono">VITE_SUPABASE_PUBLISHABLE_KEY</span> в <span className="font-mono">.env</span>.
+                  <span className="font-mono">VITE_SUPABASE_PUBLISHABLE_KEY</span> в{' '}
+                  <span className="font-mono">.env</span>.
                 </div>
               )}
 
-              <div className="grid grid-cols-2 p-1 rounded-xl bg-canvas border border-line text-xs">
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className={
-                    mode === 'login'
-                      ? 'py-1.5 rounded-lg bg-cardElevated text-white font-medium border border-lineStrong cursor-pointer'
-                      : 'py-1.5 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer'
-                  }
-                >
-                  Вход
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('register')}
-                  className={
-                    mode === 'register'
-                      ? 'py-1.5 rounded-lg bg-cardElevated text-white font-medium border border-lineStrong cursor-pointer'
-                      : 'py-1.5 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer'
-                  }
-                >
-                  Регистрация
-                </button>
-              </div>
+              {(mode === 'login' || mode === 'register') && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy || !isSupabaseConfigured}
+                    onClick={() => void handleGoogle()}
+                    className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-sm font-medium border border-white/15 shadow-sm transition-all cursor-pointer"
+                  >
+                    {googleLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+                    ) : (
+                      <GoogleIcon />
+                    )}
+                    <span>
+                      {mode === 'login' ? 'Войти через Google' : 'Продолжить через Google'}
+                    </span>
+                  </button>
 
-              <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="relative flex items-center py-0.5">
+                    <div className="flex-grow border-t border-line" />
+                    <span className="shrink mx-3 text-[11px] font-mono uppercase text-slate-500">
+                      или
+                    </span>
+                    <div className="flex-grow border-t border-line" />
+                  </div>
+                </>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-3.5">
                 {mode === 'register' && (
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">Никнейм (опц.)</label>
+                    <label className="block text-xs text-slate-300 mb-1">
+                      Никнейм (необязательно)
+                    </label>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder="cinephile_2026"
                       pattern="^[A-Za-z0-9_.-]{3,32}$"
-                      className="w-full px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                     />
                   </div>
                 )}
@@ -204,29 +389,33 @@ export function AuthModal({
                   <input
                     type="email"
                     required
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Пароль</label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Минимум 6 символов"
-                    className="w-full px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
-                  />
-                </div>
+                {(mode === 'login' || mode === 'register') && (
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">Пароль</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Минимум 6 символов"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                    />
+                  </div>
+                )}
 
                 {message && (
                   <div
-                    className={`p-3 rounded-xl text-xs border ${
+                    className={`p-3 rounded-xl text-xs border leading-relaxed ${
                       message.type === 'error'
                         ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
                         : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
@@ -238,28 +427,68 @@ export function AuthModal({
 
                 <button
                   type="submit"
-                  disabled={loading || !isSupabaseConfigured}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-xs font-semibold transition-colors cursor-pointer"
+                  disabled={busy || !isSupabaseConfigured}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
                 >
-                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {mode === 'login' ? 'Войти в Cinelog' : 'Создать аккаунт'}
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {mode === 'login'
+                    ? 'Войти'
+                    : mode === 'register'
+                      ? 'Создать аккаунт'
+                      : 'Отправить ссылку для сброса'}
                 </button>
+
+                {mode === 'login' && (
+                  <div className="text-center pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => switchMode('reset')}
+                      className="text-xs text-[#45d1c6] hover:text-[#6ee3da] transition-colors cursor-pointer"
+                    >
+                      Забыли пароль?
+                    </button>
+                  </div>
+                )}
               </form>
 
-              <div className="relative flex items-center py-1">
-                <div className="flex-grow border-t border-line" />
-                <span className="shrink mx-3 text-[10px] font-mono uppercase text-slate-500">или</span>
-                <div className="flex-grow border-t border-line" />
+              <div className="border-t border-line pt-4 text-center text-xs text-slate-400">
+                {mode === 'login' && (
+                  <>
+                    Нет аккаунта?{' '}
+                    <button
+                      type="button"
+                      onClick={() => switchMode('register')}
+                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                    >
+                      Зарегистрироваться
+                    </button>
+                  </>
+                )}
+                {mode === 'register' && (
+                  <>
+                    Уже есть аккаунт?{' '}
+                    <button
+                      type="button"
+                      onClick={() => switchMode('login')}
+                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                    >
+                      Войти
+                    </button>
+                  </>
+                )}
+                {mode === 'reset' && (
+                  <>
+                    Вспомнили пароль?{' '}
+                    <button
+                      type="button"
+                      onClick={() => switchMode('login')}
+                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                    >
+                      Вернуться ко входу
+                    </button>
+                  </>
+                )}
               </div>
-
-              <button
-                type="button"
-                disabled={loading || !isSupabaseConfigured}
-                onClick={() => void handleGoogle()}
-                className="w-full px-4 py-2.5 rounded-xl bg-canvas hover:bg-cardElevated disabled:opacity-50 border border-line text-xs font-medium text-slate-200 transition-colors cursor-pointer"
-              >
-                Продолжить через Google OAuth
-              </button>
             </>
           )}
         </div>

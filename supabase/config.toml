@@ -19,9 +19,25 @@ port = 54323
 [auth]
 enabled = true
 site_url = "https://sltrix00.github.io/MovieTracker2/"
-additional_redirect_urls = ["https://sltrix00.github.io/MovieTracker2/", "http://localhost:5173", "https://localhost:5173", "http://127.0.0.1:5173"]
+additional_redirect_urls = [
+  "https://sltrix00.github.io/MovieTracker2/",
+  "https://sltrix00.github.io/MovieTracker2/**",
+  "http://localhost:5173",
+  "http://localhost:5173/",
+  "http://localhost:5173/**",
+  "https://localhost:5173/",
+  "http://127.0.0.1:5173/",
+]
 jwt_expiry = 3600
 enable_signup = true
+
+# To test Google Sign-In with local Supabase CLI, set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET
+# in your local environment and uncomment the block below:
+# [auth.external.google]
+# enabled = true
+# client_id = "<google-web-client-id>"
+# secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+# skip_nonce_check = false
 
 [functions.tmdb-proxy]
 # Verification is performed inside the function via supabase.auth.getClaims() / getUser()
