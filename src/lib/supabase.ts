@@ -23,6 +23,13 @@ import type {
 } from '../types/cinelog';
 
 import { isSupabaseConfigured, supabaseKey, supabaseUrl } from './supabaseConfig';
+import {
+  halfStarsToRating,
+  isValidWatchLogId,
+  minutesToTimeString,
+  ratingToHalfStars,
+  timeStringToMinutes,
+} from './watchLogCodec';
 
 export { isSupabaseConfigured };
 
@@ -163,7 +170,7 @@ export async function fetchUserProfile(userId: string): Promise<ProfileRecord | 
 }
 
 interface WatchEntryRow {
-  id: string;
+  id: number | string;
   movie_id: string;
   tmdb_id: number | null;
   imdb_id: string | null;
@@ -171,7 +178,9 @@ interface WatchEntryRow {
   original_title: string | null;
   release_year: number | null;
   watched_date: string;
+  watched_time_min?: number | null;
   watched_time: string | null;
+  rating_x2?: number | null;
   rating: number | string | null;
   is_rewatch: boolean;
   source: WatchSource;
@@ -186,10 +195,14 @@ interface WatchEntryRow {
 }
 
 function mapRowToWatchEntry(row: WatchEntryRow): WatchEntry {
-  const rating =
+  const compactRating = halfStarsToRating(row.rating_x2);
+  const parsedRating =
     row.rating === null || row.rating === undefined ? null : Number.parseFloat(String(row.rating));
+  const rating =
+    compactRating ?? (parsedRating !== null && !Number.isNaN(parsedRating) ? parsedRating : null);
+
   return {
-    id: row.id,
+    id: String(row.id),
     movie_id: row.movie_id,
     tmdb_id: row.tmdb_id,
     imdb_id: row.imdb_id,
@@ -197,8 +210,8 @@ function mapRowToWatchEntry(row: WatchEntryRow): WatchEntry {
     original_title: row.original_title,
     release_year: row.release_year,
     watched_date: row.watched_date,
-    watched_time: row.watched_time,
-    rating: rating !== null && Number.isNaN(rating) ? null : rating,
+    watched_time: row.watched_time ?? minutesToTimeString(row.watched_time_min),
+    rating,
     is_rewatch: row.is_rewatch,
     source: row.source,
     runtime_minutes: row.runtime_minutes,
@@ -224,7 +237,7 @@ export async function fetchWatchEntries(): Promise<WatchEntry[]> {
       .from('watch_entries')
       .select('*')
       .order('watched_date', { ascending: false })
-      .order('watched_time', { ascending: false, nullsFirst: false })
+      .order('watched_time_min', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false })
       .range(from, to);
 
@@ -313,16 +326,19 @@ export async function insertManualWatchLog(input: CreateWatchLogInput): Promise<
     .insert({
       movie_id: movie.id,
       watched_date: input.watchedDate,
-      watched_time: input.watchedTime,
-      rating: input.rating,
+      watched_time_min: timeStringToMinutes(input.watchedTime),
+      rating_x2: ratingToHalfStars(input.rating),
       is_rewatch: input.isRewatch,
       source: 'manual',
       runtime_override_minutes: runtimeOverride,
     })
     .select('id')
-    .single<{ id: string }>();
+    .single<{ id: number | string }>();
 
   if (insertError || !inserted) {
+    if (insertError?.code === '54000') {
+      throw new Error('Превышен лимит записей (максимум 10 000 просмотров на аккаунт).');
+    }
     throw new Error(`Ошибка сохранения просмотра: ${insertError?.message ?? 'unknown'}`);
   }
 
@@ -340,8 +356,11 @@ export async function insertManualWatchLog(input: CreateWatchLogInput): Promise<
 }
 
 export async function deleteWatchLogById(logId: string): Promise<void> {
+  if (!isValidWatchLogId(logId)) {
+    throw new Error('Некорректный идентификатор записи.');
+  }
   const client = requireClient();
-  const { error } = await client.from('watch_logs').delete().eq('id', logId);
+  const { error } = await client.from('watch_logs').delete().eq('id', logId.trim());
   if (error) {
     throw new Error(`Не удалось удалить запись: ${error.message}`);
   }
@@ -466,8 +485,7 @@ export async function batchUpsertImportedRows(
   }
 
   const { data: userData } = await client.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) {
+  if (!userData.user?.id) {
     throw new Error('Пользователь не авторизован.');
   }
 
@@ -480,11 +498,10 @@ export async function batchUpsertImportedRows(
       r.runtimeMinutes && r.runtimeMinutes !== movie.runtime_minutes ? r.runtimeMinutes : null;
 
     return {
-      user_id: userId,
       movie_id: movie.id,
       watched_date: r.watchedDate,
-      watched_time: r.watchedTime,
-      rating: r.rating,
+      watched_time_min: timeStringToMinutes(r.watchedTime),
+      rating_x2: ratingToHalfStars(r.rating),
       is_rewatch: r.isRewatch,
       source: r.source,
       runtime_override_minutes: runtimeOverride,
@@ -492,14 +509,15 @@ export async function batchUpsertImportedRows(
     };
   });
 
-  // Batch upsert to watch_logs in chunks of 200 (idempotent on user_id + import_key)
+  // Batch upsert via SECURITY INVOKER RPC (supports partial unique index on user_id + import_key_hash)
   const UPSERT_CHUNK = 200;
   for (let i = 0; i < payload.length; i += UPSERT_CHUNK) {
     const slice = payload.slice(i, i + UPSERT_CHUNK);
-    const { error } = await client
-      .from('watch_logs')
-      .upsert(slice, { onConflict: 'user_id,import_key' });
+    const { error } = await client.rpc('upsert_watch_logs', { p_rows: slice });
     if (error) {
+      if (error.code === '54000') {
+        throw new Error('Превышен лимит записей (максимум 10 000 просмотров на аккаунт).');
+      }
       throw new Error(`Ошибка пакетного сохранения в Supabase: ${error.message}`);
     }
   }
