@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, RotateCcw } from 'lucide-react';
 import { AddWatchModal, type AddWatchPayload } from './components/AddWatchModal';
 import { AuthModal } from './components/AuthModal';
@@ -66,7 +66,14 @@ export function App() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [authNotice, setAuthNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const initialHadAuthCodeRef = useRef(
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code')
+  );
+  const handledInitialCodeRef = useRef(false);
+  const passwordRecoveryTriggeredRef = useRef(false);
   const [reenriching, setReenriching] = useState(false);
   const [reenrichProgress, setReenrichProgress] = useState<{ done: number; total: number } | null>(null);
   const [reenrichReport, setReenrichReport] = useState<ReenrichSummary | null>(null);
@@ -94,22 +101,30 @@ export function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
+    let active = true;
+    const hadAuthCode =
+      initialHadAuthCodeRef.current || new URLSearchParams(window.location.search).has('code');
+    initialHadAuthCodeRef.current = hadAuthCode;
+
+    const cleanAuthCodeFromUrl = () => {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('code')) {
+        url.searchParams.delete('code');
+        window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+      }
+    };
+
     const callbackError = parseAuthCallbackError(window.location);
     if (callbackError) {
+      handledInitialCodeRef.current = true;
       showToast(callbackError);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    void getVerifiedUser().then((user) => {
-      if (user) {
-        setUserEmail(user.email ?? null);
-        void loadCloudEntries();
-      }
-    });
-
-    return onAuthChanged((user, event) => {
+    const unsubscribe = onAuthChanged((user, event) => {
       setUserEmail(user?.email ?? null);
       if (event === 'PASSWORD_RECOVERY') {
+        passwordRecoveryTriggeredRef.current = true;
         setIsPasswordRecovery(true);
         setAuthModalOpen(true);
         return;
@@ -126,6 +141,37 @@ export function App() {
         setReenriching(false);
       }
     });
+
+    void getVerifiedUser().then((user) => {
+      if (!active) return;
+      if (user) {
+        setUserEmail(user.email ?? null);
+        void loadCloudEntries();
+        if (
+          hadAuthCode &&
+          !handledInitialCodeRef.current &&
+          !callbackError &&
+          !passwordRecoveryTriggeredRef.current
+        ) {
+          handledInitialCodeRef.current = true;
+          cleanAuthCodeFromUrl();
+          showToast('Почта подтверждена! Вы вошли в аккаунт.');
+        }
+      } else if (hadAuthCode && !handledInitialCodeRef.current && !callbackError) {
+        handledInitialCodeRef.current = true;
+        cleanAuthCodeFromUrl();
+        setAuthNotice({
+          type: 'success',
+          text: 'Email подтверждён! Чтобы завершить вход в этом браузере, войдите по email и паролю.',
+        });
+        setAuthModalOpen(true);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [loadCloudEntries, showToast]);
 
   const refDate = useMemo(
@@ -464,27 +510,34 @@ export function App() {
       />
       <AuthModal
         open={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setAuthNotice(null);
+        }}
         userEmail={userEmail}
         isDemoMode={isDemoMode}
         isPasswordRecovery={isPasswordRecovery}
+        initialNotice={authNotice}
         onEnableDemoMode={() => {
           setIsDemoMode(true);
           setEntries(DEMO_ENTRIES);
           setDemoWasModified(false);
         }}
         onAuthSuccess={() => {
+          setAuthNotice(null);
           void loadCloudEntries();
         }}
         onPasswordRecoveryComplete={() => {
           setIsPasswordRecovery(false);
           setAuthModalOpen(false);
+          setAuthNotice(null);
           void loadCloudEntries();
         }}
         onCancelPasswordRecovery={() => {
           void signOutAccount();
           setIsPasswordRecovery(false);
           setAuthModalOpen(false);
+          setAuthNotice(null);
         }}
       />
     </div>

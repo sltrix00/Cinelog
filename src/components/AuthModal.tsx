@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Loader2, LogOut, Sparkles, X } from 'lucide-react';
-import { localizeAuthError } from '../lib/authHelpers';
+import { isRepeatedSignupResponse, localizeAuthError } from '../lib/authHelpers';
 import {
   isSupabaseConfigured,
   resetPasswordByEmail,
@@ -17,6 +17,7 @@ interface AuthModalProps {
   userEmail: string | null;
   isDemoMode: boolean;
   isPasswordRecovery?: boolean;
+  initialNotice?: { type: 'error' | 'success'; text: string } | null;
   onEnableDemoMode: () => void;
   onAuthSuccess: () => void;
   onPasswordRecoveryComplete?: () => void;
@@ -54,6 +55,7 @@ export function AuthModal({
   userEmail,
   isDemoMode,
   isPasswordRecovery = false,
+  initialNotice = null,
   onEnableDemoMode,
   onAuthSuccess,
   onPasswordRecoveryComplete,
@@ -68,6 +70,13 @@ export function AuthModal({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (open && initialNotice) {
+      setMode('login');
+      setMessage(initialNotice);
+    }
+  }, [open, initialNotice]);
 
   if (!open) return null;
 
@@ -117,6 +126,11 @@ export function AuthModal({
         if (data.session) {
           onAuthSuccess();
           handleClose();
+        } else if (isRepeatedSignupResponse(data.user)) {
+          setMessage({
+            type: 'error',
+            text: 'Аккаунт с этим email уже существует (возможно, вы регистрировались через Google). Войдите через Google или по паролю — либо воспользуйтесь восстановлением пароля.',
+          });
         } else {
           setMessage({
             type: 'success',

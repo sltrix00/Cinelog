@@ -6,6 +6,7 @@ import {
   type User,
 } from '@supabase/supabase-js';
 import {
+  createIsolatedAuthStorage,
   getAuthRedirectUrl,
   localizeAuthError,
   parseGoogleProviderEnabled,
@@ -21,74 +22,9 @@ import type {
   WatchSource,
 } from '../types/cinelog';
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? '';
-const supabaseKey =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ||
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ||
-  '';
+import { isSupabaseConfigured, supabaseKey, supabaseUrl } from './supabaseConfig';
 
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-    supabaseKey &&
-    !supabaseUrl.includes('YOUR-PROJECT-REF') &&
-    !supabaseKey.includes('xxxxxxxx')
-);
-
-function createIsolatedAuthStorage() {
-  if (typeof window === 'undefined') {
-    return undefined;
-  }
-
-  // Purge residual session tokens previously persisted in shared-origin localStorage
-  try {
-    const keysToPurge: string[] = [];
-    for (let i = 0; i < window.localStorage.length; i += 1) {
-      const k = window.localStorage.key(i);
-      if (k && /^sb-.*-auth-token$/.test(k)) {
-        keysToPurge.push(k);
-      }
-    }
-    for (const k of keysToPurge) {
-      window.localStorage.removeItem(k);
-    }
-  } catch {
-    // Ignore storage access restrictions
-  }
-
-  return {
-    getItem(key: string): string | null {
-      try {
-        const val = window.sessionStorage.getItem(key);
-        if (val !== null) return val;
-        if (key.endsWith('-code-verifier')) {
-          const legacyVal = window.localStorage.getItem(key);
-          if (legacyVal !== null) {
-            window.localStorage.removeItem(key);
-            return legacyVal;
-          }
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    },
-    setItem(key: string, value: string): void {
-      try {
-        window.sessionStorage.setItem(key, value);
-      } catch {
-        // Ignore quota / privacy mode errors
-      }
-    },
-    removeItem(key: string): void {
-      try {
-        window.sessionStorage.removeItem(key);
-        window.localStorage.removeItem(key);
-      } catch {
-        // Ignore storage errors
-      }
-    },
-  };
-}
+export { isSupabaseConfigured };
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey, {

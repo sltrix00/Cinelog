@@ -1,7 +1,102 @@
 /**
  * Pure authentication helpers for redirect URLs, provider availability checks,
- * OAuth callback error parsing, and Russian error localization.
+ * OAuth callback error parsing, isolated storage, and Russian error localization.
  */
+
+export interface IsolatedAuthStorages {
+  sessionStorage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>;
+  localStorage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>;
+}
+
+export function isPkceVerifierKey(key: string): boolean {
+  return key.endsWith('-code-verifier');
+}
+
+export function isRepeatedSignupResponse(
+  user: { identities?: unknown[] | null } | null | undefined
+): boolean {
+  return Array.isArray(user?.identities) && user.identities.length === 0;
+}
+
+export function createIsolatedAuthStorage(storages?: IsolatedAuthStorages) {
+  if (!storages && typeof window === 'undefined') {
+    return undefined;
+  }
+
+  let session: IsolatedAuthStorages['sessionStorage'];
+  let local: IsolatedAuthStorages['localStorage'];
+  try {
+    session = storages?.sessionStorage ?? window.sessionStorage;
+    local = storages?.localStorage ?? window.localStorage;
+  } catch {
+    return undefined;
+  }
+
+  // Purge residual session tokens previously persisted in shared-origin localStorage
+  try {
+    const keysToPurge: string[] = [];
+    for (let i = 0; i < local.length; i += 1) {
+      const k = local.key(i);
+      if (k && /^sb-.*-auth-token$/.test(k)) {
+        keysToPurge.push(k);
+      }
+    }
+    for (const k of keysToPurge) {
+      local.removeItem(k);
+    }
+  } catch {
+    // Ignore storage access restrictions
+  }
+
+  return {
+    getItem(key: string): string | null {
+      try {
+        const val = session.getItem(key);
+        if (val !== null) return val;
+        if (isPkceVerifierKey(key)) {
+          return local.getItem(key);
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    setItem(key: string, value: string): void {
+      if (isPkceVerifierKey(key)) {
+        // Store short-lived PKCE verifier in localStorage so email confirmation opened in a new tab can complete
+        try {
+          local.setItem(key, value);
+        } catch {
+          // Ignore quota / privacy mode errors
+        }
+        try {
+          session.setItem(key, value);
+        } catch {
+          // Ignore quota / privacy mode errors
+        }
+        return;
+      }
+
+      try {
+        session.setItem(key, value);
+      } catch {
+        // Ignore quota / privacy mode errors
+      }
+    },
+    removeItem(key: string): void {
+      try {
+        session.removeItem(key);
+      } catch {
+        // Ignore storage errors
+      }
+      try {
+        local.removeItem(key);
+      } catch {
+        // Ignore storage errors
+      }
+    },
+  };
+}
 
 export function getAuthRedirectUrl(
   loc: Pick<Location, 'origin' | 'pathname'> = window.location
@@ -54,6 +149,12 @@ export function localizeAuthError(rawMessage: string): string {
   }
   if (normalized.includes('new password should be different') || normalized.includes('same_password')) {
     return 'Новый пароль должен отличаться от текущего.';
+  }
+  if (normalized.includes('email link is invalid or has expired')) {
+    return 'Ссылка из письма недействительна или уже была использована. Попробуйте войти в аккаунт или запросить письмо снова.';
+  }
+  if (normalized.includes('pkce') || normalized.includes('code verifier')) {
+    return 'Не удалось завершить автоматический вход по ссылке. Если email уже подтверждён — войдите по email и паролю.';
   }
 
   return trimmed || 'Ошибка авторизации. Попробуйте ещё раз.';
