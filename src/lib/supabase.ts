@@ -212,18 +212,34 @@ function mapRowToWatchEntry(row: WatchEntryRow): WatchEntry {
   };
 }
 
+const WATCH_ENTRIES_PAGE_SIZE = 1000;
+
 export async function fetchWatchEntries(): Promise<WatchEntry[]> {
   const client = requireClient();
-  const { data, error } = await client
-    .from('watch_entries')
-    .select('*')
-    .order('watched_date', { ascending: false })
-    .order('watched_time', { ascending: false, nullsFirst: false });
+  const rows: WatchEntryRow[] = [];
 
-  if (error) {
-    throw new Error(`Не удалось загрузить просмотры: ${error.message}`);
+  for (let from = 0; ; from += WATCH_ENTRIES_PAGE_SIZE) {
+    const to = from + WATCH_ENTRIES_PAGE_SIZE - 1;
+    const { data, error } = await client
+      .from('watch_entries')
+      .select('*')
+      .order('watched_date', { ascending: false })
+      .order('watched_time', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Не удалось загрузить просмотры: ${error.message}`);
+    }
+
+    const batch = (data as WatchEntryRow[] | null) ?? [];
+    rows.push(...batch);
+    if (batch.length < WATCH_ENTRIES_PAGE_SIZE) {
+      break;
+    }
   }
-  return (data as WatchEntryRow[]).map(mapRowToWatchEntry);
+
+  return rows.map(mapRowToWatchEntry);
 }
 
 export async function searchTmdbViaProxy(query: string, year?: number | null): Promise<TmdbSearchResult[]> {
