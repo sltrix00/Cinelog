@@ -18,9 +18,9 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "https://sltrix00.github.io/MovieTracker2/"
+site_url = "https://sltrix00.github.io/Cinelog/"
 additional_redirect_urls = [
-  "https://sltrix00.github.io/MovieTracker2/",
+  "https://sltrix00.github.io/Cinelog/",
   "http://localhost:5173/",
   "https://localhost:5173/",
   "http://127.0.0.1:5173/",

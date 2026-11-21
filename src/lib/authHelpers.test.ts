@@ -13,27 +13,27 @@ describe('getAuthRedirectUrl', () => {
     expect(
       getAuthRedirectUrl({
         origin: 'https://sltrix00.github.io',
-        pathname: '/MovieTracker2/',
+        pathname: '/Cinelog/',
       })
-    ).toBe('https://sltrix00.github.io/MovieTracker2/');
+    ).toBe('https://sltrix00.github.io/Cinelog/');
   });
 
   it('appends trailing slash when GitHub Pages subpath omits it', () => {
     expect(
       getAuthRedirectUrl({
         origin: 'https://sltrix00.github.io',
-        pathname: '/MovieTracker2',
+        pathname: '/Cinelog',
       })
-    ).toBe('https://sltrix00.github.io/MovieTracker2/');
+    ).toBe('https://sltrix00.github.io/Cinelog/');
   });
 
   it('strips index.html while keeping the base path', () => {
     expect(
       getAuthRedirectUrl({
         origin: 'https://sltrix00.github.io',
-        pathname: '/MovieTracker2/index.html',
+        pathname: '/Cinelog/index.html',
       })
-    ).toBe('https://sltrix00.github.io/MovieTracker2/');
+    ).toBe('https://sltrix00.github.io/Cinelog/');
   });
 
   it('normalizes localhost root path', () => {
@@ -56,9 +56,9 @@ describe('getAuthRedirectUrl', () => {
     expect(
       getAuthRedirectUrl({
         origin: 'https://sltrix00.github.io',
-        pathname: '//evil.example/MovieTracker2',
+        pathname: '//evil.example/Cinelog',
       })
-    ).toBe('https://sltrix00.github.io/evil.example/MovieTracker2/');
+    ).toBe('https://sltrix00.github.io/evil.example/Cinelog/');
   });
 });
 

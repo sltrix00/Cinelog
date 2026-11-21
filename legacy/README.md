@@ -61,7 +61,7 @@ Cinelog was created for film lovers who want a dedicated journal for logging, re
 ## File Tree & Architecture
 
 ```text
-MovieTracker2/
+Cinelog/
 ├── index.html              # Main single-page application entry point
 ├── README.md               # Master technical documentation
 ├── .gitattributes          # Git configuration

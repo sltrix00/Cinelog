@@ -7,7 +7,7 @@
 ## Project Folder Structure
 
 ```text
-MovieTracker2/
+Cinelog/
 ├── index.html
 ├── package.json
 ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
@@ -94,4 +94,4 @@ MovieTracker2/
    * `npm test`
    * `npm run build`
 5. **Live Deployment (GitHub Pages):**
-   * Automatically builds and deploys on every push to `main` via `.github/workflows/deploy.yml` to `https://sltrix00.github.io/MovieTracker2/`.
+   * Automatically builds and deploys on every push to `main` via `.github/workflows/deploy.yml` to `https://sltrix00.github.io/Cinelog/`.

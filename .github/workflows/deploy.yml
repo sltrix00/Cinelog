@@ -41,8 +41,8 @@ jobs:
 
       - name: Build production bundle
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || (github.repository == 'sltrix00/MovieTracker2' && 'https://yokxjjvjnsalgvqbykjt.supabase.co' || '') }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || (github.repository == 'sltrix00/MovieTracker2' && 'sb_publishable_RE3FIp37vbyRrYjN2L5TOA_HwXmqpsw' || '') }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || (github.repository == 'sltrix00/Cinelog' && 'https://yokxjjvjnsalgvqbykjt.supabase.co' || '') }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || (github.repository == 'sltrix00/Cinelog' && 'sb_publishable_RE3FIp37vbyRrYjN2L5TOA_HwXmqpsw' || '') }}
         run: npm run build
 
       - name: Add SPA 404 fallback
