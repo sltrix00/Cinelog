@@ -44,10 +44,10 @@ export function Header({
       </div>
       <div className="text-left">
         <div className="flex items-center gap-2">
-          <span className="text-base sm:text-lg font-bold tracking-[0.14em] text-white">CINELOG</span>
+          <span className="text-base sm:text-lg font-bold tracking-tight text-white">CINELOG</span>
           <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-[#45d1c6]" />
           {isDemoMode && (
-            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
               DEMO
             </span>
           )}
@@ -105,8 +105,8 @@ export function Header({
                     onClick={() => onSelectYear(opt.value)}
                     className={
                       active
-                        ? 'px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-cardElevated text-white border border-lineStrong shadow-sm transition-all cursor-pointer'
-                        : 'px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
+                        ? 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums bg-cardElevated text-white border border-lineStrong shadow-sm transition-all cursor-pointer'
+                        : 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
                     }
                   >
                     {opt.label}
@@ -136,7 +136,7 @@ export function Header({
               {userEmail ? (
                 <>
                   <UserCheck className="w-3.5 h-3.5 text-[#45d1c6]" />
-                  <span className="hidden md:inline max-w-[110px] truncate font-mono text-[11px]">
+                  <span className="hidden md:inline max-w-[110px] truncate text-[11px]">
                     {userEmail.split('@')[0]}
                   </span>
                 </>

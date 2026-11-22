@@ -444,7 +444,7 @@ export function App() {
               {/* Status Bar */}
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
                     Дашборд просмотров
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -467,7 +467,7 @@ export function App() {
                   )}
                   <div className="inline-flex items-center gap-2 text-xs text-slate-400 bg-card border border-line px-3.5 py-2 rounded-xl">
                     <span className="w-2 h-2 rounded-full bg-[#45d1c6] animate-pulse" />
-                    <span className="font-mono text-[11px] text-slate-300">{statusBadgeText}</span>
+                    <span className="tabular-nums text-[11px] text-slate-300">{statusBadgeText}</span>
                   </div>
                 </div>
               </div>
@@ -513,7 +513,7 @@ export function App() {
                   <span>·</span>
                   <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
                 </div>
-                <span className="font-mono text-[11px]">
+                <span className="tabular-nums text-[11px]">
                   {isDemoMode ? 'Симуляция данных на 20.11.2026' : 'Supabase PostgreSQL RLS Sync'}
                 </span>
               </footer>

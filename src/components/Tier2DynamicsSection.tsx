@@ -45,12 +45,12 @@ function CumulativeTooltip({
 
   return (
     <div className="rounded-xl bg-[#0b0e17] border border-lineStrong p-3 shadow-2xl text-xs min-w-[200px]">
-      <div className="font-semibold text-slate-100 mb-2 font-mono">{row.dateLabel}</div>
+      <div className="font-semibold text-slate-100 mb-2 tabular-nums">{row.dateLabel}</div>
       <div className="space-y-1">
         {payload.map((entry) => {
           const val = Number(entry.value ?? 0);
           return (
-            <div key={String(entry.dataKey)} className="flex items-center justify-between gap-4 font-mono">
+            <div key={String(entry.dataKey)} className="flex items-center justify-between gap-4 tabular-nums">
               <span className="flex items-center gap-1.5 text-slate-300">
                 <span
                   className="w-2.5 h-2.5 rounded-[2px] inline-block"
@@ -65,7 +65,7 @@ function CumulativeTooltip({
           );
         })}
       </div>
-      <div className="mt-2 pt-2 border-t border-line font-mono text-[11px] flex items-center justify-between text-slate-400">
+      <div className="mt-2 pt-2 border-t border-line tabular-nums text-[11px] flex items-center justify-between text-slate-400">
         <span>2026 vs 2025:</span>
         <span className={diff >= 0 ? 'text-[#45d1c6] font-semibold' : 'text-[#f06292] font-semibold'}>
           {sign}
@@ -92,8 +92,8 @@ function TrajectoryTooltip({
 
   return (
     <div className="rounded-xl bg-[#0b0e17] border border-lineStrong p-3 shadow-2xl text-xs">
-      <div className="font-semibold text-slate-100 mb-1.5 font-mono">{pt.tooltipTitle}</div>
-      <div className="space-y-1 font-mono text-slate-300">
+      <div className="font-semibold text-slate-100 mb-1.5 tabular-nums">{pt.tooltipTitle}</div>
+      <div className="space-y-1 tabular-nums text-slate-300">
         <div>
           Индекс: <span className="text-white font-semibold">{pt.index.toFixed(2)}</span>
         </div>
@@ -134,15 +134,15 @@ export function Tier2DynamicsSection({
   return (
     <section id="level-2" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Уровень 02</span>
+        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 02</span>
         <span className="text-slate-700">/</span>
-        <h2 className="text-sm font-semibold text-slate-200">Главный блок динамики</h2>
+        <h2 className="text-sm font-bold tracking-tight text-slate-200">Главный блок динамики</h2>
       </div>
 
       {/* 1. Полноширинная карточка: CUMULATIVE FILMS — ALL YEARS COMPARED (DAY OF YEAR) */}
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="mb-5">
-          <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.16em] text-slate-200">
+          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
             CUMULATIVE FILMS — ALL YEARS COMPARED (DAY OF YEAR)
           </h3>
           <p className="text-xs text-slate-400 mt-1">
@@ -159,7 +159,7 @@ export function Tier2DynamicsSection({
                 key={yr}
                 type="button"
                 onClick={() => toggleYear(yr)}
-                className={`inline-flex items-center gap-2 text-xs font-mono text-slate-300 hover:text-white transition-opacity cursor-pointer ${
+                className={`inline-flex items-center gap-2 text-xs tabular-nums text-slate-300 hover:text-white transition-opacity cursor-pointer ${
                   visible ? '' : 'opacity-35 line-through'
                 }`}
               >
@@ -188,12 +188,12 @@ export function Tier2DynamicsSection({
                   return pt?.monthTick ?? '';
                 }}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 domain={[0, yMax]}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<CumulativeTooltip />} />
               {visibleYears[2024] && (
@@ -241,14 +241,14 @@ export function Tier2DynamicsSection({
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
           <div>
-            <h3 className="text-base font-semibold text-white">
+            <h3 className="text-base font-bold tracking-tight text-white">
               Индекс просмотра сквозь {activeTrajectoryYear} год
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Изменение соотношения «фильмы / прошедший день года» с ориентиром 1.0 (темп 1 фильм в день)
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 text-[11px] font-mono text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/25 px-3 py-1 rounded-lg self-start sm:self-auto">
+          <div className="inline-flex items-center gap-2 text-[11px] tabular-nums text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/25 px-3 py-1 rounded-lg self-start sm:self-auto">
             <span className="w-4 border-t-2 border-dashed border-[#d6b85a]" />
             <span>1.0 · Темп 1 фильм в день</span>
           </div>
@@ -268,13 +268,13 @@ export function Tier2DynamicsSection({
                 dataKey="label"
                 minTickGap={34}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 domain={[0, (dataMax: number) => Math.max(1.15, +(dataMax + 0.1).toFixed(2))]}
                 tickFormatter={(v: number) => v.toFixed(2)}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<TrajectoryTooltip />} />
               <ReferenceLine

@@ -40,7 +40,7 @@ const TOOLTIP_STYLE = {
   borderRadius: '10px',
   color: '#f8fafc',
   fontSize: '12px',
-  fontFamily: 'var(--font-mono)',
+  fontFamily: 'var(--font-sans)',
 };
 
 export function Tier4DeepAnalyticsSection({
@@ -73,23 +73,23 @@ export function Tier4DeepAnalyticsSection({
   return (
     <section id="level-4" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Уровень 04</span>
+        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 04</span>
         <span className="text-slate-700">/</span>
-        <h2 className="text-sm font-semibold text-slate-200">Глубокая аналитика</h2>
+        <h2 className="text-sm font-bold tracking-tight text-slate-200">Глубокая аналитика</h2>
       </div>
 
       {/* 1. GitHub-Style Activity Heatmap */}
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-semibold text-white">
+            <h3 className="text-base font-bold tracking-tight text-white">
               Тепловая карта активности (Heatmap {heatmap.year})
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5 font-mono">
+            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
               Активных дней: {heatmap.activeDays} · Макс. серия: {heatmap.maxStreak} дн.
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+          <div className="flex items-center gap-1.5 text-[11px] tabular-nums text-slate-400">
             <span>0</span>
             <span className="w-3 h-3 rounded-[3px] bg-[#161c2e] border border-line" />
             <span className="w-3 h-3 rounded-[3px] bg-[#194549]" />
@@ -101,13 +101,13 @@ export function Tier4DeepAnalyticsSection({
 
         <div className="overflow-x-auto pb-2">
           <div className="min-w-[740px]">
-            <div className="grid grid-cols-12 text-[11px] font-mono text-slate-500 mb-1.5 pl-7">
+            <div className="grid grid-cols-12 text-[11px] tabular-nums text-slate-500 mb-1.5 pl-7">
               {MONTHS_EN.map((m) => (
                 <span key={m}>{m}</span>
               ))}
             </div>
             <div className="flex gap-2">
-              <div className="flex flex-col justify-between text-[10px] font-mono text-slate-500 py-0.5 w-5 shrink-0">
+              <div className="flex flex-col justify-between text-[10px] tabular-nums text-slate-500 py-0.5 w-5 shrink-0">
                 <span>Пн</span>
                 <span>Ср</span>
                 <span>Пт</span>
@@ -147,10 +147,10 @@ export function Tier4DeepAnalyticsSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
-              <h3 className="text-base font-semibold text-white">Оценки и тренд</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Оценки и тренд</h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 Средняя {scopeWord}:{' '}
-                <span className="font-mono text-[#d6b85a] font-semibold">
+                <span className="tabular-nums text-[#d6b85a] font-semibold">
                   {ratings.ratedCount > 0 ? `${ratings.averageRating.toFixed(2)} ★` : '—'}
                 </span>
               </p>
@@ -189,12 +189,12 @@ export function Tier4DeepAnalyticsSection({
                   <XAxis
                     dataKey="bucket"
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                    tick={{ fill: '#8b95b0', fontSize: 10, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
                     allowDecimals={false}
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -221,7 +221,7 @@ export function Tier4DeepAnalyticsSection({
                     domain={[2.0, 5.0]}
                     tickFormatter={(v: number) => `${v.toFixed(1)}★`}
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -246,10 +246,10 @@ export function Tier4DeepAnalyticsSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex items-start justify-between gap-2 mb-5">
             <div>
-              <h3 className="text-base font-semibold text-white">Годы выхода фильмов (Release Year)</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Годы выхода фильмов (Release Year)</h3>
               <p className="text-xs text-slate-400 mt-0.5">Распределение просмотренного по эпохам</p>
             </div>
-            <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-cardElevated text-slate-300 border border-line">
+            <span className="text-[11px] tabular-nums px-2.5 py-1 rounded-lg bg-cardElevated text-slate-300 border border-line">
               до 2000: {releaseEras.classicSharePct}%
             </span>
           </div>
@@ -266,7 +266,7 @@ export function Tier4DeepAnalyticsSection({
                 <YAxis
                   allowDecimals={false}
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -290,19 +290,19 @@ export function Tier4DeepAnalyticsSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
             <div>
-              <h3 className="text-base font-semibold text-white">Длительность (Runtime)</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Длительность (Runtime)</h3>
               <p className="text-xs text-slate-400 mt-0.5">Просмотренные часы кино по месяцам</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="px-2.5 py-1.5 rounded-xl bg-canvas border border-line text-right">
                 <span className="block text-[10px] text-slate-500 leading-none">Всего часов</span>
-                <span className="text-xs font-mono font-semibold text-white tabular-nums">
+                <span className="text-xs font-semibold text-white tabular-nums">
                   {runtime.totalHours} ч
                 </span>
               </div>
               <div className="px-2.5 py-1.5 rounded-xl bg-canvas border border-line text-right">
                 <span className="block text-[10px] text-slate-500 leading-none">В сутках</span>
-                <span className="text-xs font-mono font-semibold text-[#45d1c6] tabular-nums">
+                <span className="text-xs font-semibold text-[#45d1c6] tabular-nums">
                   {runtime.totalDays} сут
                 </span>
               </div>
@@ -321,7 +321,7 @@ export function Tier4DeepAnalyticsSection({
                 <YAxis
                   tickFormatter={(v: number) => `${v}ч`}
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -338,7 +338,7 @@ export function Tier4DeepAnalyticsSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
-              <h3 className="text-base font-semibold text-white">Вкусовые акценты</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Вкусовые акценты</h3>
               <p className="text-xs text-slate-400 mt-0.5">Топ-6 {scopeWord}</p>
             </div>
             <div className="inline-flex items-center p-0.5 rounded-xl bg-canvas border border-line text-[11px]">
@@ -371,10 +371,10 @@ export function Tier4DeepAnalyticsSection({
                 <div key={item.name} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono text-[11px] text-slate-500 w-4">{item.rank}.</span>
+                      <span className="tabular-nums text-[11px] text-slate-500 w-4">{item.rank}.</span>
                       <span className="font-medium text-slate-200 truncate">{item.name}</span>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+                    <div className="flex items-center gap-3 shrink-0 tabular-nums text-[11px]">
                       <span className="text-slate-400">
                         {item.count} {filmWord(item.count)}
                       </span>
@@ -401,7 +401,7 @@ export function Tier4DeepAnalyticsSection({
       {/* Floating Heatmap Tooltip */}
       {hoveredCell && (
         <div
-          className="pointer-events-none fixed z-50 px-3 py-2 rounded-lg bg-[#0b0e17] border border-lineStrong shadow-2xl text-xs text-slate-200 font-mono max-w-xs"
+          className="pointer-events-none fixed z-50 px-3 py-2 rounded-lg bg-[#0b0e17] border border-lineStrong shadow-2xl text-xs text-slate-200 tabular-nums max-w-xs"
           style={{
             left: Math.min(hoveredCell.x + 14, typeof window !== 'undefined' ? window.innerWidth - 260 : hoveredCell.x + 14),
             top: Math.max(10, hoveredCell.y - 44),
@@ -418,7 +418,7 @@ export function Tier4DeepAnalyticsSection({
                 <span className="text-slate-400">· {hoveredCell.cell.dateLabel}</span>
               </div>
               {hoveredCell.cell.titles.length > 0 && (
-                <div className="mt-1 text-[10px] text-[#45d1c6] truncate font-sans">
+                <div className="mt-1 text-[10px] text-[#45d1c6] truncate">
                   {hoveredCell.cell.titles.slice(0, 3).join(', ')}
                   {hoveredCell.cell.titles.length > 3
                     ? ` +${hoveredCell.cell.titles.length - 3}`

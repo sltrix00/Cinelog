@@ -16,9 +16,9 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
   return (
     <section id="level-1" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Уровень 01</span>
+        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 01</span>
         <span className="text-slate-700">/</span>
-        <h2 className="text-sm font-semibold text-slate-200">KPI и индекс просмотра</h2>
+        <h2 className="text-sm font-bold tracking-tight text-slate-200">KPI и индекс просмотра</h2>
       </div>
 
       {/* 4 Main Counter Cards */}
@@ -33,12 +33,12 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-mono font-bold tracking-tight text-white tabular-nums">
+            <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.allTimeUnique}
             </span>
             <span className="text-xs text-slate-400">уникальных</span>
           </div>
-          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80 font-mono">
+          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80 tabular-nums">
             всего {kpis.allTimeTotal} просмотров (с учётом пересмотров)
           </p>
         </div>
@@ -53,15 +53,15 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             />
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-4xl font-mono font-bold tracking-tight text-white tabular-nums">
+            <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.yearTotal}
             </span>
             <div className="relative group">
               <span
                 className={
                   kpis.yearRewatches > 0
-                    ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30 cursor-help transition-colors hover:bg-[#d6b85a]/20'
-                    : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-cardElevated text-slate-400 border border-line cursor-help'
+                    ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30 cursor-help transition-colors hover:bg-[#d6b85a]/20'
+                    : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line cursor-help'
                 }
               >
                 ↺ {kpis.yearRewatches} {rewatchWord(kpis.yearRewatches)}
@@ -71,14 +71,14 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
               <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs">
                 <div className="font-semibold text-slate-200 mb-2 flex items-center justify-between">
                   <span>Последние пересмотры</span>
-                  <span className="font-mono text-[#d6b85a]">{kpis.yearRewatchPct}%</span>
+                  <span className="tabular-nums text-[#d6b85a]">{kpis.yearRewatchPct}%</span>
                 </div>
                 <ul className="space-y-1.5 text-[11px] text-slate-400">
                   {kpis.recentRewatches.length > 0 ? (
                     kpis.recentRewatches.map((r) => (
                       <li key={r.id} className="flex justify-between gap-2">
                         <span className="truncate text-slate-200">{r.title}</span>
-                        <span className="font-mono text-slate-500 shrink-0">{r.dateLabel}</span>
+                        <span className="tabular-nums text-slate-500 shrink-0">{r.dateLabel}</span>
                       </li>
                     ))
                   ) : (
@@ -100,14 +100,14 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             <Calendar className="w-3.5 h-3.5 text-slate-500" />
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-4xl font-mono font-bold tracking-tight text-white tabular-nums">
+            <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.monthTotal}
             </span>
             <span
               className={
                 kpis.monthRewatches > 0
-                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
-                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-cardElevated text-slate-400 border border-line'
+                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
+                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line'
               }
             >
               ↺ {kpis.monthRewatches} {rewatchWord(kpis.monthRewatches)}
@@ -122,17 +122,17 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
         <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">За неделю</span>
-            <span className="text-[11px] font-mono text-slate-500">7 дней</span>
+            <span className="text-[11px] tabular-nums text-slate-500">7 дней</span>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-4xl font-mono font-bold tracking-tight text-white tabular-nums">
+            <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.weekTotal}
             </span>
             <span
               className={
                 kpis.weekRewatches > 0
-                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
-                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-cardElevated text-slate-400 border border-line'
+                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
+                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line'
               }
             >
               ↺ {kpis.weekRewatches} {rewatchWord(kpis.weekRewatches)}
@@ -153,11 +153,11 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
           <div className="md:col-span-4 space-y-1">
             <div className="inline-flex items-center gap-2">
               <Gauge className="w-4 h-4 text-[#45d1c6]" />
-              <h3 className="text-sm font-semibold text-white">Индекс просмотра</h3>
+              <h3 className="text-sm font-bold tracking-tight text-white">Индекс просмотра</h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               Показывает средний темп просмотров в день. Значение{' '}
-              <span className="font-mono text-slate-200">1.00</span> соответствует ровно 1 фильму в день с начала периода.
+              <span className="tabular-nums text-slate-200">1.00</span> соответствует ровно 1 фильму в день с начала периода.
             </p>
           </div>
 
@@ -169,12 +169,12 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
                   {selectedYear === 'all' ? 'Индекс за всё время' : 'Индекс за год'}
                 </span>
                 <div className="flex items-baseline gap-2.5 mt-1">
-                  <span className="text-3xl font-mono font-bold text-[#f06292] tabular-nums">
+                  <span className="text-3xl font-extrabold tracking-tight text-[#f06292] tabular-nums">
                     {kpis.yearIndex.toFixed(2)}
                   </span>
-                  <span className="text-[11px] font-mono text-slate-500">фильм/день</span>
+                  <span className="text-[11px] text-slate-500">фильм/день</span>
                 </div>
-                <p className="text-[11px] font-mono text-slate-400 mt-1.5">
+                <p className="text-[11px] tabular-nums text-slate-400 mt-1.5">
                   {kpis.yearTotal} {filmWord(kpis.yearTotal)} / {kpis.daysElapsedYear} дн.
                 </p>
               </div>
@@ -182,7 +182,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
                 <span className="text-[10px] uppercase tracking-wider text-slate-500 block">
                   {kpis.yearProjection !== null ? 'Прогноз' : 'Итог'}
                 </span>
-                <span className="text-sm font-mono font-semibold text-slate-200 tabular-nums">
+                <span className="text-sm font-semibold text-slate-200 tabular-nums">
                   {kpis.yearProjection !== null ? `~${kpis.yearProjection}` : kpis.yearTotal}
                 </span>
               </div>
@@ -195,12 +195,12 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
                   Индекс за месяц
                 </span>
                 <div className="flex items-baseline gap-2.5 mt-1">
-                  <span className="text-3xl font-mono font-bold text-[#45d1c6] tabular-nums">
+                  <span className="text-3xl font-extrabold tracking-tight text-[#45d1c6] tabular-nums">
                     {kpis.monthIndex.toFixed(2)}
                   </span>
-                  <span className="text-[11px] font-mono text-slate-500">фильм/день</span>
+                  <span className="text-[11px] text-slate-500">фильм/день</span>
                 </div>
-                <p className="text-[11px] font-mono text-slate-400 mt-1.5">
+                <p className="text-[11px] tabular-nums text-slate-400 mt-1.5">
                   {kpis.monthTotal} {filmWord(kpis.monthTotal)} / {kpis.monthDaysElapsed} дн.
                 </p>
               </div>

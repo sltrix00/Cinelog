@@ -32,7 +32,7 @@ const TOOLTIP_STYLE = {
   borderRadius: '10px',
   color: '#f8fafc',
   fontSize: '12px',
-  fontFamily: 'var(--font-mono)',
+  fontFamily: 'var(--font-sans)',
 };
 
 export function Tier3RhythmSection({
@@ -54,23 +54,23 @@ export function Tier3RhythmSection({
   return (
     <section id="level-3" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Уровень 03</span>
+        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 03</span>
         <span className="text-slate-700">/</span>
-        <h2 className="text-sm font-semibold text-slate-200">Привычки и ритм просмотров</h2>
+        <h2 className="text-sm font-bold tracking-tight text-slate-200">Привычки и ритм просмотров</h2>
       </div>
 
       {/* 1. FILMS WATCHED PER MONTH — BY YEAR (Wide Block) */}
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div>
-            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.12em] text-slate-200">
+            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
               FILMS WATCHED PER MONTH — BY YEAR
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               Сгруппированное сравнение помесячной активности за 2024, 2025 и 2026 годы
             </p>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-4 text-xs tabular-nums text-slate-300">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-sm bg-[#d6b85a]" />
               2024
@@ -93,12 +93,12 @@ export function Tier3RhythmSection({
               <XAxis
                 dataKey="month"
                 stroke="#1e2438"
-                tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 allowDecimals={false}
                 stroke="#1e2438"
-                tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
@@ -119,12 +119,12 @@ export function Tier3RhythmSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex items-start justify-between gap-2 mb-5">
             <div>
-              <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.12em] text-slate-200">
+              <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
                 DAY OF WEEK
               </h3>
               <p className="text-xs text-slate-400 mt-1">Распределение по дням недели {scopeLabel}</p>
             </div>
-            <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
+            <span className="text-[11px] tabular-nums px-2.5 py-1 rounded-lg bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
               Пик: {dayOfWeek.peakLabel} ({dayOfWeek.peakCount})
             </span>
           </div>
@@ -141,7 +141,7 @@ export function Tier3RhythmSection({
                 <YAxis
                   allowDecimals={false}
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -165,7 +165,7 @@ export function Tier3RhythmSection({
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
             <div>
-              <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.12em] text-slate-200">
+              <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
                 TIME OF THE DAY
               </h3>
               <p className="text-xs text-slate-400 mt-1">Утро / День / Вечер / Ночь</p>
@@ -211,7 +211,7 @@ export function Tier3RhythmSection({
                   <YAxis
                     allowDecimals={false}
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -236,7 +236,7 @@ export function Tier3RhythmSection({
               </div>
               <p className="text-sm font-medium text-slate-200">Недостаточно данных о времени</p>
               <p className="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">
-                Экспорт CSV содержит только дату (<span className="font-mono text-slate-300">YYYY-MM-DD</span>).
+                Экспорт CSV содержит только дату (<span className="tabular-nums text-slate-300">YYYY-MM-DD</span>).
                 Добавляйте фильмы напрямую в Cinelog или через расширение, чтобы собирать статистику по времени суток.
               </p>
             </div>
