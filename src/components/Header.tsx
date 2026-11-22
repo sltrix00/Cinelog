@@ -7,6 +7,7 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onOpenImportModal: () => void;
   onOpenAuthModal: () => void;
+  onLogoClick?: () => void;
   isDemoMode: boolean;
   userEmail: string | null;
 }
@@ -32,31 +33,47 @@ export function Header({
   onOpenAddModal,
   onOpenImportModal,
   onOpenAuthModal,
+  onLogoClick,
   isDemoMode,
   userEmail,
 }: HeaderProps) {
+  const logoContent = (
+    <>
+      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f06292]/20 via-[#45d1c6]/15 to-[#d6b85a]/20 border border-lineStrong flex items-center justify-center">
+        <Clapperboard className="w-4 h-4 text-[#f06292]" />
+      </div>
+      <div className="text-left">
+        <div className="flex items-center gap-2">
+          <span className="text-base sm:text-lg font-bold tracking-[0.14em] text-white">CINELOG</span>
+          <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-[#45d1c6]" />
+          {isDemoMode && (
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
+              DEMO
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 leading-none mt-0.5">Персональная аналитика кино</p>
+      </div>
+    </>
+  );
+
   return (
     <header className="sticky top-0 z-40 bg-canvas/85 backdrop-blur-md border-b border-line">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3 py-3.5">
           {/* Logo & Subtitle */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f06292]/20 via-[#45d1c6]/15 to-[#d6b85a]/20 border border-lineStrong flex items-center justify-center">
-              <Clapperboard className="w-4 h-4 text-[#f06292]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base sm:text-lg font-bold tracking-[0.14em] text-white">CINELOG</span>
-                <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-[#45d1c6]" />
-                {isDemoMode && (
-                  <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-[#45d1c6]/10 text-[#45d1c6] border border-[#45d1c6]/25">
-                    DEMO
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-400 leading-none mt-0.5">Персональная аналитика кино</p>
-            </div>
-          </div>
+          {onLogoClick ? (
+            <button
+              type="button"
+              onClick={onLogoClick}
+              title="На главную страницу"
+              className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {logoContent}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">{logoContent}</div>
+          )}
 
           {/* Navigation Pills (Desktop) */}
           <nav className="hidden xl:flex items-center gap-1 p-1 rounded-xl bg-card border border-line">

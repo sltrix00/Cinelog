@@ -1,0 +1,601 @@
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, ChevronDown, Clapperboard } from 'lucide-react';
+
+interface LandingPageProps {
+  onOpenRegister: () => void;
+  onOpenLogin: () => void;
+  onOpenDemo: () => void;
+}
+
+interface SloganItem {
+  title: string;
+  sub: string;
+}
+
+const SLOGANS: SloganItem[] = [
+  {
+    title: 'Как часто ты на самом деле смотришь кино?',
+    sub: 'Твоя личная статистика, ритм просмотров и эволюция вкуса в одном чистом пространстве.',
+  },
+  {
+    title: 'Знаешь ли ты свои настоящие кино-привычки?',
+    sub: 'Узнай, в какие дни, часы и эпохи ты смотришь фильмы чаще всего — без догадок.',
+  },
+  {
+    title: 'Твой кинодневник умеет больше, чем хранить оценки.',
+    sub: 'Преврати историю просмотров в живые графики, тепловые карты и гонку год к году.',
+  },
+  {
+    title: 'Letterboxd хранит списки. Cinelog показывает картину целиком.',
+    sub: 'Перенеси свой дневник за пару кликов и открой цифры, которых нет на других платформах.',
+  },
+  {
+    title: 'Сколько часов жизни ты провёл в кино — и что это было?',
+    sub: 'Отслеживай свой темп за 365 дней, любимых режиссёров и баланс десятилетий.',
+  },
+];
+
+const HEATMAP_SHADES = [
+  'bg-[#1e2438]',
+  'bg-[#1e2438]',
+  'bg-[#45d1c6]/30',
+  'bg-[#45d1c6]/60',
+  'bg-[#f06292]/75',
+  'bg-[#f06292]',
+];
+
+const HEATMAP_CELLS = Array.from({ length: 48 }, (_, i) => ({
+  id: i,
+  shade: HEATMAP_SHADES[(i * 7 + 3) % HEATMAP_SHADES.length],
+}));
+
+const WEEKDAY_BARS = [
+  { label: 'Пн', heightClass: 'h-[22%]', colorClass: 'bg-[#1e2438]' },
+  { label: 'Вт', heightClass: 'h-[30%]', colorClass: 'bg-[#1e2438]' },
+  { label: 'Ср', heightClass: 'h-[45%]', colorClass: 'bg-[#45d1c6]/40' },
+  { label: 'Чт', heightClass: 'h-[65%]', colorClass: 'bg-[#45d1c6]/70' },
+  { label: 'Пт', heightClass: 'h-[85%]', colorClass: 'bg-[#f06292]/80' },
+  { label: 'Сб', heightClass: 'h-[100%]', colorClass: 'bg-[#f06292]' },
+  { label: 'Вс', heightClass: 'h-[75%]', colorClass: 'bg-[#d6b85a]' },
+];
+
+export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: LandingPageProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * SLOGANS.length));
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  // Rotate slogan every 12 seconds with a slow, soft cross-fade
+  useEffect(() => {
+    let swapTimeoutId: number | undefined;
+
+    const intervalId = window.setInterval(() => {
+      setIsFadingOut(true);
+      swapTimeoutId = window.setTimeout(() => {
+        setSloganIndex((prev) => (prev + 1) % SLOGANS.length);
+        setIsFadingOut(false);
+      }, 650);
+    }, 12000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (swapTimeoutId !== undefined) {
+        window.clearTimeout(swapTimeoutId);
+      }
+    };
+  }, []);
+
+  // Scroll-reveal via IntersectionObserver
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const targets = Array.from(root.querySelectorAll<HTMLElement>('[data-reveal]'));
+    if (targets.length === 0) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      targets.forEach((el) => el.classList.add('visible'));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 }
+    );
+
+    targets.forEach((el) => observer.observe(el));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const currentSlogan = SLOGANS[sloganIndex];
+
+  return (
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-canvas text-slate-100 overflow-x-hidden antialiased"
+    >
+      {/* Minimalist Top Bar */}
+      <header className="relative z-20 max-w-6xl mx-auto px-5 sm:px-6 pt-5 pb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6] p-[1.5px]">
+            <div className="w-full h-full rounded-[6.5px] bg-canvas flex items-center justify-center">
+              <Clapperboard className="w-4 h-4 text-[#f06292]" />
+            </div>
+          </div>
+          <span className="text-lg font-bold tracking-tight text-white">Cinelog</span>
+        </div>
+
+        <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+          <button
+            type="button"
+            onClick={onOpenDemo}
+            className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+          >
+            Посмотреть демо
+          </button>
+          <button
+            type="button"
+            onClick={onOpenLogin}
+            className="px-3.5 sm:px-4 py-1.5 rounded-lg bg-cardElevated hover:bg-line text-slate-200 border border-lineStrong font-medium transition-colors cursor-pointer"
+          >
+            Войти
+          </button>
+        </div>
+      </header>
+
+      {/* Hero Section (Variant B) */}
+      <section className="relative min-h-[78vh] flex flex-col justify-center overflow-hidden px-5 sm:px-6 py-8 sm:py-12">
+        {/* Ambient Background Glow */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+          <div className="absolute -top-24 left-1/3 w-[620px] h-[380px] rounded-full bg-[#f06292]/10 blur-[120px]" />
+          <div className="absolute bottom-0 right-1/4 w-[480px] h-[320px] rounded-full bg-[#45d1c6]/10 blur-[120px]" />
+        </div>
+
+        <div className="relative z-10 max-w-6xl mx-auto w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+            {/* Left: Rotating Slogan (no badge above) */}
+            <div className="lg:col-span-6 text-left">
+              <div
+                className={`min-h-[120px] sm:min-h-[168px] flex flex-col justify-center transition-[opacity,transform] ${
+                  isFadingOut
+                    ? 'opacity-0 -translate-y-1 duration-[650ms] ease-in-out'
+                    : 'opacity-100 translate-y-0 duration-[750ms] ease-[cubic-bezier(0.22,1,0.36,1)]'
+                }`}
+              >
+                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-[1.14]">
+                  {currentSlogan.title}
+                </h1>
+                <p className="mt-3 sm:mt-4 text-sm sm:text-lg text-slate-300 leading-relaxed max-w-xl">
+                  {currentSlogan.sub}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Compact Mini Dashboard Preview */}
+            <div className="lg:col-span-6">
+              <div className="rounded-2xl bg-card/95 border border-lineStrong p-3.5 sm:p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <div className="text-[11px] sm:text-xs text-slate-400">Накопительный темп · 365 дней</div>
+                    <div className="text-base sm:text-lg font-bold font-mono tabular-nums text-white mt-0.5">
+                      148 фильмов <span className="text-xs font-normal text-[#45d1c6]">(+23 к 2025)</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono shrink-0 pt-0.5">
+                    <span className="text-[#d6b85a]">● 24</span>
+                    <span className="text-[#45d1c6]">● 25</span>
+                    <span className="text-[#f06292]">● 26</span>
+                  </div>
+                </div>
+
+                <svg viewBox="0 0 420 135" className="w-full h-24 sm:h-36" fill="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="landingPinkArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f06292" stopOpacity="0.22" />
+                      <stop offset="100%" stopColor="#f06292" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="0" y1="30" x2="420" y2="30" stroke="#1e2438" strokeDasharray="3 3" />
+                  <line x1="0" y1="70" x2="420" y2="70" stroke="#1e2438" strokeDasharray="3 3" />
+                  <line x1="0" y1="115" x2="420" y2="115" stroke="#1e2438" />
+
+                  {/* 2024 gold */}
+                  <path
+                    d="M 4 115 L 28 112 L 46 105 L 72 103 L 96 96 L 122 95 L 148 88 L 176 87 L 204 84 L 235 79 L 268 78 L 298 70 L 332 66 L 368 64 L 412 58"
+                    stroke="#d6b85a"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    className="landing-draw-1"
+                  />
+
+                  {/* 2025 teal */}
+                  <path
+                    d="M 4 115 L 24 109 L 48 107 L 76 96 L 102 92 L 130 82 L 160 80 L 188 73 L 216 64 L 248 61 L 278 52 L 310 49 L 344 43 L 380 41 L 412 36"
+                    stroke="#45d1c6"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    className="landing-draw-2"
+                  />
+
+                  {/* 2026 pink area + line */}
+                  <path
+                    d="M 4 115 L 22 105 L 44 102 L 64 89 L 92 85 L 116 74 L 142 73 L 168 58 L 198 54 L 224 44 L 254 42 L 282 29 L 312 26 L 342 19 L 378 16 L 412 10 L 412 115 L 4 115 Z"
+                    fill="url(#landingPinkArea)"
+                  />
+                  <path
+                    d="M 4 115 L 22 105 L 44 102 L 64 89 L 92 85 L 116 74 L 142 73 L 168 58 L 198 54 L 224 44 L 254 42 L 282 29 L 312 26 L 342 19 L 378 16 L 412 10"
+                    stroke="#f06292"
+                    strokeWidth="2.6"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    className="landing-draw-3"
+                  />
+
+                  <circle cx="412" cy="58" r="3" fill="#d6b85a" />
+                  <circle cx="412" cy="36" r="3" fill="#45d1c6" />
+                  <circle cx="412" cy="10" r="4" fill="#f06292" />
+                  <circle cx="412" cy="10" r="8" fill="#f06292" fillOpacity="0.25" />
+                </svg>
+
+                <div className="grid grid-cols-3 gap-2 mt-3 pt-2.5 border-t border-line text-center">
+                  <div className="rounded-lg bg-cardElevated p-2">
+                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Часов кино</div>
+                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-white mt-0.5">294 ч</div>
+                  </div>
+                  <div className="rounded-lg bg-cardElevated p-2">
+                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Средняя за месяц</div>
+                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#d6b85a] mt-0.5 flex items-center justify-center gap-1">
+                      <span>7.8</span>
+                      <span className="inline-flex items-center text-[10px] text-[#45d1c6]" title="+0.4 к прошлому месяцу">
+                        ▲+0.4
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-cardElevated p-2">
+                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Пик ритма</div>
+                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#45d1c6] mt-0.5">
+                      Сб 22:00
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Centered CTA Below the Two Columns */}
+          <div className="mt-8 sm:mt-11 flex flex-col items-center gap-2.5 text-center">
+            <button
+              type="button"
+              onClick={onOpenRegister}
+              className="group inline-flex items-center gap-2.5 px-7 sm:px-8 py-3 sm:py-3.5 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_30px_rgba(240,98,146,0.35)] hover:shadow-[0_0_40px_rgba(240,98,146,0.5)] transition-all cursor-pointer"
+            >
+              <span>Начать вести кинодневник</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
+            <span className="text-xs text-slate-400">Импорт истории с Letterboxd и IMDb в пару кликов</span>
+          </div>
+        </div>
+
+        {/* Scroll Hint */}
+        <a
+          href="#compare"
+          className="mt-8 sm:mt-10 mx-auto flex flex-col items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          <span>Листай вниз, чтобы узнать больше</span>
+          <ChevronDown className="w-4 h-4 animate-bounce" />
+        </a>
+      </section>
+
+      {/* Section 1: Why Not IMDb or Letterboxd */}
+      <section id="compare" className="max-w-6xl mx-auto px-5 sm:px-6 py-16 sm:py-20 border-t border-line">
+        <div data-reveal className="landing-reveal text-center max-w-2xl mx-auto mb-10 sm:mb-12">
+          <div className="text-xs font-mono uppercase tracking-widest text-[#f06292] mb-2">
+            Глубже обычных трекеров
+          </div>
+          <h2 className="text-2xl sm:text-4xl font-bold text-white">
+            IMDb и Letterboxd показывают списки. Мы показываем тебя.
+          </h2>
+          <p className="mt-3 text-slate-400 text-sm sm:text-base">
+            Обычные сервисы созданы для каталогов и соцсетей. Cinelog превращает твою историю в настоящую аналитическую
+            панель.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-1 rounded-2xl bg-card/60 border border-line p-6 sm:p-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-sm font-semibold text-slate-400">IMDb / Letterboxd</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-line text-slate-400">Базовый учёт</span>
+            </div>
+            <ul className="space-y-4 text-sm text-slate-400">
+              <li className="flex items-start gap-3">
+                <span className="text-slate-600 mt-0.5">✕</span>
+                <span>Просто хронологический список оценок без динамики</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-600 mt-0.5">✕</span>
+                <span>Не видно, в какие дни недели и часы ты смотришь кино чаще</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-600 mt-0.5">✕</span>
+                <span>Нет сравнения темпа год к году на одном графике</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-600 mt-0.5">✕</span>
+                <span>Поверхностная статистика (или платная подписка ради простых цифр)</span>
+              </li>
+            </ul>
+          </div>
+
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-2 rounded-2xl bg-card border border-[#45d1c6]/40 p-6 sm:p-8 shadow-[0_0_40px_rgba(69,209,198,0.06)]"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-sm font-bold text-white">Cinelog</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-[#45d1c6]/15 text-[#45d1c6] font-medium">
+                Глубокая аналитика
+              </span>
+            </div>
+            <ul className="space-y-4 text-sm text-slate-200">
+              <li className="flex items-start gap-3">
+                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span>
+                  <strong className="text-white">Гонка годов:</strong> накопительная кривая 365 дней — обгоняешь ли ты
+                  себя прошлогоднего
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span>
+                  <strong className="text-white">Ритм жизни:</strong> тепловая карта года, пики по дням недели и
+                  времени суток
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span>
+                  <strong className="text-white">Индекс просмотров и вкус:</strong> траектория активности, эпохи
+                  релизов, жанры и режиссёры
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span>
+                  <strong className="text-white">Чистый интерфейс:</strong> никакой рекламы, ленты чужих рецензий и
+                  лишнего шума
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 2: 2-Click Import */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-6 py-16 sm:py-20 border-t border-line">
+        <div data-reveal className="landing-reveal grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+          <div className="lg:col-span-5">
+            <div className="text-xs font-mono uppercase tracking-widest text-[#d6b85a] mb-2">Лёгкий переезд</div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white">Перенеси свой кинодневник в пару кликов</h2>
+            <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
+              Не нужно вбивать сотни фильмов вручную. Загрузи готовый экспорт из{' '}
+              <strong className="text-slate-200">Letterboxd</strong> или{' '}
+              <strong className="text-slate-200">IMDb</strong> — мы сами сопоставим фильмы, подтянем постеры, жанры,
+              хронометраж и построим все графики.
+            </p>
+          </div>
+
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div
+              data-reveal
+              className="landing-reveal landing-reveal-delay-1 rounded-2xl bg-card border border-line p-5"
+            >
+              <div className="w-8 h-8 rounded-lg bg-cardElevated border border-lineStrong flex items-center justify-center font-mono text-xs font-bold text-[#d6b85a] mb-3">
+                01
+              </div>
+              <div className="text-sm font-semibold text-white">Скачай CSV</div>
+              <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                Экспортируй <code className="text-slate-300">ratings.csv</code> или{' '}
+                <code className="text-slate-300">diary.csv</code> из настроек IMDb / Letterboxd.
+              </p>
+            </div>
+            <div
+              data-reveal
+              className="landing-reveal landing-reveal-delay-2 rounded-2xl bg-card border border-line p-5"
+            >
+              <div className="w-8 h-8 rounded-lg bg-cardElevated border border-lineStrong flex items-center justify-center font-mono text-xs font-bold text-[#45d1c6] mb-3">
+                02
+              </div>
+              <div className="text-sm font-semibold text-white">Перетащи файл</div>
+              <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                Загрузи файл в Cinelog — система автоматически распознает формат.
+              </p>
+            </div>
+            <div
+              data-reveal
+              className="landing-reveal landing-reveal-delay-3 rounded-2xl bg-card border border-line p-5"
+            >
+              <div className="w-8 h-8 rounded-lg bg-cardElevated border border-lineStrong flex items-center justify-center font-mono text-xs font-bold text-[#f06292] mb-3">
+                03
+              </div>
+              <div className="text-sm font-semibold text-white">Готовые графики</div>
+              <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                Все оценки, даты и метаданные сразу превратятся в живую аналитику.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3: Feature Showcase (3 cards on lg+, 4 cards on < lg) */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-6 py-16 sm:py-20 border-t border-line">
+        <div data-reveal className="landing-reveal text-center max-w-2xl mx-auto mb-10 sm:mb-12">
+          <div className="text-xs font-mono uppercase tracking-widest text-[#45d1c6] mb-2">Что внутри</div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">Вся анатомия твоих просмотров</h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Card 1: Heatmap */}
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-1 rounded-2xl bg-card border border-line p-6"
+          >
+            <div className="text-sm font-semibold text-white">Тепловая карта года</div>
+            <p className="text-xs text-slate-400 mt-1 mb-4">Видно каждый кино-марафон и перерыв за 365 дней.</p>
+            <div className="grid grid-cols-12 gap-1" aria-hidden="true">
+              {HEATMAP_CELLS.map((cell) => (
+                <div key={cell.id} className={`h-3.5 rounded-[3px] ${cell.shade}`} />
+              ))}
+            </div>
+          </div>
+
+          {/* Card 2: Time of day / weekday */}
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-2 rounded-2xl bg-card border border-line p-6"
+          >
+            <div className="text-sm font-semibold text-white">Ритм дня и недели</div>
+            <p className="text-xs text-slate-400 mt-1 mb-4">Утренний ты зритель или ночной киноман по выходным.</p>
+            <div className="flex items-end gap-2 h-20 pt-2" aria-hidden="true">
+              {WEEKDAY_BARS.map((bar) => (
+                <div key={bar.label} className={`flex-1 rounded-t ${bar.colorClass} ${bar.heightClass}`} />
+              ))}
+            </div>
+            <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1.5">
+              {WEEKDAY_BARS.map((bar) => (
+                <span key={bar.label}>{bar.label}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Card 3: Viewing Index */}
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-3 rounded-2xl bg-card border border-line p-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-white">Индекс просмотров</div>
+              <span className="text-xs font-mono font-bold text-[#45d1c6] bg-[#45d1c6]/10 px-2 py-0.5 rounded">
+                1.24×
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 mb-3">
+              Траектория твоего темпа относительно личной нормы (1.00).
+            </p>
+            <svg viewBox="0 0 260 88" className="w-full h-[88px]" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="landingIdxGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#45d1c6" stopOpacity="0.32" />
+                  <stop offset="100%" stopColor="#45d1c6" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="52" x2="260" y2="52" stroke="#2c3450" strokeDasharray="4 4" />
+              <text x="2" y="48" fill="#64748b" fontSize="9" fontFamily="monospace">
+                1.00
+              </text>
+              <path
+                d="M 0 60 C 28 65, 48 44, 78 48 C 108 52, 130 34, 160 36 C 190 38, 215 20, 256 16 L 256 86 L 0 86 Z"
+                fill="url(#landingIdxGrad)"
+              />
+              <path
+                d="M 0 60 C 28 65, 48 44, 78 48 C 108 52, 130 34, 160 36 C 190 38, 215 20, 256 16"
+                stroke="#45d1c6"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+              <circle cx="256" cy="16" r="3.5" fill="#45d1c6" />
+            </svg>
+          </div>
+
+          {/* Card 4: Eras & Taste (shown only on < lg for a balanced 4-card grid) */}
+          <div
+            data-reveal
+            className="landing-reveal landing-reveal-delay-3 block lg:hidden rounded-2xl bg-card border border-line p-6"
+          >
+            <div className="text-sm font-semibold text-white">Эпохи и акценты вкуса</div>
+            <p className="text-xs text-slate-400 mt-1 mb-4">Какие десятилетия, жанры и режиссёры преобладают.</p>
+            <div className="space-y-2.5 mt-3">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-300">2020-е</span>
+                  <span className="font-mono text-[#f06292]">44%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                  <div className="h-full w-[44%] bg-[#f06292] rounded-full" />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-300">2010-е</span>
+                  <span className="font-mono text-[#45d1c6]">31%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                  <div className="h-full w-[31%] bg-[#45d1c6] rounded-full" />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-300">Классика (&lt;2000)</span>
+                  <span className="font-mono text-[#d6b85a]">25%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                  <div className="h-full w-[25%] bg-[#d6b85a] rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: Final CTA */}
+      <section className="max-w-4xl mx-auto px-5 sm:px-6 py-20 sm:py-24 text-center border-t border-line">
+        <div data-reveal className="landing-reveal">
+          <h2 className="text-2xl sm:text-4xl font-bold text-white">Готов увидеть свою историю в цифрах?</h2>
+          <p className="mt-3 text-slate-400 text-sm sm:text-base max-w-xl mx-auto">
+            Создай аккаунт за 10 секунд или перенеси оценки из Letterboxd / IMDb.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={onOpenRegister}
+              className="px-8 py-3.5 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_30px_rgba(240,98,146,0.35)] hover:shadow-[0_0_40px_rgba(240,98,146,0.5)] transition-all cursor-pointer"
+            >
+              Зарегистрироваться бесплатно
+            </button>
+            <button
+              type="button"
+              onClick={onOpenDemo}
+              className="px-6 py-3.5 rounded-xl bg-card hover:bg-cardElevated text-slate-200 border border-lineStrong font-medium text-sm transition-colors cursor-pointer"
+            >
+              Посмотреть демо-дашборд
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Minimal Footer */}
+      <footer className="max-w-6xl mx-auto px-5 sm:px-6 pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-2">
+          <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
+          <span>·</span>
+          <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+        </div>
+        <span className="font-mono text-[11px]">Твой личный кинодневник</span>
+      </footer>
+    </div>
+  );
+}

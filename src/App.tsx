@@ -5,6 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { CsvImportModal } from './components/CsvImportModal';
 import { Header } from './components/Header';
 import { JournalSection } from './components/JournalSection';
+import { LandingPage } from './components/LandingPage';
 import { Tier1KpiSection } from './components/Tier1KpiSection';
 import { Tier2DynamicsSection } from './components/Tier2DynamicsSection';
 import { Tier3RhythmSection } from './components/Tier3RhythmSection';
@@ -60,11 +61,14 @@ export function App() {
   const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoWasModified, setDemoWasModified] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured);
+  const [showDemoDashboard, setShowDemoDashboard] = useState(false);
   const [loadingCloud, setLoadingCloud] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('login');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [authNotice, setAuthNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -134,6 +138,7 @@ export function App() {
       } else {
         setIsPasswordRecovery(false);
         setIsDemoMode(true);
+        setShowDemoDashboard(false);
         setEntries(DEMO_ENTRIES);
         setDemoWasModified(false);
         setReenrichReport(null);
@@ -142,31 +147,36 @@ export function App() {
       }
     });
 
-    void getVerifiedUser().then((user) => {
-      if (!active) return;
-      if (user) {
-        setUserEmail(user.email ?? null);
-        void loadCloudEntries();
-        if (
-          hadAuthCode &&
-          !handledInitialCodeRef.current &&
-          !callbackError &&
-          !passwordRecoveryTriggeredRef.current
-        ) {
+    void getVerifiedUser()
+      .then((user) => {
+        if (!active) return;
+        if (user) {
+          setUserEmail(user.email ?? null);
+          void loadCloudEntries();
+          if (
+            hadAuthCode &&
+            !handledInitialCodeRef.current &&
+            !callbackError &&
+            !passwordRecoveryTriggeredRef.current
+          ) {
+            handledInitialCodeRef.current = true;
+            cleanAuthCodeFromUrl();
+            showToast('Почта подтверждена! Вы вошли в аккаунт.');
+          }
+        } else if (hadAuthCode && !handledInitialCodeRef.current && !callbackError) {
           handledInitialCodeRef.current = true;
           cleanAuthCodeFromUrl();
-          showToast('Почта подтверждена! Вы вошли в аккаунт.');
+          setAuthNotice({
+            type: 'success',
+            text: 'Email подтверждён! Чтобы завершить вход в этом браузере, войдите по email и паролю.',
+          });
+          setAuthModalInitialMode('login');
+          setAuthModalOpen(true);
         }
-      } else if (hadAuthCode && !handledInitialCodeRef.current && !callbackError) {
-        handledInitialCodeRef.current = true;
-        cleanAuthCodeFromUrl();
-        setAuthNotice({
-          type: 'success',
-          text: 'Email подтверждён! Чтобы завершить вход в этом браузере, войдите по email и паролю.',
-        });
-        setAuthModalOpen(true);
-      }
-    });
+      })
+      .finally(() => {
+        if (active) setAuthChecked(true);
+      });
 
     return () => {
       active = false;
@@ -392,99 +402,124 @@ export function App() {
           ? `День ${refDate.dayOfYear} / 365`
           : `Архив ${selectedYear} года · 365 / 365 дней`;
 
+  const openAuthModal = useCallback((mode: 'login' | 'register' = 'login') => {
+    setAuthModalInitialMode(mode);
+    setAuthModalOpen(true);
+  }, []);
+
+  const openDemoDashboard = useCallback(() => {
+    setShowDemoDashboard(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const showLanding = authChecked && !userEmail && !showDemoDashboard;
+
   return (
     <div className="min-h-screen bg-canvas text-slate-100">
-      <Header
-        selectedYear={selectedYear}
-        onSelectYear={setSelectedYear}
-        onOpenAddModal={() => setAddModalOpen(true)}
-        onOpenImportModal={() => setImportModalOpen(true)}
-        onOpenAuthModal={() => setAuthModalOpen(true)}
-        isDemoMode={isDemoMode}
-        userEmail={userEmail}
-      />
-
-      {loadingCloud ? (
-        <DashboardSkeleton />
+      {!authChecked ? (
+        <div className="min-h-screen bg-canvas" />
+      ) : showLanding ? (
+        <LandingPage
+          onOpenRegister={() => openAuthModal('register')}
+          onOpenLogin={() => openAuthModal('login')}
+          onOpenDemo={openDemoDashboard}
+        />
       ) : (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-          {/* Status Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
-                Дашборд просмотров
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                {isDemoMode
-                  ? 'Интерактивная статистика по архиву 2024–2026 годов (Demo Mode)'
-                  : `Персональный облачный журнал · ${userEmail}`}
-              </p>
-            </div>
+        <>
+          <Header
+            selectedYear={selectedYear}
+            onSelectYear={setSelectedYear}
+            onOpenAddModal={() => setAddModalOpen(true)}
+            onOpenImportModal={() => setImportModalOpen(true)}
+            onOpenAuthModal={() => openAuthModal('login')}
+            onLogoClick={isDemoMode ? () => setShowDemoDashboard(false) : undefined}
+            isDemoMode={isDemoMode}
+            userEmail={userEmail}
+          />
 
-            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-              {isDemoMode && demoWasModified && (
-                <button
-                  type="button"
-                  onClick={handleResetDemo}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/30 px-3 py-2 rounded-xl hover:bg-[#d6b85a]/20 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Сбросить демо</span>
-                </button>
-              )}
-              <div className="inline-flex items-center gap-2 text-xs text-slate-400 bg-card border border-line px-3.5 py-2 rounded-xl">
-                <span className="w-2 h-2 rounded-full bg-[#45d1c6] animate-pulse" />
-                <span className="font-mono text-[11px] text-slate-300">{statusBadgeText}</span>
+          {loadingCloud ? (
+            <DashboardSkeleton />
+          ) : (
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+              {/* Status Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+                    Дашборд просмотров
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                    {isDemoMode
+                      ? 'Интерактивная статистика по архиву 2024–2026 годов (Demo Mode)'
+                      : `Персональный облачный журнал · ${userEmail}`}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  {isDemoMode && demoWasModified && (
+                    <button
+                      type="button"
+                      onClick={handleResetDemo}
+                      className="inline-flex items-center gap-1.5 text-xs text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/30 px-3 py-2 rounded-xl hover:bg-[#d6b85a]/20 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Сбросить демо</span>
+                    </button>
+                  )}
+                  <div className="inline-flex items-center gap-2 text-xs text-slate-400 bg-card border border-line px-3.5 py-2 rounded-xl">
+                    <span className="w-2 h-2 rounded-full bg-[#45d1c6] animate-pulse" />
+                    <span className="font-mono text-[11px] text-slate-300">{statusBadgeText}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <Tier1KpiSection kpis={kpis} selectedYear={selectedYear} />
-          <Tier2DynamicsSection
-            cumulativeData={cumulativeData}
-            indexTrajectory={indexTrajectory}
-            selectedYear={selectedYear}
-          />
-          <Tier3RhythmSection
-            monthlyData={monthlyData}
-            dayOfWeek={dayOfWeek}
-            timeOfDay={timeOfDay}
-            selectedYear={selectedYear}
-          />
-          <Tier4DeepAnalyticsSection
-            heatmap={heatmap}
-            ratings={ratings}
-            releaseEras={releaseEras}
-            runtime={runtime}
-            tasteDirectors={tasteDirectors}
-            tasteCountries={tasteCountries}
-            tasteGenres={tasteGenres}
-            selectedYear={selectedYear}
-          />
-          <JournalSection
-            entries={entries}
-            selectedYear={selectedYear}
-            onDeleteEntry={(id) => void handleDeleteEntry(id)}
-            pendingEnrichCount={pendingEnrichMovieIds.length}
-            unmatchedCount={unmatchedMovieCount}
-            reenriching={reenriching}
-            reenrichProgress={reenrichProgress}
-            reenrichReport={reenrichReport}
-            onReenrichMovies={() => void handleReenrichMovies()}
-            onDismissReenrichReport={() => setReenrichReport(null)}
-          />
+              <Tier1KpiSection kpis={kpis} selectedYear={selectedYear} />
+              <Tier2DynamicsSection
+                cumulativeData={cumulativeData}
+                indexTrajectory={indexTrajectory}
+                selectedYear={selectedYear}
+              />
+              <Tier3RhythmSection
+                monthlyData={monthlyData}
+                dayOfWeek={dayOfWeek}
+                timeOfDay={timeOfDay}
+                selectedYear={selectedYear}
+              />
+              <Tier4DeepAnalyticsSection
+                heatmap={heatmap}
+                ratings={ratings}
+                releaseEras={releaseEras}
+                runtime={runtime}
+                tasteDirectors={tasteDirectors}
+                tasteCountries={tasteCountries}
+                tasteGenres={tasteGenres}
+                selectedYear={selectedYear}
+              />
+              <JournalSection
+                entries={entries}
+                selectedYear={selectedYear}
+                onDeleteEntry={(id) => void handleDeleteEntry(id)}
+                pendingEnrichCount={pendingEnrichMovieIds.length}
+                unmatchedCount={unmatchedMovieCount}
+                reenriching={reenriching}
+                reenrichProgress={reenrichProgress}
+                reenrichReport={reenrichReport}
+                onReenrichMovies={() => void handleReenrichMovies()}
+                onDismissReenrichReport={() => setReenrichReport(null)}
+              />
 
-          <footer className="pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <div className="flex items-center gap-2">
-              <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
-              <span>·</span>
-              <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
-            </div>
-            <span className="font-mono text-[11px]">
-              {isDemoMode ? 'Симуляция данных на 20.11.2026' : 'Supabase PostgreSQL RLS Sync'}
-            </span>
-          </footer>
-        </main>
+              <footer className="pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
+                  <span>·</span>
+                  <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+                </div>
+                <span className="font-mono text-[11px]">
+                  {isDemoMode ? 'Симуляция данных на 20.11.2026' : 'Supabase PostgreSQL RLS Sync'}
+                </span>
+              </footer>
+            </main>
+          )}
+        </>
       )}
 
       {/* Toast Notification */}
@@ -517,9 +552,11 @@ export function App() {
         userEmail={userEmail}
         isDemoMode={isDemoMode}
         isPasswordRecovery={isPasswordRecovery}
+        initialMode={authModalInitialMode}
         initialNotice={authNotice}
         onEnableDemoMode={() => {
           setIsDemoMode(true);
+          setShowDemoDashboard(true);
           setEntries(DEMO_ENTRIES);
           setDemoWasModified(false);
         }}

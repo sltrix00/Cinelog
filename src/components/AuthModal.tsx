@@ -17,6 +17,7 @@ interface AuthModalProps {
   userEmail: string | null;
   isDemoMode: boolean;
   isPasswordRecovery?: boolean;
+  initialMode?: 'login' | 'register';
   initialNotice?: { type: 'error' | 'success'; text: string } | null;
   onEnableDemoMode: () => void;
   onAuthSuccess: () => void;
@@ -55,13 +56,14 @@ export function AuthModal({
   userEmail,
   isDemoMode,
   isPasswordRecovery = false,
+  initialMode = 'login',
   initialNotice = null,
   onEnableDemoMode,
   onAuthSuccess,
   onPasswordRecoveryComplete,
   onCancelPasswordRecovery,
 }: AuthModalProps) {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -72,11 +74,14 @@ export function AuthModal({
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   useEffect(() => {
-    if (open && initialNotice) {
+    if (!open) return;
+    if (initialNotice) {
       setMode('login');
       setMessage(initialNotice);
+    } else if (!isPasswordRecovery) {
+      setMode(initialMode);
     }
-  }, [open, initialNotice]);
+  }, [open, initialMode, initialNotice, isPasswordRecovery]);
 
   if (!open) return null;
 
