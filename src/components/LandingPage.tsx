@@ -123,96 +123,96 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: Landing
       ref={containerRef}
       className="min-h-screen bg-canvas text-slate-100 overflow-x-hidden antialiased"
     >
-      {/* Minimalist Top Bar */}
-      <header className="relative z-20 max-w-6xl mx-auto px-5 sm:px-6 pt-5 pb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6] p-[1.5px]">
-            <div className="w-full h-full rounded-[6.5px] bg-canvas flex items-center justify-center">
-              <Clapperboard className="w-4 h-4 text-[#f06292]" />
-            </div>
-          </div>
-          <span className="text-lg font-bold tracking-tight text-white">Cinelog</span>
+      {/* Full-Viewport First Screen (Header + Hero + Bottom Scroll Hint) */}
+      <div className="relative min-h-[100dvh] w-full flex flex-col justify-between overflow-hidden border-b border-line">
+        {/* Atmospheric Background Layers */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+          <div className="landing-hero-grid absolute inset-0" />
+          <div className="absolute -top-32 left-[18%] w-[680px] h-[440px] rounded-full bg-[#f06292]/12 blur-[130px]" />
+          <div className="absolute top-[25%] right-[10%] w-[560px] h-[400px] rounded-full bg-[#45d1c6]/10 blur-[130px]" />
+          <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-[520px] h-[220px] rounded-full bg-[#d6b85a]/8 blur-[120px]" />
         </div>
 
-        <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm">
-          <button
-            type="button"
-            onClick={onOpenDemo}
-            className="text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            Посмотреть демо
-          </button>
+        {/* Minimalist Top Bar (Only Logo + Войти) */}
+        <header className="relative z-20 w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 pt-6 pb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6] p-[1.5px]">
+              <div className="w-full h-full rounded-[10.5px] bg-canvas flex items-center justify-center">
+                <Clapperboard className="w-4 h-4 text-[#f06292]" />
+              </div>
+            </div>
+            <span className="text-lg sm:text-xl font-bold tracking-tight text-white">Cinelog</span>
+          </div>
+
           <button
             type="button"
             onClick={onOpenLogin}
-            className="px-3.5 sm:px-4 py-1.5 rounded-lg bg-cardElevated hover:bg-line text-slate-200 border border-lineStrong font-medium transition-colors cursor-pointer"
+            className="px-4 sm:px-5 py-2 rounded-xl bg-cardElevated/90 hover:bg-line text-slate-100 border border-lineStrong text-xs sm:text-sm font-medium transition-colors cursor-pointer"
           >
             Войти
           </button>
-        </div>
-      </header>
+        </header>
 
-      {/* Hero Section (Variant B) */}
-      <section className="relative min-h-[78vh] flex flex-col justify-center overflow-hidden px-5 sm:px-6 py-8 sm:py-12">
-        {/* Ambient Background Glow */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-          <div className="absolute -top-24 left-1/3 w-[620px] h-[380px] rounded-full bg-[#f06292]/10 blur-[120px]" />
-          <div className="absolute bottom-0 right-1/4 w-[480px] h-[320px] rounded-full bg-[#45d1c6]/10 blur-[120px]" />
-        </div>
-
-        <div className="relative z-10 max-w-6xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+        {/* Hero Main Content */}
+        <main className="relative z-10 flex-1 flex flex-col justify-center w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-6 sm:py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-center">
             {/* Left: Rotating Slogan (no badge above) */}
             <div className="lg:col-span-6 text-left">
               <div
-                className={`min-h-[120px] sm:min-h-[168px] flex flex-col justify-center transition-[opacity,transform] ${
+                className={`min-h-[130px] sm:min-h-[180px] lg:min-h-[220px] flex flex-col justify-center transition-[opacity,transform] ${
                   isFadingOut
                     ? 'opacity-0 -translate-y-1 duration-[650ms] ease-in-out'
                     : 'opacity-100 translate-y-0 duration-[750ms] ease-[cubic-bezier(0.22,1,0.36,1)]'
                 }`}
               >
-                <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-[1.14]">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-[3.5rem] font-extrabold tracking-tight text-white leading-[1.1]">
                   {currentSlogan.title}
                 </h1>
-                <p className="mt-3 sm:mt-4 text-sm sm:text-lg text-slate-300 leading-relaxed max-w-xl">
+                <p className="mt-4 sm:mt-5 text-sm sm:text-lg lg:text-xl text-slate-300 leading-relaxed max-w-xl">
                   {currentSlogan.sub}
                 </p>
               </div>
             </div>
 
-            {/* Right: Compact Mini Dashboard Preview */}
+            {/* Right: Full-Proportioned Mini Dashboard Preview */}
             <div className="lg:col-span-6">
-              <div className="rounded-2xl bg-card/95 border border-lineStrong p-3.5 sm:p-5 shadow-2xl">
-                <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="relative rounded-2xl bg-card/90 backdrop-blur-md border border-lineStrong p-4 sm:p-6 lg:p-7 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+                {/* Top Pink Hairline Sheen */}
+                <div
+                  className="pointer-events-none absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-[#f06292]/60 to-transparent"
+                  aria-hidden="true"
+                />
+
+                <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
                     <div className="text-[11px] sm:text-xs text-slate-400">Накопительный темп · 365 дней</div>
-                    <div className="text-base sm:text-lg font-bold font-mono tabular-nums text-white mt-0.5">
-                      148 фильмов <span className="text-xs font-normal text-[#45d1c6]">(+23 к 2025)</span>
+                    <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono tabular-nums text-white mt-0.5">
+                      148 фильмов <span className="text-xs sm:text-sm font-normal text-[#45d1c6]">(+23 к 2025)</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] font-mono shrink-0 pt-0.5">
+                  <div className="flex items-center gap-2.5 text-xs font-mono shrink-0 pt-1">
                     <span className="text-[#d6b85a]">● 24</span>
                     <span className="text-[#45d1c6]">● 25</span>
                     <span className="text-[#f06292]">● 26</span>
                   </div>
                 </div>
 
-                <svg viewBox="0 0 420 135" className="w-full h-24 sm:h-36" fill="none" aria-hidden="true">
+                <svg viewBox="0 0 420 145" className="w-full h-24 sm:h-36 lg:h-48" fill="none" aria-hidden="true">
                   <defs>
                     <linearGradient id="landingPinkArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f06292" stopOpacity="0.22" />
+                      <stop offset="0%" stopColor="#f06292" stopOpacity="0.24" />
                       <stop offset="100%" stopColor="#f06292" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   <line x1="0" y1="30" x2="420" y2="30" stroke="#1e2438" strokeDasharray="3 3" />
-                  <line x1="0" y1="70" x2="420" y2="70" stroke="#1e2438" strokeDasharray="3 3" />
-                  <line x1="0" y1="115" x2="420" y2="115" stroke="#1e2438" />
+                  <line x1="0" y1="74" x2="420" y2="74" stroke="#1e2438" strokeDasharray="3 3" />
+                  <line x1="0" y1="122" x2="420" y2="122" stroke="#1e2438" />
 
                   {/* 2024 gold */}
                   <path
-                    d="M 4 115 L 28 112 L 46 105 L 72 103 L 96 96 L 122 95 L 148 88 L 176 87 L 204 84 L 235 79 L 268 78 L 298 70 L 332 66 L 368 64 L 412 58"
+                    d="M 4 122 L 28 119 L 46 112 L 72 110 L 96 102 L 122 101 L 148 93 L 176 92 L 204 88 L 235 83 L 268 82 L 298 74 L 332 69 L 368 67 L 412 61"
                     stroke="#d6b85a"
-                    strokeWidth="1.8"
+                    strokeWidth="2"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-1"
@@ -220,9 +220,9 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: Landing
 
                   {/* 2025 teal */}
                   <path
-                    d="M 4 115 L 24 109 L 48 107 L 76 96 L 102 92 L 130 82 L 160 80 L 188 73 L 216 64 L 248 61 L 278 52 L 310 49 L 344 43 L 380 41 L 412 36"
+                    d="M 4 122 L 24 116 L 48 114 L 76 102 L 102 98 L 130 87 L 160 85 L 188 77 L 216 68 L 248 64 L 278 55 L 310 52 L 344 45 L 380 43 L 412 38"
                     stroke="#45d1c6"
-                    strokeWidth="2"
+                    strokeWidth="2.2"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-2"
@@ -230,41 +230,44 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: Landing
 
                   {/* 2026 pink area + line */}
                   <path
-                    d="M 4 115 L 22 105 L 44 102 L 64 89 L 92 85 L 116 74 L 142 73 L 168 58 L 198 54 L 224 44 L 254 42 L 282 29 L 312 26 L 342 19 L 378 16 L 412 10 L 412 115 L 4 115 Z"
+                    d="M 4 122 L 22 111 L 44 108 L 64 94 L 92 90 L 116 78 L 142 77 L 168 61 L 198 57 L 224 46 L 254 44 L 282 30 L 312 27 L 342 20 L 378 17 L 412 10 L 412 122 L 4 122 Z"
                     fill="url(#landingPinkArea)"
                   />
                   <path
-                    d="M 4 115 L 22 105 L 44 102 L 64 89 L 92 85 L 116 74 L 142 73 L 168 58 L 198 54 L 224 44 L 254 42 L 282 29 L 312 26 L 342 19 L 378 16 L 412 10"
+                    d="M 4 122 L 22 111 L 44 108 L 64 94 L 92 90 L 116 78 L 142 77 L 168 61 L 198 57 L 224 46 L 254 44 L 282 30 L 312 27 L 342 20 L 378 17 L 412 10"
                     stroke="#f06292"
-                    strokeWidth="2.6"
+                    strokeWidth="2.8"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-3"
                   />
 
-                  <circle cx="412" cy="58" r="3" fill="#d6b85a" />
-                  <circle cx="412" cy="36" r="3" fill="#45d1c6" />
-                  <circle cx="412" cy="10" r="4" fill="#f06292" />
-                  <circle cx="412" cy="10" r="8" fill="#f06292" fillOpacity="0.25" />
+                  <circle cx="412" cy="61" r="3" fill="#d6b85a" />
+                  <circle cx="412" cy="38" r="3.2" fill="#45d1c6" />
+                  <circle cx="412" cy="10" r="4.5" fill="#f06292" />
+                  <circle cx="412" cy="10" r="9" fill="#f06292" fillOpacity="0.25" />
                 </svg>
 
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-2.5 border-t border-line text-center">
-                  <div className="rounded-lg bg-cardElevated p-2">
-                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Часов кино</div>
-                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-white mt-0.5">294 ч</div>
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mt-4 pt-3.5 border-t border-line text-center">
+                  <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
+                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Часов кино</div>
+                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-white mt-1">294 ч</div>
                   </div>
-                  <div className="rounded-lg bg-cardElevated p-2">
-                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Средняя за месяц</div>
-                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#d6b85a] mt-0.5 flex items-center justify-center gap-1">
+                  <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
+                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Средняя за месяц</div>
+                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-[#d6b85a] mt-1 flex items-center justify-center gap-1">
                       <span>7.8</span>
-                      <span className="inline-flex items-center text-[10px] text-[#45d1c6]" title="+0.4 к прошлому месяцу">
+                      <span
+                        className="inline-flex items-center text-[10px] sm:text-xs text-[#45d1c6]"
+                        title="+0.4 к прошлому месяцу"
+                      >
                         ▲+0.4
                       </span>
                     </div>
                   </div>
-                  <div className="rounded-lg bg-cardElevated p-2">
-                    <div className="text-[10px] sm:text-[11px] text-slate-400 leading-tight">Пик ритма</div>
-                    <div className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#45d1c6] mt-0.5">
+                  <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
+                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Пик ритма</div>
+                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-[#45d1c6] mt-1">
                       Сб 22:00
                     </div>
                   </div>
@@ -274,31 +277,33 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: Landing
           </div>
 
           {/* Centered CTA Below the Two Columns */}
-          <div className="mt-8 sm:mt-11 flex flex-col items-center gap-2.5 text-center">
+          <div className="mt-10 sm:mt-14 lg:mt-16 flex flex-col items-center gap-3 text-center">
             <button
               type="button"
               onClick={onOpenRegister}
-              className="group inline-flex items-center gap-2.5 px-7 sm:px-8 py-3 sm:py-3.5 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_30px_rgba(240,98,146,0.35)] hover:shadow-[0_0_40px_rgba(240,98,146,0.5)] transition-all cursor-pointer"
+              className="group inline-flex items-center gap-2.5 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_35px_rgba(240,98,146,0.4)] hover:shadow-[0_0_48px_rgba(240,98,146,0.55)] transition-all cursor-pointer"
             >
               <span>Начать вести кинодневник</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
             </button>
-            <span className="text-xs text-slate-400">Импорт истории с Letterboxd и IMDb в пару кликов</span>
+            <span className="text-xs sm:text-sm text-slate-400">Импорт истории с Letterboxd и IMDb в пару кликов</span>
           </div>
-        </div>
+        </main>
 
-        {/* Scroll Hint */}
-        <a
-          href="#compare"
-          className="mt-8 sm:mt-10 mx-auto flex flex-col items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-        >
-          <span>Листай вниз, чтобы узнать больше</span>
-          <ChevronDown className="w-4 h-4 animate-bounce" />
-        </a>
-      </section>
+        {/* Bottom Scroll Hint anchored to bottom edge of 100dvh */}
+        <div className="relative z-10 pb-6 pt-2 flex justify-center">
+          <a
+            href="#compare"
+            className="flex flex-col items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            <span>Листай вниз, чтобы узнать больше</span>
+            <ChevronDown className="w-4 h-4 animate-bounce" />
+          </a>
+        </div>
+      </div>
 
       {/* Section 1: Why Not IMDb or Letterboxd */}
-      <section id="compare" className="max-w-6xl mx-auto px-5 sm:px-6 py-16 sm:py-20 border-t border-line">
+      <section id="compare" className="max-w-6xl mx-auto px-5 sm:px-6 py-16 sm:py-20">
         <div data-reveal className="landing-reveal text-center max-w-2xl mx-auto mb-10 sm:mb-12">
           <div className="text-xs font-mono uppercase tracking-widest text-[#f06292] mb-2">
             Глубже обычных трекеров

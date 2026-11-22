@@ -121,3 +121,12 @@
     animation: none;
   }
 }
+
+.landing-hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(30, 36, 56, 0.28) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 36, 56, 0.28) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 100%);
+}
