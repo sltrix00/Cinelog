@@ -64,7 +64,7 @@ function DashboardSkeleton() {
 }
 
 export function App() {
-  const [selectedYear, setSelectedYear] = useState<YearFilter>('all');
+  const [selectedYear, setSelectedYear] = useState<YearFilter>(() => new Date().getFullYear());
   const [entries, setEntries] = useState<WatchEntry[]>(DEMO_ENTRIES);
   const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoWasModified, setDemoWasModified] = useState(false);
@@ -266,7 +266,10 @@ export function App() {
     }
   }, []);
 
-  const availableYears = useMemo(() => extractAvailableYears(entries), [entries]);
+  const availableYears = useMemo(
+    () => extractAvailableYears(entries, [2024, 2025, 2026, new Date().getFullYear()]),
+    [entries]
+  );
   const comparisonYears = useMemo(
     () => resolveComparisonYears(entries, selectedYear, availableYears),
     [entries, selectedYear, availableYears]
@@ -568,7 +571,7 @@ export function App() {
     setIsDemoMode(true);
     setEntries(DEMO_ENTRIES);
     setDemoWasModified(false);
-    setSelectedYear('all');
+    setSelectedYear(SIM_YEAR);
     showToast('Демо-данные 2024–2026 восстановлены.');
   };
 
