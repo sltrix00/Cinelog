@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, RotateCcw } from 'lucide-react';
 import { AddWatchModal, type AddWatchPayload } from './components/AddWatchModal';
 import { AuthModal } from './components/AuthModal';
-import { CsvImportModal } from './components/CsvImportModal';
 import { Header } from './components/Header';
 import { JournalSection } from './components/JournalSection';
 import { LandingPage } from './components/LandingPage';
 import { LegalModal, type LegalTab } from './components/LegalModal';
+import { SectionDotNav } from './components/SectionDotNav';
 import { Tier1KpiSection } from './components/Tier1KpiSection';
 import { Tier2DynamicsSection } from './components/Tier2DynamicsSection';
 import { Tier3RhythmSection } from './components/Tier3RhythmSection';
@@ -30,9 +30,11 @@ import {
 import { parseAuthCallbackError } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
+import { resolveProfileNickname } from './lib/headerHelpers';
 import {
   batchUpsertImportedRows,
   deleteWatchLogById,
+  fetchUserProfile,
   fetchWatchEntries,
   getVerifiedUser,
   insertManualWatchLog,
@@ -46,7 +48,7 @@ import type { ParsedImportRow, ReenrichSummary, WatchEntry, YearFilter } from '.
 
 function DashboardSkeleton() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-pulse">
+    <div className="max-w-7xl mx-auto pl-10 pr-4 sm:pl-12 sm:pr-6 lg:pl-14 lg:pr-8 2xl:px-8 py-8 space-y-8 animate-pulse">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="h-36 rounded-2xl bg-card border border-line" />
@@ -59,18 +61,18 @@ function DashboardSkeleton() {
 }
 
 export function App() {
-  const [selectedYear, setSelectedYear] = useState<YearFilter>(2026);
+  const [selectedYear, setSelectedYear] = useState<YearFilter>('all');
   const [entries, setEntries] = useState<WatchEntry[]>(DEMO_ENTRIES);
   const [isDemoMode, setIsDemoMode] = useState(true);
   const [demoWasModified, setDemoWasModified] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userNickname, setUserNickname] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured);
   const [showDemoDashboard, setShowDemoDashboard] = useState(false);
   const [loadingCloud, setLoadingCloud] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WatchEntry | null>(null);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('login');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
@@ -88,6 +90,7 @@ export function App() {
   );
   const handledInitialCodeRef = useRef(false);
   const passwordRecoveryTriggeredRef = useRef(false);
+  const activeUserIdRef = useRef<string | null>(null);
   const [reenriching, setReenriching] = useState(false);
   const [reenrichProgress, setReenrichProgress] = useState<{ done: number; total: number } | null>(null);
   const [reenrichReport, setReenrichReport] = useState<ReenrichSummary | null>(null);
@@ -98,6 +101,21 @@ export function App() {
       setToastMsg((curr) => (curr === msg ? null : curr));
     }, 3400);
   }, []);
+
+  const loadUserProfile = useCallback(
+    async (user: { id: string; user_metadata?: Record<string, unknown> | null }) => {
+      activeUserIdRef.current = user.id;
+      try {
+        const profile = await fetchUserProfile(user.id);
+        if (activeUserIdRef.current !== user.id) return;
+        setUserNickname(resolveProfileNickname(profile, user.user_metadata));
+      } catch {
+        if (activeUserIdRef.current !== user.id) return;
+        setUserNickname(resolveProfileNickname(null, user.user_metadata));
+      }
+    },
+    []
+  );
 
   const loadCloudEntries = useCallback(async () => {
     setLoadingCloud(true);
@@ -145,7 +163,10 @@ export function App() {
       }
       if (user) {
         void loadCloudEntries();
+        void loadUserProfile(user);
       } else {
+        activeUserIdRef.current = null;
+        setUserNickname(null);
         setIsPasswordRecovery(false);
         setIsDemoMode(true);
         setShowDemoDashboard(false);
@@ -163,6 +184,7 @@ export function App() {
         if (user) {
           setUserEmail(user.email ?? null);
           void loadCloudEntries();
+          void loadUserProfile(user);
           if (
             hadAuthCode &&
             !handledInitialCodeRef.current &&
@@ -192,7 +214,7 @@ export function App() {
       active = false;
       unsubscribe();
     };
-  }, [loadCloudEntries, showToast]);
+  }, [loadCloudEntries, loadUserProfile, showToast]);
 
   useEffect(() => {
     const syncLegalFromHash = () => {
@@ -344,7 +366,7 @@ export function App() {
     if (!isDemoMode && isSupabaseConfigured && userEmail) {
       const saved = await insertManualWatchLog(payload);
       setEntries((prev) => [saved, ...prev]);
-      if (isValidYear) {
+      if (isValidYear && selectedYear !== 'all') {
         setSelectedYear(yr);
       }
       showToast(
@@ -386,7 +408,7 @@ export function App() {
 
     setEntries((prev) => [newEntry, ...prev]);
     setDemoWasModified(true);
-    if (isValidYear) {
+    if (isValidYear && selectedYear !== 'all') {
       setSelectedYear(yr);
     }
     showToast(
@@ -424,7 +446,7 @@ export function App() {
     const latestYear = importedEntries
       .map((e) => Number.parseInt(e.watched_date.slice(0, 4), 10))
       .find((y) => Number.isInteger(y) && y >= 1888 && y <= 2100);
-    if (latestYear) setSelectedYear(latestYear);
+    if (latestYear && selectedYear !== 'all') setSelectedYear(latestYear);
     showToast(`Импортировано ${importedEntries.length} записей!`);
   };
 
@@ -478,7 +500,7 @@ export function App() {
     setIsDemoMode(true);
     setEntries(DEMO_ENTRIES);
     setDemoWasModified(false);
-    setSelectedYear(2026);
+    setSelectedYear('all');
     showToast('Демо-данные 2024–2026 восстановлены.');
   };
 
@@ -529,17 +551,19 @@ export function App() {
               setEditingEntry(null);
               setAddModalOpen(true);
             }}
-            onOpenImportModal={() => setImportModalOpen(true)}
             onOpenAuthModal={() => openAuthModal('login')}
             onLogoClick={isDemoMode ? () => setShowDemoDashboard(false) : undefined}
             isDemoMode={isDemoMode}
             userEmail={userEmail}
+            userNickname={userNickname}
           />
 
           {loadingCloud ? (
             <DashboardSkeleton />
           ) : (
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+            <>
+              <SectionDotNav />
+              <main className="max-w-7xl mx-auto pl-10 pr-4 sm:pl-12 sm:pr-6 lg:pl-14 lg:pr-8 2xl:px-8 py-8 space-y-12">
               {/* Status Bar */}
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
@@ -653,6 +677,7 @@ export function App() {
                 </div>
               </footer>
             </main>
+            </>
           )}
         </>
       )}
@@ -674,13 +699,8 @@ export function App() {
         onSave={handleSaveWatch}
         isDemoMode={isDemoMode}
         initialEntry={editingEntry}
-      />
-      <CsvImportModal
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
         existingEntries={entries}
         onConfirmImport={handleConfirmImport}
-        isDemoMode={isDemoMode}
       />
       <LegalModal tab={legalTab} onChangeTab={openLegalModal} onClose={closeLegalModal} />
       <AuthModal
