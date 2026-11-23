@@ -84,6 +84,7 @@ export function JournalSection({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState>(null);
   const [identityInput, setIdentityInput] = useState('');
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -91,7 +92,19 @@ export function JournalSection({
 
   const masterCheckboxRef = useRef<HTMLInputElement>(null);
   const selectionMenuRef = useRef<HTMLDivElement>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
   const identityInputRef = useRef<HTMLInputElement>(null);
+
+  const activeFilterCount =
+    (sortBy !== 'date-desc' ? 1 : 0) +
+    (minRating > 0 ? 1 : 0) +
+    (rewatchesOnly ? 1 : 0);
+
+  const handleResetFilters = () => {
+    setSortBy('date-desc');
+    setMinRating(0);
+    setRewatchesOnly(false);
+  };
 
   // Reset pagination when any filter or sort changes
   useEffect(() => {
@@ -135,6 +148,27 @@ export function JournalSection({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectionMenuOpen]);
+
+  // Close filter popover on outside click or Escape
+  useEffect(() => {
+    if (!filterMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setFilterMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFilterMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [filterMenuOpen]);
 
   const deleteModalRef = useModalA11y<HTMLDivElement>({
     open: Boolean(pendingDeleteEntry),
@@ -189,6 +223,12 @@ export function JournalSection({
   }, [entries, selectedYear, search, sortBy, rewatchesOnly, minRating]);
 
   const displayed = filtered.slice(0, visibleLimit);
+
+  useEffect(() => {
+    if (filtered.length === 0 && selectionMenuOpen) {
+      setSelectionMenuOpen(false);
+    }
+  }, [filtered.length, selectionMenuOpen]);
 
   const masterState = useMemo(
     () => getMasterCheckboxState(filtered, selectedIds),
@@ -456,160 +496,243 @@ export function JournalSection({
         </div>
       )}
 
-      {/* Filters Toolbar */}
-      <div className="rounded-2xl bg-card border border-line p-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search
-            className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            aria-label="Поиск по названию, режиссёру или жанру"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по названию, режиссёру или жанру..."
-            className="w-full min-h-10 pl-9 pr-3 py-2 rounded-xl bg-canvas border border-line text-xs text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
-          />
-        </div>
+      {/* Unified Journal Toolbar */}
+      <div className="rounded-2xl bg-card border border-line p-3 sm:p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {/* Leftmost: Gmail-style selection control */}
+          <div className="relative shrink-0" ref={selectionMenuRef}>
+            <div
+              className={`inline-flex items-center rounded-xl bg-canvas border border-line transition-colors ${
+                filtered.length === 0 ? 'opacity-50' : 'hover:border-lineStrong'
+              }`}
+            >
+              <label
+                className={`inline-flex items-center justify-center min-w-10 min-h-10 px-2.5 rounded-l-xl transition-colors ${
+                  filtered.length === 0
+                    ? 'cursor-not-allowed'
+                    : 'cursor-pointer hover:bg-cardElevated'
+                }`}
+              >
+                <input
+                  ref={masterCheckboxRef}
+                  type="checkbox"
+                  disabled={filtered.length === 0}
+                  checked={filtered.length > 0 && masterState === 'all'}
+                  onChange={handleToggleMasterCheckbox}
+                  aria-label="Выбрать все записи в текущем списке"
+                  className="w-4 h-4 accent-[#45d1c6] rounded cursor-pointer disabled:cursor-not-allowed focus:outline-none"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={filtered.length === 0}
+                onClick={() => {
+                  setSelectionMenuOpen((o) => !o);
+                  setFilterMenuOpen(false);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={selectionMenuOpen}
+                aria-label="Варианты выбора записей"
+                className="inline-flex items-center justify-center min-h-10 px-1.5 border-l border-line text-slate-400 hover:text-white hover:bg-cardElevated disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed rounded-r-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+              >
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
 
-        <select
-          aria-label="Сортировка записей"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortKey)}
-          className="min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-xs text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6] cursor-pointer"
-        >
-          <option value="date-desc">Сначала новые</option>
-          <option value="date-asc">Сначала старые</option>
-          <option value="rating-desc">Оценка: выше</option>
-          <option value="rating-asc">Оценка: ниже</option>
-          <option value="title-asc">Название: А–Я</option>
-        </select>
+            {selectionMenuOpen && filtered.length > 0 && (
+              <div
+                role="menu"
+                aria-label="Варианты выбора"
+                className="absolute left-0 top-full mt-1.5 w-52 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl py-1 z-30"
+              >
+                {selectionPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handleSelectPreset(preset.id)}
+                    className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-card hover:text-white flex items-center justify-between gap-2 transition-colors cursor-pointer focus:outline-none focus-visible:bg-card"
+                  >
+                    <span>{preset.label}</span>
+                    {preset.count !== undefined && (
+                      <span className="tabular-nums text-[11px] text-slate-400">
+                        {preset.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2 min-h-10 px-3 py-1.5 rounded-xl bg-canvas border border-line text-xs">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-[#d6b85a]" aria-hidden="true" />
-          <label htmlFor="minRatingFilter" className="text-slate-300">
-            Мин:
-          </label>
-          <input
-            id="minRatingFilter"
-            type="range"
-            min="0"
-            max="5"
-            step="0.5"
-            value={minRating}
-            onChange={(e) => setMinRating(Number.parseFloat(e.target.value))}
-            className="w-20 accent-[#d6b85a] cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
-          />
-          <span className="tabular-nums text-[#d6b85a] w-9 text-right">
-            {minRating > 0 ? `${minRating.toFixed(1)}★` : 'Все'}
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search
+              className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              aria-label="Поиск по названию, режиссёру или жанру"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по названию, режиссёру или жанру..."
+              className={`w-full min-h-10 pl-9 ${
+                search ? 'pr-8' : 'pr-3'
+              } py-2 rounded-xl bg-canvas border border-line text-xs text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]`}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Очистить поиск"
+                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated absolute right-1.5 top-1/2 -translate-y-1/2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          {/* Right of search: Filter icon button + popover */}
+          <div className="relative shrink-0" ref={filterMenuRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterMenuOpen((o) => !o);
+                setSelectionMenuOpen(false);
+              }}
+              aria-haspopup="dialog"
+              aria-expanded={filterMenuOpen}
+              aria-label="Фильтры и сортировка"
+              title="Фильтры и сортировка"
+              className={`inline-flex items-center justify-center gap-1.5 min-w-10 min-h-10 px-2.5 rounded-xl border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                activeFilterCount > 0 || filterMenuOpen
+                  ? 'bg-[#45d1c6]/10 border-[#45d1c6]/45 text-[#45d1c6] hover:bg-[#45d1c6]/15'
+                  : 'bg-canvas border-line hover:border-lineStrong hover:bg-cardElevated text-slate-300 hover:text-white'
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+              {activeFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-[#45d1c6] text-[#090d16] text-[10px] font-bold tabular-nums">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {filterMenuOpen && (
+              <div
+                role="dialog"
+                aria-label="Фильтры и сортировка"
+                className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl p-4 z-30 space-y-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-200">
+                    Фильтры и сортировка
+                  </span>
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetFilters}
+                      className="text-[11px] text-[#45d1c6] hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] rounded"
+                    >
+                      Сбросить
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="sortOrderFilter" className="block text-xs text-slate-300">
+                    Сортировка
+                  </label>
+                  <select
+                    id="sortOrderFilter"
+                    aria-label="Сортировка записей"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortKey)}
+                    className="w-full min-h-9 px-3 py-1.5 rounded-xl bg-canvas border border-line text-xs text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6] cursor-pointer"
+                  >
+                    <option value="date-desc">Сначала новые</option>
+                    <option value="date-asc">Сначала старые</option>
+                    <option value="rating-desc">Оценка: выше</option>
+                    <option value="rating-asc">Оценка: ниже</option>
+                    <option value="title-asc">Название: А–Я</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="minRatingFilter" className="text-xs text-slate-300">
+                      Минимальная оценка
+                    </label>
+                    <span className="tabular-nums text-xs text-[#d6b85a]">
+                      {minRating > 0 ? `${minRating.toFixed(1)}★` : 'Все'}
+                    </span>
+                  </div>
+                  <input
+                    id="minRatingFilter"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.5"
+                    value={minRating}
+                    onChange={(e) => setMinRating(Number.parseFloat(e.target.value))}
+                    className="w-full accent-[#d6b85a] cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2.5 min-h-9 px-3 py-1.5 rounded-xl bg-canvas border border-line text-xs text-slate-200 cursor-pointer select-none focus-within:ring-2 focus-within:ring-[#45d1c6]">
+                  <input
+                    type="checkbox"
+                    checked={rewatchesOnly}
+                    onChange={(e) => setRewatchesOnly(e.target.checked)}
+                    className="w-4 h-4 accent-[#d6b85a] rounded cursor-pointer focus:outline-none"
+                  />
+                  <RotateCcw className="w-3.5 h-3.5 text-[#d6b85a]" aria-hidden="true" />
+                  <span>Только пересмотры</span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Rightmost: Shown count */}
+          <span className="text-[11px] tabular-nums text-slate-400 whitespace-nowrap ml-auto sm:ml-0">
+            Показано {displayed.length} из {filtered.length}
           </span>
         </div>
 
-        <label className="inline-flex items-center gap-2 min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-xs text-slate-200 cursor-pointer select-none focus-within:ring-2 focus-within:ring-[#45d1c6]">
-          <input
-            type="checkbox"
-            checked={rewatchesOnly}
-            onChange={(e) => setRewatchesOnly(e.target.checked)}
-            className="w-4 h-4 accent-[#d6b85a] rounded cursor-pointer focus:outline-none"
-          />
-          <RotateCcw className="w-3.5 h-3.5 text-[#d6b85a]" aria-hidden="true" />
-          <span>Только пересмотры</span>
-        </label>
+        {/* Bulk Selection Actions Row */}
+        {selectedIds.size > 0 && (
+          <div className="pt-3 border-t border-line flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#45d1c6]/10 border border-[#45d1c6]/30 text-xs tabular-nums text-[#45d1c6]">
+              Выбрано: {selectedIds.size}
+            </span>
+
+            {onDeleteSelected && (
+              <button
+                type="button"
+                onClick={openBulkDeleteSelected}
+                className="inline-flex items-center gap-1.5 min-h-9 px-3 py-1.5 rounded-xl bg-[#f06292]/15 hover:bg-[#f06292]/25 border border-[#f06292]/35 text-xs font-medium text-[#f06292] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292]"
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                Удалить выбранные ({selectedIds.size})
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="min-h-9 px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+            >
+              Снять выделение
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl bg-card border border-line">
-        {/* Gmail-style Selection Toolbar */}
-        {filtered.length > 0 && (
-          <div className="rounded-t-2xl border-b border-line bg-canvas/60 px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="relative" ref={selectionMenuRef}>
-                <div className="inline-flex items-center rounded-xl bg-card border border-line hover:border-lineStrong transition-colors">
-                  <label className="inline-flex items-center justify-center min-w-9 min-h-9 px-2.5 cursor-pointer rounded-l-xl hover:bg-cardElevated transition-colors">
-                    <input
-                      ref={masterCheckboxRef}
-                      type="checkbox"
-                      checked={masterState === 'all'}
-                      onChange={handleToggleMasterCheckbox}
-                      aria-label="Выбрать все записи в текущем списке"
-                      className="w-4 h-4 accent-[#45d1c6] rounded cursor-pointer focus:outline-none"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setSelectionMenuOpen((o) => !o)}
-                    aria-haspopup="menu"
-                    aria-expanded={selectionMenuOpen}
-                    aria-label="Варианты выбора записей"
-                    className="inline-flex items-center justify-center min-h-9 px-1.5 border-l border-line text-slate-400 hover:text-white hover:bg-cardElevated rounded-r-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
-                  >
-                    <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-
-                {selectionMenuOpen && (
-                  <div
-                    role="menu"
-                    aria-label="Варианты выбора"
-                    className="absolute left-0 top-full mt-1.5 w-52 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl py-1 z-30"
-                  >
-                    {selectionPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => handleSelectPreset(preset.id)}
-                        className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-card hover:text-white flex items-center justify-between gap-2 transition-colors cursor-pointer focus:outline-none focus-visible:bg-card"
-                      >
-                        <span>{preset.label}</span>
-                        {preset.count !== undefined && (
-                          <span className="tabular-nums text-[11px] text-slate-400">
-                            {preset.count}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {selectedIds.size > 0 && (
-                <>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#45d1c6]/10 border border-[#45d1c6]/30 text-xs tabular-nums text-[#45d1c6]">
-                    Выбрано: {selectedIds.size}
-                  </span>
-
-                  {onDeleteSelected && (
-                    <button
-                      type="button"
-                      onClick={openBulkDeleteSelected}
-                      className="inline-flex items-center gap-1.5 min-h-9 px-3 py-1.5 rounded-xl bg-[#f06292]/15 hover:bg-[#f06292]/25 border border-[#f06292]/35 text-xs font-medium text-[#f06292] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292]"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      Удалить выбранные ({selectedIds.size})
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedIds(new Set())}
-                    className="min-h-9 px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
-                  >
-                    Снять выделение
-                  </button>
-                </>
-              )}
-            </div>
-
-            <span className="text-[11px] tabular-nums text-slate-400">
-              Показано {displayed.length} из {filtered.length}
-            </span>
-          </div>
-        )}
-
+      <div className="rounded-2xl bg-card border border-line overflow-hidden">
         {displayed.length > 0 ? (
-          <div className="overflow-x-auto rounded-b-2xl">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-line bg-canvas/50 text-xs uppercase tracking-wider text-slate-400">
