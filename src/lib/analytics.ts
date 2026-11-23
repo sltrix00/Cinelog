@@ -420,41 +420,55 @@ export function computeTimeOfDayDistribution(
   };
 }
 
-function buildYearHeatmapRow(
+export function computeActivityHeatmap(
   entries: WatchEntry[],
-  year: number,
-  refDate: ReferenceDateContext
-): { year: number; cells: HeatmapCell[]; activeDays: number } {
+  selectedYear: YearFilter,
+  refDate: ReferenceDateContext = DEFAULT_REFERENCE_DATE
+): HeatmapSummary {
+  const isAll = selectedYear === 'all';
+  const scoped = isAll
+    ? entries
+    : entries.filter((e) => parseIsoDateParts(e.watched_date).year === selectedYear);
+
   const countsByDoy = new Array<number>(366).fill(0);
   const titlesByDoy = Array.from({ length: 366 }, () => [] as string[]);
 
-  for (const entry of entries) {
-    if (parseIsoDateParts(entry.watched_date).year !== year) continue;
+  for (const entry of scoped) {
     const doy = Math.min(365, Math.max(1, getDayOfYear(entry.watched_date)));
     countsByDoy[doy] += 1;
-    titlesByDoy[doy].push(entry.title);
+    const labelTitle = isAll
+      ? `${entry.title} (${entry.watched_date.slice(0, 4)})`
+      : entry.title;
+    titlesByDoy[doy].push(labelTitle);
   }
 
-  const maxDoy = year === refDate.year ? refDate.dayOfYear : year > refDate.year ? 0 : 365;
+  const labelYear = isAll ? refDate.year : selectedYear;
+  const maxDoy = !isAll && selectedYear === refDate.year ? refDate.dayOfYear : 365;
   const cells: HeatmapCell[] = [];
   let activeDays = 0;
+  let maxStreak = 0;
+  let currStreak = 0;
 
   for (let doy = 1; doy <= 365; doy++) {
-    const isFuture = year > refDate.year || (year === refDate.year && doy > maxDoy);
+    const isFuture = !isAll && selectedYear === refDate.year && doy > maxDoy;
     const count = isFuture ? 0 : countsByDoy[doy];
 
     if (!isFuture && count > 0) {
       activeDays += 1;
+      currStreak += 1;
+      if (currStreak > maxStreak) maxStreak = currStreak;
+    } else {
+      currStreak = 0;
     }
 
     const intensity: 0 | 1 | 2 | 3 =
       count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : 3;
 
-    const { dateStr } = dayOfYearToParts(year, doy);
+    const { dateStr } = dayOfYearToParts(labelYear, doy);
     cells.push({
       doy,
       dateStr,
-      dateLabel: `${formatDayOfYearRu(doy, year)} ${year}`,
+      dateLabel: isAll ? formatDayOfYearRu(doy, labelYear) : `${formatDayOfYearRu(doy, labelYear)} ${labelYear}`,
       count,
       intensity,
       isFuture,
@@ -462,73 +476,9 @@ function buildYearHeatmapRow(
     });
   }
 
-  return { year, cells, activeDays };
-}
-
-export function computeActivityHeatmap(
-  entries: WatchEntry[],
-  selectedYear: YearFilter,
-  refDate: ReferenceDateContext = DEFAULT_REFERENCE_DATE
-): HeatmapSummary {
-  if (selectedYear !== 'all') {
-    const row = buildYearHeatmapRow(entries, selectedYear, refDate);
-    let maxStreak = 0;
-    let currStreak = 0;
-    for (const cell of row.cells) {
-      if (!cell.isFuture && cell.count > 0) {
-        currStreak += 1;
-        if (currStreak > maxStreak) maxStreak = currStreak;
-      } else {
-        currStreak = 0;
-      }
-    }
-
-    return {
-      year: selectedYear,
-      years: [row],
-      cells: row.cells,
-      activeDays: row.activeDays,
-      maxStreak,
-    };
-  }
-
-  const yearSet = new Set<number>();
-  for (const entry of entries) {
-    const { year } = parseIsoDateParts(entry.watched_date);
-    if (Number.isInteger(year) && year >= 1888 && year <= 2100) {
-      yearSet.add(year);
-    }
-  }
-  const targetYearsDesc =
-    yearSet.size > 0 ? Array.from(yearSet).sort((a, b) => b - a) : [refDate.year];
-
-  const years = targetYearsDesc.map((y) => buildYearHeatmapRow(entries, y, refDate));
-  const activeDays = years.reduce((sum, r) => sum + r.activeDays, 0);
-
-  // Compute max streak chronologically across all years (handling year boundaries & gaps)
-  const yearsAsc = [...years].sort((a, b) => a.year - b.year);
-  let maxStreak = 0;
-  let currStreak = 0;
-  let prevYear: number | null = null;
-  for (const row of yearsAsc) {
-    if (prevYear !== null && row.year !== prevYear + 1) {
-      currStreak = 0;
-    }
-    for (const cell of row.cells) {
-      if (!cell.isFuture && cell.count > 0) {
-        currStreak += 1;
-        if (currStreak > maxStreak) maxStreak = currStreak;
-      } else {
-        currStreak = 0;
-      }
-    }
-    prevYear = row.year;
-  }
-
   return {
-    year: 'all',
-    years,
-    cells: years[0]?.cells ?? [],
+    year: selectedYear,
+    cells,
     activeDays,
     maxStreak,
   };

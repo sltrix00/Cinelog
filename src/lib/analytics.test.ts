@@ -202,18 +202,21 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(filtered2021.map((e) => e.id)).toEqual(['1', '3']);
   });
 
-  it('computes all-time multi-year heatmap with cross-year streak when selectedYear is all', () => {
+  it('aggregates all years into a single 365-day heatmap when selectedYear is all', () => {
     const entries = [
-      makeCsvOnlyEntry({ id: '1', watched_date: '2025-12-30' }),
-      makeCsvOnlyEntry({ id: '2', watched_date: '2025-12-31' }),
-      makeCsvOnlyEntry({ id: '3', watched_date: '2026-01-01' }),
-      makeCsvOnlyEntry({ id: '4', watched_date: '2024-06-15' }),
+      makeCsvOnlyEntry({ id: '1', watched_date: '2024-01-01', title: 'Film A' }),
+      makeCsvOnlyEntry({ id: '2', watched_date: '2025-01-01', title: 'Film B' }),
+      makeCsvOnlyEntry({ id: '3', watched_date: '2026-01-02', title: 'Film C' }),
+      makeCsvOnlyEntry({ id: '4', watched_date: '2024-12-25', title: 'Film D' }),
     ];
 
     const heatmapAll = computeActivityHeatmap(entries, 'all', DEFAULT_REFERENCE_DATE);
     expect(heatmapAll.year).toBe('all');
-    expect(heatmapAll.years?.map((y) => y.year)).toEqual([2026, 2025, 2024]);
-    expect(heatmapAll.activeDays).toBe(4);
-    expect(heatmapAll.maxStreak).toBe(3);
+    expect(heatmapAll.cells).toHaveLength(365);
+    expect(heatmapAll.cells[0].count).toBe(2);
+    expect(heatmapAll.cells[0].titles).toEqual(['Film A (2024)', 'Film B (2025)']);
+    expect(heatmapAll.activeDays).toBe(3);
+    expect(heatmapAll.maxStreak).toBe(2);
+    expect(heatmapAll.cells.every((c) => !c.isFuture)).toBe(true);
   });
 });
