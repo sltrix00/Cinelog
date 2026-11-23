@@ -30,12 +30,21 @@ grant select (
 
 -- 2. Bound array sizes on public.movies
 alter table public.movies
+  drop constraint if exists movies_genres_max_len_check;
+
+alter table public.movies
   add constraint movies_genres_max_len_check
   check (coalesce(array_length(genres, 1), 0) <= 10);
 
 alter table public.movies
+  drop constraint if exists movies_directors_max_len_check;
+
+alter table public.movies
   add constraint movies_directors_max_len_check
   check (coalesce(array_length(directors, 1), 0) <= 10);
+
+alter table public.movies
+  drop constraint if exists movies_countries_max_len_check;
 
 alter table public.movies
   add constraint movies_countries_max_len_check

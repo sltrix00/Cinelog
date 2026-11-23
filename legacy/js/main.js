@@ -374,25 +374,47 @@ function normalizeImported(movie) {
   };
 }
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILES = 20;
+const MAX_IMPORT_ROWS = 10000;
+
 async function parseFile(file) {
+  if (file.size > MAX_FILE_BYTES) {
+    throw new Error(`File "${file.name}" exceeds 10 MB limit.`);
+  }
   const content = await file.text();
   const extension = file.name.split('.').pop().toLowerCase();
   if (extension === 'txt') {
-    return parseTxt(content);
+    const rows = parseTxt(content);
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw new Error(`File "${file.name}" exceeds ${MAX_IMPORT_ROWS} row limit.`);
+    }
+    return rows;
   }
   if (extension === 'json') {
     const data = JSON.parse(content);
     const items = Array.isArray(data) ? data : data.movies || [];
+    if (items.length > MAX_IMPORT_ROWS) {
+      throw new Error(`File "${file.name}" exceeds ${MAX_IMPORT_ROWS} row limit.`);
+    }
     return items.map(normalizeImported);
   }
   if (extension === 'csv') {
-    return parseCSV(content);
+    const rows = parseCSV(content);
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw new Error(`File "${file.name}" exceeds ${MAX_IMPORT_ROWS} row limit.`);
+    }
+    return rows;
   }
   return [];
 }
 
 async function handleFiles(files) {
   if (!files || !files.length) return;
+  if (files.length > MAX_FILES) {
+    showImportMessage(`Too many files selected (maximum ${MAX_FILES}).`, 'error');
+    return;
+  }
   const allMovies = [];
   const successfulFiles = [];
   const errors = [];
@@ -400,6 +422,10 @@ async function handleFiles(files) {
   for (const file of files) {
     try {
       const movies = await parseFile(file);
+      if (allMovies.length + movies.length > MAX_IMPORT_ROWS) {
+        errors.push(`Total imported rows cannot exceed ${MAX_IMPORT_ROWS}.`);
+        break;
+      }
       if (movies.length) {
         allMovies.push(...movies);
         successfulFiles.push(file.name);

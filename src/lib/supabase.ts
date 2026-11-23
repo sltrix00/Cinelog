@@ -153,8 +153,30 @@ export async function updateAccountPassword(newPassword: string) {
 }
 
 export async function signOutAccount() {
-  if (!supabase) return;
-  await supabase.auth.signOut();
+  try {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+  } finally {
+    if (typeof window !== 'undefined') {
+      for (const storage of [window.localStorage, window.sessionStorage]) {
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < storage.length; i += 1) {
+            const key = storage.key(i);
+            if (key && /^sb-.*-auth-token/.test(key)) {
+              keysToRemove.push(key);
+            }
+          }
+          for (const key of keysToRemove) {
+            storage.removeItem(key);
+          }
+        } catch {
+          // Ignore storage access errors in restricted browser contexts
+        }
+      }
+    }
+  }
 }
 
 export async function fetchUserProfile(userId: string): Promise<ProfileRecord | null> {

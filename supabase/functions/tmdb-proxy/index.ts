@@ -7,6 +7,7 @@ import {
   normalizeGenres,
   parseReleaseYear,
   pickBestCandidate,
+  sanitizeFormulaPrefix,
   type TmdbSearchCandidate,
 } from './matching.ts';
 
@@ -22,10 +23,12 @@ const ALLOWED_SEARCH_LANGUAGES = new Set(['ru-RU', 'en-US']);
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
 const HEAVY_RATE_LIMIT_MAX_REQUESTS = 35;
+const IP_RATE_LIMIT_MAX_REQUESTS = 180;
 const MAX_REQUEST_BODY_BYTES = 262_144; // 256 KB
 const MAX_PG_INT4 = 2_147_483_647;
 const userRequestTimestamps = new Map<string, number[]>();
 const heavyRequestTimestamps = new Map<string, number[]>();
+const ipRequestTimestamps = new Map<string, number[]>();
 let warnedLegacyApiKey = false;
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -234,7 +237,7 @@ function sanitizeStringList(raw: unknown, maxItems: number, maxItemLength = 120)
   const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== 'string') continue;
-    const clean = item.trim().slice(0, maxItemLength);
+    const clean = sanitizeFormulaPrefix(item).slice(0, maxItemLength);
     if (!clean) continue;
     const key = clean.toLowerCase();
     if (seen.has(key)) continue;
@@ -394,11 +397,95 @@ function formatMovieLabel(title: string, year?: number | null): string {
   return year ? `${clean} (${year})` : clean;
 }
 
+function getClientIp(req: Request): string {
+  const cfIp = req.headers.get('cf-connecting-ip')?.trim();
+  if (cfIp) return cfIp;
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return 'unknown';
+}
+
+function decodeBase64UrlSegment(segment: string): string | null {
+  try {
+    const padded = segment.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(segment.length / 4) * 4, '=');
+    return atob(padded);
+  } catch {
+    return null;
+  }
+}
+
+function hasValidJwtClaimsPreview(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+
+  const headerRaw = decodeBase64UrlSegment(parts[0]);
+  const payloadRaw = decodeBase64UrlSegment(parts[1]);
+  if (!headerRaw || !payloadRaw) return false;
+
+  try {
+    const header = JSON.parse(headerRaw) as Record<string, unknown>;
+    const payload = JSON.parse(payloadRaw) as Record<string, unknown>;
+    if (!header || typeof header !== 'object' || typeof header.alg !== 'string' || !header.alg.trim()) {
+      return false;
+    }
+    if (!payload || typeof payload !== 'object') {
+      return false;
+    }
+    if (typeof payload.sub !== 'string' || !UUID_REGEX.test(payload.sub)) {
+      return false;
+    }
+    if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) || payload.exp * 1000 <= Date.now() - 5000) {
+      return false;
+    }
+    if (payload.role !== undefined && payload.role !== 'authenticated') {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readBoundedRequestBody(
+  req: Request,
+  maxBytes: number
+): Promise<{ ok: true; text: string } | { ok: false; byteLength: number }> {
+  if (!req.body) {
+    return { ok: true, text: '' };
+  }
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return { ok: false, byteLength: totalBytes };
+    }
+    chunks.push(value);
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, text: new TextDecoder().decode(combined) };
+}
+
 async function verifyCaller(req: Request): Promise<{ userId: string } | null> {
   const authHeader = req.headers.get('Authorization') ?? '';
   const bearerMatch = authHeader.match(/^Bearer\s+(\S+)$/i);
   const token = bearerMatch ? bearerMatch[1].trim() : '';
-  if (!token || token.length < 20 || token.length > 4096 || token.split('.').length !== 3) {
+  if (!token || token.length < 20 || token.length > 4096 || !hasValidJwtClaimsPreview(token)) {
     return null;
   }
 
@@ -473,9 +560,10 @@ async function handleSearch(reqBody: SearchRequest) {
 
 async function searchBestTmdbMovie(
   title: string,
-  year?: number | null
+  year?: number | null,
+  maxAttempts = 4
 ): Promise<TmdbSearchCandidate | null> {
-  const attempts = buildSearchAttempts(title, year);
+  const attempts = buildSearchAttempts(title, year, maxAttempts);
   if (attempts.length === 0) return null;
 
   const allCandidates: TmdbSearchCandidate[] = [];
@@ -583,12 +671,7 @@ async function enrichAndCacheByTmdbId(
 
   if (cached && !options?.forceRefresh) {
     const ageMs = Date.now() - new Date(cached.updated_at).getTime();
-    if (
-      ageMs < CACHE_TTL_MS &&
-      cached.runtime_minutes !== null &&
-      cached.directors.length > 0 &&
-      cached.original_title !== null
-    ) {
+    if (ageMs < CACHE_TTL_MS && cached.original_title !== null) {
       return cached;
     }
   }
@@ -612,7 +695,7 @@ async function getOrCreateFallbackMovie(
   item: BatchItem,
   userId: string
 ): Promise<MovieRow> {
-  const cleanTitle = item.title.trim().slice(0, 500);
+  const cleanTitle = sanitizeFormulaPrefix(item.title).slice(0, 500);
   if (!cleanTitle) {
     throw new Error('Movie title is required');
   }
@@ -697,7 +780,9 @@ async function findCachedTmdbMovieByTitle(
     .from('movies')
     .select(PUBLIC_MOVIE_COLUMNS)
     .not('tmdb_id', 'is', null)
-    .ilike('title', escapedTitle);
+    .ilike('title', escapedTitle)
+    .order('release_year', { ascending: false, nullsFirst: false })
+    .order('tmdb_id', { ascending: true });
   const { data: byTitle, error: byTitleErr } = await (validYear
     ? titleQuery.eq('release_year', validYear)
     : titleQuery
@@ -714,7 +799,9 @@ async function findCachedTmdbMovieByTitle(
     .from('movies')
     .select(PUBLIC_MOVIE_COLUMNS)
     .not('tmdb_id', 'is', null)
-    .ilike('original_title', escapedTitle);
+    .ilike('original_title', escapedTitle)
+    .order('release_year', { ascending: false, nullsFirst: false })
+    .order('tmdb_id', { ascending: true });
   const { data: byOrig, error: byOrigErr } = await (validYear
     ? origQuery.eq('release_year', validYear)
     : origQuery
@@ -1164,6 +1251,12 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Method not allowed' }, 405, cors.headers);
   }
 
+  const clientIp = getClientIp(req);
+  if (checkSlidingRateLimit(ipRequestTimestamps, clientIp, IP_RATE_LIMIT_MAX_REQUESTS)) {
+    logSecurityEvent('rate_limited', { scope: 'ip', clientIp });
+    return jsonResponse({ error: 'Too many requests. Please wait a minute and try again.' }, 429, cors.headers);
+  }
+
   const caller = await verifyCaller(req);
   if (!caller) {
     logSecurityEvent('auth_failed', { origin: req.headers.get('Origin') ?? null });
@@ -1186,13 +1279,16 @@ Deno.serve(async (req: Request) => {
 
   let body: ProxyRequest;
   try {
-    const rawText = await req.text();
-    const byteLength = new TextEncoder().encode(rawText).byteLength;
-    if (byteLength > MAX_REQUEST_BODY_BYTES) {
-      logSecurityEvent('payload_rejected', { userId: caller.userId, reason: 'body_bytes_exceeded', byteLength });
+    const bodyResult = await readBoundedRequestBody(req, MAX_REQUEST_BODY_BYTES);
+    if (!bodyResult.ok) {
+      logSecurityEvent('payload_rejected', {
+        userId: caller.userId,
+        reason: 'body_bytes_exceeded',
+        byteLength: bodyResult.byteLength,
+      });
       return jsonResponse({ error: 'Request payload too large' }, 413, cors.headers);
     }
-    const parsed = JSON.parse(rawText);
+    const parsed = JSON.parse(bodyResult.text);
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
@@ -1217,6 +1313,10 @@ Deno.serve(async (req: Request) => {
     const serviceClient = getServiceClient();
 
     if (body.action === 'enrich') {
+      if (checkSlidingRateLimit(heavyRequestTimestamps, caller.userId, HEAVY_RATE_LIMIT_MAX_REQUESTS)) {
+        logSecurityEvent('rate_limited', { userId: caller.userId, scope: 'enrich' });
+        return jsonResponse({ error: 'Too many enrich requests. Please wait a minute and try again.' }, 429, cors.headers);
+      }
       const tmdbId = parsePositiveInt4(body.tmdbId);
       if (tmdbId === null) {
         return jsonResponse({ error: 'tmdbId must be a valid positive integer' }, 400, cors.headers);
@@ -1239,10 +1339,10 @@ Deno.serve(async (req: Request) => {
             typeof it === 'object' &&
             it !== null &&
             typeof (it as { title?: unknown }).title === 'string' &&
-            (it as { title: string }).title.trim().length > 0
+            sanitizeFormulaPrefix((it as { title: string }).title).length > 0
         )
         .map((it) => ({
-          title: it.title.trim().slice(0, 500),
+          title: sanitizeFormulaPrefix(it.title).slice(0, 500),
           year: typeof it.year === 'number' && Number.isInteger(it.year) ? it.year : null,
           tmdbId: parsePositiveInt4(it.tmdbId),
           imdbId: typeof it.imdbId === 'string' ? it.imdbId : null,
@@ -1285,9 +1385,28 @@ Deno.serve(async (req: Request) => {
         lastErrorMessage: null,
       };
 
-      const movies = await runWithConcurrency(items, BATCH_CONCURRENCY, (item) =>
+      const uniqueItems: BatchItem[] = [];
+      const uniqueIndexByKey = new Map<string, number>();
+      const itemUniqueIndices = items.map((item) => {
+        const imdb = normalizeImdbId(item.imdbId);
+        const key = item.tmdbId
+          ? `tmdb:${item.tmdbId}`
+          : imdb
+            ? `imdb:${imdb}`
+            : `ty:${item.title.toLowerCase()}:${item.year ?? 0}`;
+        let uniqueIdx = uniqueIndexByKey.get(key);
+        if (uniqueIdx === undefined) {
+          uniqueIdx = uniqueItems.length;
+          uniqueIndexByKey.set(key, uniqueIdx);
+          uniqueItems.push(item);
+        }
+        return uniqueIdx;
+      });
+
+      const uniqueMovies = await runWithConcurrency(uniqueItems, BATCH_CONCURRENCY, (item) =>
         resolveSingleBatchItem(serviceClient, item, language, sharedState, caller.userId)
       );
+      const movies = itemUniqueIndices.map((uniqueIdx) => uniqueMovies[uniqueIdx]);
 
       let matched = 0;
       const unmatchedTitles: string[] = [];

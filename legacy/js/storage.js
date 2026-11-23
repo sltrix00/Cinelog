@@ -107,7 +107,7 @@ export async function verifyPassword(password, storedHash) {
     if (parts.length !== 4) return false;
     const iterations = Number.parseInt(parts[1], 10);
     const saltHex = parts[2];
-    if (!Number.isInteger(iterations) || iterations < 10000 || !/^[0-9a-f]+$/i.test(saltHex) || saltHex.length % 2 !== 0) {
+    if (!Number.isInteger(iterations) || iterations < 10000 || iterations > 600000 || !/^[0-9a-f]+$/i.test(saltHex) || saltHex.length % 2 !== 0) {
       return false;
     }
     const computed = await hashPassword(password, saltHex, iterations);

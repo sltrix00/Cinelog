@@ -180,7 +180,7 @@ export function AuthModal({
         } else if (isRepeatedSignupResponse(data.user)) {
           setMessage({
             type: 'error',
-            text: 'Аккаунт с этим email уже существует (возможно, вы регистрировались через Google). Войдите через Google или по паролю — либо воспользуйтесь восстановлением пароля.',
+            text: 'Если аккаунт с этим email уже существует (например, через Google), войдите в аккаунт или воспользуйтесь восстановлением пароля.',
           });
         } else {
           setMessage({

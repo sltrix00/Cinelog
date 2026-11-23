@@ -6,6 +6,7 @@ import {
   normalizeGenres,
   normalizeTitleForComparison,
   pickBestCandidate,
+  sanitizeFormulaPrefix,
 } from '../../supabase/functions/tmdb-proxy/matching.ts';
 
 describe('TMDB matching & metadata normalization', () => {
@@ -215,5 +216,19 @@ describe('TMDB matching & metadata normalization', () => {
         { job: 'Director', name: 'Christopher Nolan' },
       ])
     ).toEqual(['Christopher Nolan']);
+  });
+
+  it('caps search attempts when maxAttempts is provided and sanitizes formula prefixes', () => {
+    const capped = buildSearchAttempts('Ананасовый экспресс: сижу, курю', 2008, 4);
+    expect(capped).toHaveLength(4);
+    expect(capped[0]).toEqual({
+      query: 'Ананасовый экспресс: сижу, курю',
+      year: 2008,
+      language: 'ru-RU',
+    });
+
+    expect(sanitizeFormulaPrefix('=CMD("calc")')).toBe('CMD("calc")');
+    expect(sanitizeFormulaPrefix('@@HYPERLINK("x")')).toBe('HYPERLINK("x")');
+    expect(sanitizeFormulaPrefix('  Дюна: Часть вторая  ')).toBe('Дюна: Часть вторая');
   });
 });

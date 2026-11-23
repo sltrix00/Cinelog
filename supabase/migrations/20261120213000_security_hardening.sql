@@ -76,8 +76,17 @@ alter policy "movies: readable by signed-in users"
 
 -- 6. Bound profiles.preferences size and restrict movies.poster_url host
 alter table public.profiles
+  drop constraint if exists profiles_preferences_max_size_check;
+
+alter table public.profiles
   add constraint profiles_preferences_max_size_check
   check (octet_length(preferences::text) <= 32768);
+
+alter table public.movies
+  drop constraint if exists movies_poster_url_check;
+
+alter table public.movies
+  drop constraint if exists movies_poster_url_tmdb_host_check;
 
 alter table public.movies
   add constraint movies_poster_url_tmdb_host_check

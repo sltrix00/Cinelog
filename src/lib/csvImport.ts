@@ -69,12 +69,16 @@ export function normalizeTimeString(raw: unknown): string | null {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+export function stripFormulaPrefix(value: string): string {
+  return value.replace(/^(?:[=@\t\r]+|[+-]+(?=[A-Za-z=@\t\r/\\]))+/, '').trim();
+}
+
 function sanitizeMetaArray(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
   for (const val of raw) {
     if (typeof val !== 'string') continue;
-    const clean = val.trim().slice(0, 100);
+    const clean = stripFormulaPrefix(val).slice(0, 100);
     if (clean) out.push(clean);
     if (out.length >= 10) break;
   }
@@ -171,7 +175,7 @@ function splitMultiValue(raw?: string): string[] {
   if (!raw) return [];
   return raw
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => stripFormulaPrefix(s))
     .filter(Boolean);
 }
 
@@ -203,7 +207,7 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
     });
 
     if (detectedSource === 'csv_imdb') {
-      const title = row['title'] || row['original title'] || '';
+      const title = stripFormulaPrefix(row['title'] || row['original title'] || '');
       if (!title) continue;
       const imdbId = /^tt\d{5,10}$/.test(row['const'] ?? '') ? row['const'] : null;
       const releaseYear = Number.parseInt(row['year'] ?? '', 10) || null;
@@ -238,7 +242,7 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
     }
 
     // Letterboxd / generic CSV
-    const title = row['name'] || row['title'] || row['movie'] || '';
+    const title = stripFormulaPrefix(row['name'] || row['title'] || row['movie'] || '');
     if (!title) continue;
 
     const releaseYear = Number.parseInt(row['year'] || row['movieyear'] || row['release_year'] || '', 10) || null;
@@ -353,7 +357,8 @@ export function parseRussianTxtDiary(content: string): ParsedImportRow[] {
     const titleMatch = titlePart.match(/^(.+?)\s*\((\d{4})\)\s*$/);
     if (!titleMatch) continue;
 
-    const title = titleMatch[1].trim();
+    const title = stripFormulaPrefix(titleMatch[1]);
+    if (!title) continue;
     const releaseYear = Number.parseInt(titleMatch[2], 10);
     const watchedDate = parseTxtDate(infoPart, currentYear) ?? `${currentYear}-01-01`;
     const watchedTime = parseTxtTime(infoPart);
@@ -408,7 +413,7 @@ export function parseJsonImport(content: string): ParsedImportRow[] {
       }
       const item = raw as Record<string, unknown>;
       const rawTitle = typeof item.title === 'string' ? item.title : typeof item.name === 'string' ? item.name : '';
-      const title = rawTitle.trim().slice(0, 500);
+      const title = stripFormulaPrefix(rawTitle).slice(0, 500);
       if (!title) return null;
 
       const parsedYear = Number.parseInt(String(item.release_year ?? item.movieYear ?? item.year ?? ''), 10);

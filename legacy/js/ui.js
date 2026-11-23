@@ -164,13 +164,14 @@ export function fillYearFilter() {
 
   const years = [...new Set(appState.movies
     .filter(movie => movie.watchedAt)
-    .map(movie => new Date(movie.watchedAt).getFullYear()))]
+    .map(movie => new Date(movie.watchedAt).getFullYear())
+    .filter(year => Number.isInteger(year) && year >= 1888 && year <= 2100))]
     .sort((a, b) => b - a);
   const selectedYear = appState.filters.watchedYear;
 
   select.innerHTML = '<option value="">All Years</option>' +
     years.map(year =>
-      `<option value="${year}"${String(selectedYear) === String(year) ? ' selected' : ''}>${year}</option>`
+      `<option value="${escapeHTML(year)}"${String(selectedYear) === String(year) ? ' selected' : ''}>${escapeHTML(year)}</option>`
     ).join('');
 
   if (selectedYear && !years.includes(Number(selectedYear))) {

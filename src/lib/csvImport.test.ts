@@ -6,6 +6,7 @@ import {
   parseJsonImport,
   parseRussianTxtDiary,
   parsedRowsToLocalWatchEntries,
+  stripFormulaPrefix,
 } from './csvImport';
 import { computeTimeOfDayDistribution } from './analytics';
 import type { WatchEntry } from '../types/cinelog';
@@ -212,5 +213,38 @@ describe('Smart CSV & Diary Import Pipeline', () => {
     expect(rows[1].tmdbId).toBe(603);
     expect(rows[1].imdbId).toBe('tt0133093');
     expect(rows[1].runtimeMinutes).toBe(136);
+  });
+
+  it('neutralizes spreadsheet formula injection prefixes while preserving legitimate titles', () => {
+    expect(stripFormulaPrefix('=CMD("calc")')).toBe('CMD("calc")');
+    expect(stripFormulaPrefix('@SUM(A1:A2)')).toBe('SUM(A1:A2)');
+    expect(stripFormulaPrefix('+HYPERLINK("https://evil.example")')).toBe('HYPERLINK("https://evil.example")');
+    expect(stripFormulaPrefix('-IMPORTXML("https://evil.example","//a")')).toBe('IMPORTXML("https://evil.example","//a")');
+    expect(stripFormulaPrefix('8½')).toBe('8½');
+    expect(stripFormulaPrefix('13-й район')).toBe('13-й район');
+    expect(stripFormulaPrefix('+1')).toBe('+1');
+
+    const csv = [
+      'Name,Year,Watched Date,Directors,Genres',
+      '"=CMD(""calc"")",2024,2026-05-01,"@Director","+Drama"',
+    ].join('\n');
+    const csvRows = parseCsvContent(csv);
+    expect(csvRows).toHaveLength(1);
+    expect(csvRows[0].title).toBe('CMD("calc")');
+    expect(csvRows[0].directors).toEqual(['Director']);
+    expect(csvRows[0].genres).toEqual(['Drama']);
+
+    const jsonRows = parseJsonImport(
+      JSON.stringify([
+        {
+          title: '===HYPERLINK("https://evil.example")',
+          watched_date: '2026-05-02',
+          directors: ['=Author'],
+        },
+      ])
+    );
+    expect(jsonRows).toHaveLength(1);
+    expect(jsonRows[0].title).toBe('HYPERLINK("https://evil.example")');
+    expect(jsonRows[0].directors).toEqual(['Author']);
   });
 });

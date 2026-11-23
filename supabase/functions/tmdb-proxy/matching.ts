@@ -98,6 +98,10 @@ export function stripPunctuationForSearch(title: string): string {
     .trim();
 }
 
+export function sanitizeFormulaPrefix(value: string): string {
+  return value.replace(/^(?:[=@\t\r]+|[+-]+(?=[A-Za-z=@\t\r/\\]))+/, '').trim();
+}
+
 export function extractMainTitleBeforeSubtitle(title: string): string | null {
   const cleaned = cleanSearchQuery(title);
   if (!cleaned) return null;
@@ -108,7 +112,11 @@ export function extractMainTitleBeforeSubtitle(title: string): string | null {
   return left;
 }
 
-export function buildSearchAttempts(title: string, year?: number | null): SearchAttempt[] {
+export function buildSearchAttempts(
+  title: string,
+  year?: number | null,
+  maxAttempts?: number
+): SearchAttempt[] {
   const raw = title.replace(/\s+/g, ' ').trim();
   if (!raw) return [];
 
@@ -164,6 +172,9 @@ export function buildSearchAttempts(title: string, year?: number | null): Search
     pushAttempt(mainTitle, undefined, primaryLang);
   }
 
+  if (typeof maxAttempts === 'number' && maxAttempts > 0) {
+    return attempts.slice(0, maxAttempts);
+  }
   return attempts;
 }
 
