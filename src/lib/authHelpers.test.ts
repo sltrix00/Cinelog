@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createIsolatedAuthStorage,
   getAuthRedirectUrl,
   isRepeatedSignupResponse,
   localizeAuthError,
@@ -167,27 +166,6 @@ describe('parseAuthCallbackError', () => {
   });
 });
 
-function createMemoryStorage(initial: Record<string, string> = {}) {
-  const map = new Map<string, string>(Object.entries(initial));
-  return {
-    get length() {
-      return map.size;
-    },
-    key(index: number) {
-      return Array.from(map.keys())[index] ?? null;
-    },
-    getItem(key: string) {
-      return map.has(key) ? map.get(key)! : null;
-    },
-    setItem(key: string, value: string) {
-      map.set(key, value);
-    },
-    removeItem(key: string) {
-      map.delete(key);
-    },
-  };
-}
-
 describe('isRepeatedSignupResponse', () => {
   it('detects obfuscated existing-user signup responses with empty identities', () => {
     expect(isRepeatedSignupResponse({ identities: [] })).toBe(true);
@@ -207,70 +185,5 @@ describe('localizeAuthError PKCE and expired link handling', () => {
     expect(localizeAuthError('PKCE code verifier not found in storage.')).toContain(
       'Не удалось завершить автоматический вход по ссылке'
     );
-  });
-});
-
-describe('createIsolatedAuthStorage', () => {
-  it('isolates session tokens to sessionStorage and purges residual localStorage session tokens', () => {
-    const sessionStorage = createMemoryStorage();
-    const localStorage = createMemoryStorage({
-      'sb-proj-auth-token': '{"access_token":"stale"}',
-      'unrelated-key': 'keep-me',
-    });
-
-    const storage = createIsolatedAuthStorage({ sessionStorage, localStorage })!;
-    expect(localStorage.getItem('sb-proj-auth-token')).toBeNull();
-    expect(localStorage.getItem('unrelated-key')).toBe('keep-me');
-
-    storage.setItem('sb-proj-auth-token', '{"access_token":"fresh"}');
-    expect(sessionStorage.getItem('sb-proj-auth-token')).toBe('{"access_token":"fresh"}');
-    expect(localStorage.getItem('sb-proj-auth-token')).toBeNull();
-    expect(storage.getItem('sb-proj-auth-token')).toBe('{"access_token":"fresh"}');
-  });
-
-  it('persists PKCE code verifiers across browser tabs without deleting them on read', () => {
-    const tab1Session = createMemoryStorage();
-    const sharedLocal = createMemoryStorage();
-    const tab1Storage = createIsolatedAuthStorage({
-      sessionStorage: tab1Session,
-      localStorage: sharedLocal,
-    })!;
-
-    tab1Storage.setItem('sb-proj-auth-token-code-verifier', 'verifier-1');
-    tab1Storage.setItem('sb-proj-auth-token-flow-123-code-verifier', 'verifier-slot-123');
-    expect(sharedLocal.getItem('sb-proj-auth-token-code-verifier')).toBe('verifier-1');
-    expect(sharedLocal.getItem('sb-proj-auth-token-flow-123-code-verifier')).toBe(
-      'verifier-slot-123'
-    );
-
-    // Confirmation link opens in a new tab with an empty sessionStorage
-    const tab2Session = createMemoryStorage();
-    const tab2Storage = createIsolatedAuthStorage({
-      sessionStorage: tab2Session,
-      localStorage: sharedLocal,
-    })!;
-
-    // GoTrueClient reads the verifier twice (_isPKCECallback + _exchangeCodeForSession)
-    expect(tab2Storage.getItem('sb-proj-auth-token-code-verifier')).toBe('verifier-1');
-    expect(tab2Storage.getItem('sb-proj-auth-token-code-verifier')).toBe('verifier-1');
-    expect(tab2Storage.getItem('sb-proj-auth-token-flow-123-code-verifier')).toBe(
-      'verifier-slot-123'
-    );
-    expect(tab2Storage.getItem('sb-proj-auth-token-flow-123-code-verifier')).toBe(
-      'verifier-slot-123'
-    );
-
-    tab2Storage.removeItem('sb-proj-auth-token-code-verifier');
-    tab2Storage.removeItem('sb-proj-auth-token-flow-123-code-verifier');
-    expect(sharedLocal.getItem('sb-proj-auth-token-code-verifier')).toBeNull();
-    expect(tab2Session.getItem('sb-proj-auth-token-code-verifier')).toBeNull();
-    expect(tab2Storage.getItem('sb-proj-auth-token-code-verifier')).toBeNull();
-    expect(tab2Storage.getItem('sb-proj-auth-token-flow-123-code-verifier')).toBeNull();
-
-    // Same-tab removal also clears tab1's sessionStorage copy
-    tab1Storage.removeItem('sb-proj-auth-token-code-verifier');
-    tab1Storage.removeItem('sb-proj-auth-token-flow-123-code-verifier');
-    expect(tab1Session.getItem('sb-proj-auth-token-code-verifier')).toBeNull();
-    expect(tab1Session.getItem('sb-proj-auth-token-flow-123-code-verifier')).toBeNull();
   });
 });

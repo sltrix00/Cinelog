@@ -6,7 +6,6 @@ import {
   type User,
 } from '@supabase/supabase-js';
 import {
-  createIsolatedAuthStorage,
   getAuthRedirectUrl,
   localizeAuthError,
   parseGoogleProviderEnabled,
@@ -41,7 +40,6 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         autoRefreshToken: true,
         detectSessionInUrl: true,
         flowType: 'pkce',
-        storage: createIsolatedAuthStorage(),
       },
     })
   : null;
