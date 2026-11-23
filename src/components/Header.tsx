@@ -61,8 +61,8 @@ export function Header({
   const accountLabel = formatAccountButtonLabel(userEmail, userNickname);
   const accountTitle = userEmail
     ? userNickname?.trim()
-      ? `${userNickname.trim()} (${userEmail})`
-      : `Профиль (${userEmail})`
+      ? `Профиль · ${userNickname.trim()}`
+      : 'Открыть профиль'
     : 'Войти или зарегистрироваться';
 
   const logoContent = (

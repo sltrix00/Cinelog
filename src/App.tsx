@@ -30,7 +30,7 @@ import {
 import { parseAuthCallbackError } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
-import { resolveProfileNickname } from './lib/headerHelpers';
+import { formatDashboardSubtitle, resolveProfileNickname } from './lib/headerHelpers';
 import {
   batchUpsertImportedRows,
   deleteWatchLogById,
@@ -571,9 +571,7 @@ export function App() {
                     Дашборд просмотров
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    {isDemoMode
-                      ? 'Интерактивная статистика по архиву 2024–2026 годов (Demo Mode)'
-                      : `Персональный облачный журнал · ${userEmail}`}
+                    {formatDashboardSubtitle(isDemoMode, userNickname)}
                   </p>
                 </div>
 
@@ -710,15 +708,15 @@ export function App() {
           setAuthNotice(null);
         }}
         userEmail={userEmail}
-        isDemoMode={isDemoMode}
+        userNickname={userNickname}
+        watchCount={entries.length}
+        uniqueFilmsCount={kpis.allTimeUnique}
         isPasswordRecovery={isPasswordRecovery}
         initialMode={authModalInitialMode}
         initialNotice={authNotice}
-        onEnableDemoMode={() => {
-          setIsDemoMode(true);
-          setShowDemoDashboard(true);
-          setEntries(DEMO_ENTRIES);
-          setDemoWasModified(false);
+        onNicknameUpdated={(next) => {
+          setUserNickname(next);
+          showToast(next ? `Никнейм «${next}» сохранён.` : 'Никнейм удалён.');
         }}
         onAuthSuccess={() => {
           setAuthNotice(null);

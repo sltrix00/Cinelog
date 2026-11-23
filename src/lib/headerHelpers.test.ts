@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatAccountButtonLabel,
+  formatDashboardSubtitle,
   formatYearFilterLabel,
+  getProfileInitials,
+  maskEmailAsPassword,
   resolveProfileNickname,
   sortYearsDesc,
+  validateNicknameInput,
 } from './headerHelpers';
 
 describe('resolveProfileNickname', () => {
@@ -70,5 +74,83 @@ describe('sortYearsDesc', () => {
       2025,
       2024,
     ]);
+  });
+});
+
+describe('formatDashboardSubtitle', () => {
+  it('returns demo subtitle in demo mode regardless of nickname', () => {
+    expect(formatDashboardSubtitle(true, 'olzhas')).toBe(
+      'Интерактивная статистика по архиву 2024–2026 годов (Demo Mode)'
+    );
+  });
+
+  it('omits email and leaves only base text when user has no nickname', () => {
+    expect(formatDashboardSubtitle(false, null)).toBe('Персональный облачный журнал');
+    expect(formatDashboardSubtitle(false, '   ')).toBe('Персональный облачный журнал');
+  });
+
+  it('appends trimmed nickname when set', () => {
+    expect(formatDashboardSubtitle(false, '  cine_fan  ')).toBe(
+      'Персональный облачный журнал · cine_fan'
+    );
+  });
+});
+
+describe('validateNicknameInput', () => {
+  it('allows empty/whitespace input to clear nickname', () => {
+    expect(validateNicknameInput('')).toEqual({ valid: true, normalized: null, error: null });
+    expect(validateNicknameInput('   ')).toEqual({ valid: true, normalized: null, error: null });
+  });
+
+  it('rejects too short, too long, or invalid characters', () => {
+    expect(validateNicknameInput('ab')).toEqual({
+      valid: false,
+      normalized: null,
+      error: 'Минимум 3 символа.',
+    });
+    expect(validateNicknameInput('a'.repeat(33))).toEqual({
+      valid: false,
+      normalized: null,
+      error: 'Максимум 32 символа.',
+    });
+    expect(validateNicknameInput('имя_юзера')).toEqual({
+      valid: false,
+      normalized: null,
+      error: 'Допустимы только латинские буквы, цифры, _, . и -.',
+    });
+    expect(validateNicknameInput('bad nick')).toEqual({
+      valid: false,
+      normalized: null,
+      error: 'Допустимы только латинские буквы, цифры, _, . и -.',
+    });
+  });
+
+  it('accepts valid trimmed nicknames', () => {
+    expect(validateNicknameInput('  Olzhas_01.film-club  ')).toEqual({
+      valid: true,
+      normalized: 'Olzhas_01.film-club',
+      error: null,
+    });
+  });
+});
+
+describe('maskEmailAsPassword', () => {
+  it('masks emails with bullet characters bounded between 10 and 20 chars', () => {
+    expect(maskEmailAsPassword('a@b.c')).toBe('•'.repeat(10));
+    expect(maskEmailAsPassword('user@example.com')).toBe('•'.repeat(16));
+    expect(maskEmailAsPassword('very.long.email.address@example.com')).toBe('•'.repeat(20));
+  });
+});
+
+describe('getProfileInitials', () => {
+  it('returns null when nickname is empty', () => {
+    expect(getProfileInitials(null)).toBeNull();
+    expect(getProfileInitials('   ')).toBeNull();
+  });
+
+  it('extracts up to 2 uppercase alphanumeric characters', () => {
+    expect(getProfileInitials('olzhas_26')).toBe('OL');
+    expect(getProfileInitials('__ab')).toBe('AB');
+    expect(getProfileInitials('...')).toBe('..');
   });
 });

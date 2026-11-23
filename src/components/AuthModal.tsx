@@ -1,6 +1,22 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import {
+  AtSign,
+  Check,
+  CircleUserRound,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogOut,
+  Mail,
+  X,
+} from 'lucide-react';
 import { isRepeatedSignupResponse, localizeAuthError } from '../lib/authHelpers';
+import {
+  getProfileInitials,
+  maskEmailAsPassword,
+  validateNicknameInput,
+} from '../lib/headerHelpers';
+import { updateUserNickname } from '../lib/profileService';
 import {
   isSupabaseConfigured,
   resetPasswordByEmail,
@@ -15,11 +31,13 @@ interface AuthModalProps {
   open: boolean;
   onClose: () => void;
   userEmail: string | null;
-  isDemoMode: boolean;
+  userNickname?: string | null;
+  watchCount?: number;
+  uniqueFilmsCount?: number;
   isPasswordRecovery?: boolean;
   initialMode?: 'login' | 'register';
   initialNotice?: { type: 'error' | 'success'; text: string } | null;
-  onEnableDemoMode: () => void;
+  onNicknameUpdated?: (nickname: string | null) => void;
   onAuthSuccess: () => void;
   onPasswordRecoveryComplete?: () => void;
   onCancelPasswordRecovery?: () => void;
@@ -54,11 +72,13 @@ export function AuthModal({
   open,
   onClose,
   userEmail,
-  isDemoMode,
+  userNickname = null,
+  watchCount,
+  uniqueFilmsCount,
   isPasswordRecovery = false,
   initialMode = 'login',
   initialNotice = null,
-  onEnableDemoMode,
+  onNicknameUpdated,
   onAuthSuccess,
   onPasswordRecoveryComplete,
   onCancelPasswordRecovery,
@@ -73,19 +93,37 @@ export function AuthModal({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
+  const [nicknameDraft, setNicknameDraft] = useState(userNickname ?? '');
+  const [savingNickname, setSavingNickname] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
+
   useEffect(() => {
     if (!open) return;
+    setShowEmail(false);
     if (initialNotice) {
       setMode('login');
       setMessage(initialNotice);
     } else if (!isPasswordRecovery) {
       setMode(initialMode);
+      setMessage(null);
     }
   }, [open, initialMode, initialNotice, isPasswordRecovery]);
 
+  useEffect(() => {
+    if (!open) return;
+    setNicknameDraft(userNickname ?? '');
+  }, [open, userNickname]);
+
   if (!open) return null;
 
-  const busy = loading || googleLoading;
+  const busy = loading || googleLoading || savingNickname || loggingOut;
+  const isProfileView = !isPasswordRecovery && Boolean(userEmail);
+
+  const nicknameValidation = validateNicknameInput(nicknameDraft);
+  const currentNickname = userNickname?.trim() || null;
+  const hasNicknameChanges = nicknameValidation.normalized !== currentNickname;
+  const profileInitials = getProfileInitials(currentNickname);
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -219,81 +257,221 @@ export function AuthModal({
   };
 
   const handleLogout = async () => {
-    await signOutAccount();
-    onEnableDemoMode();
-    handleClose();
+    setLoggingOut(true);
+    setMessage(null);
+    try {
+      await signOutAccount();
+      handleClose();
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : '';
+      setMessage({
+        type: 'error',
+        text: raw ? localizeAuthError(raw) : 'Не удалось выйти из аккаунта.',
+      });
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  const handleNicknameSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (savingNickname || loggingOut) return;
+
+    if (!nicknameValidation.valid) {
+      setMessage({
+        type: 'error',
+        text: nicknameValidation.error ?? 'Некорректный никнейм.',
+      });
+      return;
+    }
+
+    if (!hasNicknameChanges) return;
+
+    setSavingNickname(true);
+    setMessage(null);
+    try {
+      const saved = await updateUserNickname(nicknameDraft);
+      setNicknameDraft(saved ?? '');
+      onNicknameUpdated?.(saved);
+      setMessage({
+        type: 'success',
+        text: saved ? 'Никнейм сохранён.' : 'Никнейм удалён.',
+      });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Не удалось обновить никнейм.',
+      });
+    } finally {
+      setSavingNickname(false);
+    }
   };
 
   const modalTitle = isPasswordRecovery
     ? 'Новый пароль'
-    : userEmail
-      ? 'Ваш аккаунт'
-      : mode === 'login'
-        ? 'Вход в аккаунт'
-        : mode === 'register'
-          ? 'Создать аккаунт'
-          : 'Восстановление пароля';
+    : mode === 'login'
+      ? 'Вход в аккаунт'
+      : mode === 'register'
+        ? 'Создать аккаунт'
+        : 'Восстановление пароля';
 
   const modalSubtitle = isPasswordRecovery
     ? 'Придумайте новый пароль для входа в Cinelog'
-    : userEmail
-      ? 'Облачная синхронизация вашего киножурнала'
-      : mode === 'reset'
-        ? 'Отправим ссылку для сброса пароля на ваш email'
-        : 'Синхронизация вашего киножурнала в облаке';
+    : mode === 'reset'
+      ? 'Отправим ссылку для сброса пароля на ваш email'
+      : 'Синхронизация вашего киножурнала в облаке';
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isPasswordRecovery) handleClose();
+        if (e.target === e.currentTarget && !isPasswordRecovery && !busy) handleClose();
       }}
     >
       <div className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
-        <div className="relative px-6 pt-6 pb-2 text-center">
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label="Закрыть"
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-          <h3 className="text-lg font-semibold tracking-tight text-white">{modalTitle}</h3>
-          <p className="text-xs text-slate-400 mt-1">{modalSubtitle}</p>
-        </div>
+        {isProfileView && userEmail ? (
+          <>
+            {/* Profile Hero Header */}
+            <div className="relative px-6 pt-6 pb-5 border-b border-line bg-gradient-to-b from-[#45d1c6]/[0.07] via-[#f06292]/[0.04] to-transparent">
+              <div
+                className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[#45d1c6]/60 to-transparent"
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleClose}
+                aria-label="Закрыть"
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-        <div className="px-6 pb-6 pt-3 space-y-4">
-          {isPasswordRecovery ? (
-            <form onSubmit={handlePasswordRecoverySubmit} className="space-y-3.5">
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Новый пароль</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  maxLength={128}
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Минимум 8 символов (буквы и цифры)"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
-                />
+              <div className="flex flex-col items-center text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f06292]/35 via-[#45d1c6]/25 to-[#d6b85a]/30 p-[1.5px] shadow-lg">
+                  <div className="w-full h-full rounded-[14.5px] bg-canvas flex items-center justify-center">
+                    {profileInitials ? (
+                      <span className="text-lg font-bold tracking-wider text-white">
+                        {profileInitials}
+                      </span>
+                    ) : (
+                      <CircleUserRound className="w-7 h-7 text-[#45d1c6]" />
+                    )}
+                  </div>
+                </div>
+
+                <h3 className="mt-3 text-lg font-bold tracking-tight text-white">
+                  {currentNickname ?? 'Профиль'}
+                </h3>
+
+                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#45d1c6]/10 border border-[#45d1c6]/25 text-[11px] font-medium text-[#45d1c6]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#45d1c6] animate-pulse" />
+                  <span>Облачная синхронизация</span>
+                </div>
+
+                {watchCount !== undefined && (
+                  <div className="mt-4 w-full grid grid-cols-2 gap-2.5">
+                    <div className="rounded-xl bg-canvas/75 border border-line px-3 py-2 text-center">
+                      <div className="text-[11px] text-slate-400">Просмотров</div>
+                      <div className="text-sm font-bold font-mono tabular-nums text-white mt-0.5">
+                        {watchCount}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-canvas/75 border border-line px-3 py-2 text-center">
+                      <div className="text-[11px] text-slate-400">Уникальных фильмов</div>
+                      <div className="text-sm font-bold font-mono tabular-nums text-[#45d1c6] mt-0.5">
+                        {uniqueFilmsCount ?? watchCount}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Повторите пароль</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  maxLength={128}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Введите пароль ещё раз"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
-                />
+            {/* Profile Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Nickname Section */}
+              <form
+                onSubmit={handleNicknameSubmit}
+                className="rounded-xl bg-canvas/80 border border-line p-4 space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="profileNickname"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300"
+                  >
+                    <AtSign className="w-3.5 h-3.5 text-[#f06292]" />
+                    <span>Никнейм</span>
+                  </label>
+                  <span className="text-[11px] text-slate-500">3–32 симв. · A–Z, 0–9, _ . -</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="profileNickname"
+                    type="text"
+                    maxLength={32}
+                    value={nicknameDraft}
+                    onChange={(e) => setNicknameDraft(e.target.value)}
+                    placeholder="Придумайте никнейм"
+                    disabled={savingNickname || loggingOut}
+                    className="min-w-0 flex-1 px-3 py-2 rounded-xl bg-card border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6] disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={
+                      !hasNicknameChanges ||
+                      !nicknameValidation.valid ||
+                      savingNickname ||
+                      loggingOut
+                    }
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#45d1c6] hover:bg-[#5ee0d6] disabled:opacity-40 text-[#0b0e17] text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    {savingNickname ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                    )}
+                    <span>Сохранить</span>
+                  </button>
+                </div>
+
+                {!nicknameValidation.valid && nicknameDraft.trim().length > 0 && (
+                  <p className="text-[11px] text-[#f06292]">{nicknameValidation.error}</p>
+                )}
+                {currentNickname && nicknameDraft.trim().length === 0 && (
+                  <p className="text-[11px] text-slate-400">
+                    Оставьте пустым, чтобы скрыть никнейм
+                  </p>
+                )}
+              </form>
+
+              {/* Masked Email Section */}
+              <div className="rounded-xl bg-canvas/80 border border-line p-4 space-y-2">
+                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Электронная почта</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-card border border-line">
+                  <span
+                    className={
+                      showEmail
+                        ? 'font-mono text-sm text-slate-100 truncate select-all'
+                        : 'tracking-[0.2em] text-sm text-slate-400 select-none truncate'
+                    }
+                  >
+                    {showEmail ? userEmail : maskEmailAsPassword(userEmail)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmail((prev) => !prev)}
+                    aria-label={showEmail ? 'Скрыть почту' : 'Показать почту'}
+                    aria-pressed={showEmail}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer shrink-0"
+                  >
+                    {showEmail ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {message && (
@@ -309,223 +487,260 @@ export function AuthModal({
               )}
 
               <button
-                type="submit"
+                type="button"
                 disabled={busy}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
+                onClick={() => void handleLogout()}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292]/10 hover:bg-[#f06292]/20 disabled:opacity-50 border border-[#f06292]/25 text-xs font-semibold text-[#f06292] transition-colors cursor-pointer"
               >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Сохранить новый пароль
-              </button>
-            </form>
-          ) : userEmail ? (
-            <div className="space-y-4">
-              {message && (
-                <div
-                  className={`p-3 rounded-xl text-xs border leading-relaxed ${
-                    message.type === 'error'
-                      ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
-                      : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              )}
-
-              <div className="p-4 rounded-xl bg-canvas border border-line space-y-1">
-                <span className="text-[11px] font-mono uppercase text-slate-500">Вы вошли как</span>
-                <div className="text-sm font-mono font-semibold text-white">{userEmail}</div>
-                <p className="text-xs text-[#45d1c6]">Облачная синхронизация активна.</p>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                {!isDemoMode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onEnableDemoMode();
-                      handleClose();
-                    }}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-cardElevated hover:bg-lineStrong border border-line text-xs font-medium text-slate-200 transition-colors cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#d6b85a]" />
-                    Режим Демо (2024–2026)
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#f06292]/15 hover:bg-[#f06292]/25 border border-[#f06292]/30 text-xs font-medium text-[#f06292] transition-colors cursor-pointer"
-                >
+                {loggingOut ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
                   <LogOut className="w-3.5 h-3.5" />
-                  Выйти
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {!isSupabaseConfigured && (
-                <div className="p-3 rounded-xl bg-[#d6b85a]/10 border border-[#d6b85a]/30 text-xs text-[#d6b85a] leading-relaxed">
-                  Сейчас активен автономный <strong>Demo Mode</strong>. Чтобы включить облачную
-                  синхронизацию, добавьте <span className="font-mono">VITE_SUPABASE_URL</span> и{' '}
-                  <span className="font-mono">VITE_SUPABASE_PUBLISHABLE_KEY</span> в{' '}
-                  <span className="font-mono">.env</span>.
-                </div>
-              )}
-
-              {(mode === 'login' || mode === 'register') && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy || !isSupabaseConfigured}
-                    onClick={() => void handleGoogle()}
-                    className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-sm font-medium border border-white/15 shadow-sm transition-all cursor-pointer"
-                  >
-                    {googleLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
-                    ) : (
-                      <GoogleIcon />
-                    )}
-                    <span>
-                      {mode === 'login' ? 'Войти через Google' : 'Продолжить через Google'}
-                    </span>
-                  </button>
-
-                  <div className="relative flex items-center py-0.5">
-                    <div className="flex-grow border-t border-line" />
-                    <span className="shrink mx-3 text-[11px] font-mono uppercase text-slate-500">
-                      или
-                    </span>
-                    <div className="flex-grow border-t border-line" />
-                  </div>
-                </>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                {mode === 'register' && (
-                  <div>
-                    <label className="block text-xs text-slate-300 mb-1">
-                      Никнейм (необязательно)
-                    </label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="cinephile_2026"
-                      pattern="^[A-Za-z0-9_.-]{3,32}$"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
-                    />
-                  </div>
                 )}
+                <span>Выйти из аккаунта</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="relative px-6 pt-6 pb-2 text-center">
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Закрыть"
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <h3 className="text-lg font-semibold tracking-tight text-white">{modalTitle}</h3>
+              <p className="text-xs text-slate-400 mt-1">{modalSubtitle}</p>
+            </div>
 
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Email</label>
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
-                  />
-                </div>
-
-                {(mode === 'login' || mode === 'register') && (
+            <div className="px-6 pb-6 pt-3 space-y-4">
+              {isPasswordRecovery ? (
+                <form onSubmit={handlePasswordRecoverySubmit} className="space-y-3.5">
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">Пароль</label>
+                    <label className="block text-xs text-slate-300 mb-1">Новый пароль</label>
                     <input
                       type="password"
                       required
-                      minLength={mode === 'register' ? 8 : 6}
+                      minLength={8}
                       maxLength={128}
-                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={mode === 'register' ? 'Минимум 8 символов (буквы и цифры)' : 'Введите пароль'}
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Минимум 8 символов (буквы и цифры)"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
                     />
                   </div>
-                )}
 
-                {message && (
-                  <div
-                    className={`p-3 rounded-xl text-xs border leading-relaxed ${
-                      message.type === 'error'
-                        ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
-                        : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
-                    }`}
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">Повторите пароль</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Введите пароль ещё раз"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                    />
+                  </div>
+
+                  {message && (
+                    <div
+                      className={`p-3 rounded-xl text-xs border leading-relaxed ${
+                        message.type === 'error'
+                          ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
+                          : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
+                      }`}
+                    >
+                      {message.text}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
                   >
-                    {message.text}
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Сохранить новый пароль
+                  </button>
+                </form>
+              ) : (
+                <>
+                  {!isSupabaseConfigured && (
+                    <div className="p-3 rounded-xl bg-[#d6b85a]/10 border border-[#d6b85a]/30 text-xs text-[#d6b85a] leading-relaxed">
+                      Сейчас активен автономный <strong>Demo Mode</strong>. Чтобы включить облачную
+                      синхронизацию, добавьте <span className="font-mono">VITE_SUPABASE_URL</span> и{' '}
+                      <span className="font-mono">VITE_SUPABASE_PUBLISHABLE_KEY</span> в{' '}
+                      <span className="font-mono">.env</span>.
+                    </div>
+                  )}
+
+                  {(mode === 'login' || mode === 'register') && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy || !isSupabaseConfigured}
+                        onClick={() => void handleGoogle()}
+                        className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-sm font-medium border border-white/15 shadow-sm transition-all cursor-pointer"
+                      >
+                        {googleLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+                        ) : (
+                          <GoogleIcon />
+                        )}
+                        <span>
+                          {mode === 'login' ? 'Войти через Google' : 'Продолжить через Google'}
+                        </span>
+                      </button>
+
+                      <div className="relative flex items-center py-0.5">
+                        <div className="flex-grow border-t border-line" />
+                        <span className="shrink mx-3 text-[11px] font-mono uppercase text-slate-500">
+                          или
+                        </span>
+                        <div className="flex-grow border-t border-line" />
+                      </div>
+                    </>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="space-y-3.5">
+                    {mode === 'register' && (
+                      <div>
+                        <label className="block text-xs text-slate-300 mb-1">
+                          Никнейм (необязательно)
+                        </label>
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="cinephile_2026"
+                          pattern="^[A-Za-z0-9_.-]{3,32}$"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">Email</label>
+                      <input
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                      />
+                    </div>
+
+                    {(mode === 'login' || mode === 'register') && (
+                      <div>
+                        <label className="block text-xs text-slate-300 mb-1">Пароль</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={mode === 'register' ? 8 : 6}
+                          maxLength={128}
+                          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder={
+                            mode === 'register'
+                              ? 'Минимум 8 символов (буквы и цифры)'
+                              : 'Введите пароль'
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                        />
+                      </div>
+                    )}
+
+                    {message && (
+                      <div
+                        className={`p-3 rounded-xl text-xs border leading-relaxed ${
+                          message.type === 'error'
+                            ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
+                            : 'bg-[#45d1c6]/10 border-[#45d1c6]/30 text-[#45d1c6]'
+                        }`}
+                      >
+                        {message.text}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={busy || !isSupabaseConfigured}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
+                    >
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {mode === 'login'
+                        ? 'Войти'
+                        : mode === 'register'
+                          ? 'Создать аккаунт'
+                          : 'Отправить ссылку для сброса'}
+                    </button>
+
+                    {mode === 'login' && (
+                      <div className="text-center pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => switchMode('reset')}
+                          className="text-xs text-[#45d1c6] hover:text-[#6ee3da] transition-colors cursor-pointer"
+                        >
+                          Забыли пароль?
+                        </button>
+                      </div>
+                    )}
+                  </form>
+
+                  <div className="border-t border-line pt-4 text-center text-xs text-slate-400">
+                    {mode === 'login' && (
+                      <>
+                        Нет аккаунта?{' '}
+                        <button
+                          type="button"
+                          onClick={() => switchMode('register')}
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                        >
+                          Зарегистрироваться
+                        </button>
+                      </>
+                    )}
+                    {mode === 'register' && (
+                      <>
+                        Уже есть аккаунт?{' '}
+                        <button
+                          type="button"
+                          onClick={() => switchMode('login')}
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                        >
+                          Войти
+                        </button>
+                      </>
+                    )}
+                    {mode === 'reset' && (
+                      <>
+                        Вспомнили пароль?{' '}
+                        <button
+                          type="button"
+                          onClick={() => switchMode('login')}
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                        >
+                          Вернуться ко входу
+                        </button>
+                      </>
+                    )}
                   </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={busy || !isSupabaseConfigured}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
-                >
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {mode === 'login'
-                    ? 'Войти'
-                    : mode === 'register'
-                      ? 'Создать аккаунт'
-                      : 'Отправить ссылку для сброса'}
-                </button>
-
-                {mode === 'login' && (
-                  <div className="text-center pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => switchMode('reset')}
-                      className="text-xs text-[#45d1c6] hover:text-[#6ee3da] transition-colors cursor-pointer"
-                    >
-                      Забыли пароль?
-                    </button>
-                  </div>
-                )}
-              </form>
-
-              <div className="border-t border-line pt-4 text-center text-xs text-slate-400">
-                {mode === 'login' && (
-                  <>
-                    Нет аккаунта?{' '}
-                    <button
-                      type="button"
-                      onClick={() => switchMode('register')}
-                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
-                    >
-                      Зарегистрироваться
-                    </button>
-                  </>
-                )}
-                {mode === 'register' && (
-                  <>
-                    Уже есть аккаунт?{' '}
-                    <button
-                      type="button"
-                      onClick={() => switchMode('login')}
-                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
-                    >
-                      Войти
-                    </button>
-                  </>
-                )}
-                {mode === 'reset' && (
-                  <>
-                    Вспомнили пароль?{' '}
-                    <button
-                      type="button"
-                      onClick={() => switchMode('login')}
-                      className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
-                    >
-                      Вернуться ко входу
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
