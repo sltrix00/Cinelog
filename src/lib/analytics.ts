@@ -171,6 +171,8 @@ export function computeTier1KPIs(
 ): Tier1KPIResult {
   const allTimeTotal = entries.length;
   const allTimeUnique = new Set(entries.map(getUniqueFilmKey)).size;
+  const allTimeRewatches = entries.filter((e) => e.is_rewatch).length;
+  const allTimeNewCount = allTimeTotal - allTimeRewatches;
 
   const scoped = filterEntriesByYear(entries, selectedYear);
   const yearTotal = scoped.length;
@@ -226,6 +228,8 @@ export function computeTier1KPIs(
   return {
     allTimeTotal,
     allTimeUnique,
+    allTimeRewatches,
+    allTimeNewCount,
     yearTotal,
     yearNewCount,
     yearRewatches,

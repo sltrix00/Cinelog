@@ -76,6 +76,8 @@ export interface RewatchSummaryItem {
 export interface Tier1KPIResult {
   allTimeTotal: number;
   allTimeUnique: number;
+  allTimeRewatches: number;
+  allTimeNewCount: number;
   yearTotal: number;
   yearNewCount: number;
   yearRewatches: number;

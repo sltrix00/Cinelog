@@ -1,4 +1,5 @@
-import { Calendar, Film, Gauge } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Calendar, Film, Gauge, Info } from 'lucide-react';
 import { filmWord, rewatchWord } from '../lib/analytics';
 import { getYearColor } from '../lib/demoData';
 import type { Tier1KPIResult, YearFilter } from '../types/cinelog';
@@ -9,8 +10,32 @@ interface Tier1KpiSectionProps {
 }
 
 export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
+  const [uniqueInfoOpen, setUniqueInfoOpen] = useState(false);
+  const uniqueInfoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!uniqueInfoOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (uniqueInfoRef.current && !uniqueInfoRef.current.contains(e.target as Node)) {
+        setUniqueInfoOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUniqueInfoOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [uniqueInfoOpen]);
+
   const yearLabel = selectedYear === 'all' ? 'За всё время' : `За ${selectedYear} год`;
   const yearDotColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
+
+  const repeatInJournal = Math.max(0, kpis.allTimeTotal - kpis.allTimeUnique);
+  const uniqueVsNewDiff = kpis.allTimeUnique - kpis.allTimeNewCount;
 
   return (
     <section id="level-1" className="scroll-mt-24 space-y-4">
@@ -23,8 +48,10 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
       {/* 4 Main Counter Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* 1. Всего просмотрено */}
-        <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-[#45d1c6]/10 blur-2xl pointer-events-none" />
+        <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between relative">
+          <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-[#45d1c6]/10 blur-2xl" />
+          </div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">Всего просмотрено</span>
             <span className="p-1.5 rounded-lg bg-cardElevated border border-line text-slate-400">
@@ -35,7 +62,63 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.allTimeUnique}
             </span>
-            <span className="text-xs text-slate-400">уникальных</span>
+            <div ref={uniqueInfoRef} className="relative group inline-flex items-center">
+              <button
+                type="button"
+                onClick={() => setUniqueInfoOpen((v) => !v)}
+                aria-expanded={uniqueInfoOpen}
+                aria-label="Что означает «уникальных»"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-help focus:outline-none"
+              >
+                <span className="underline decoration-dotted underline-offset-4 decoration-slate-500">
+                  уникальных
+                </span>
+                <Info className="w-3.5 h-3.5 text-[#45d1c6]" />
+              </button>
+
+              {/* Tooltip / Popover explaining unique count vs first watches */}
+              <div
+                className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-[11px] leading-relaxed text-slate-300 transition-opacity duration-150 ${
+                  uniqueInfoOpen
+                    ? 'opacity-100 pointer-events-auto'
+                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                }`}
+              >
+                <div className="font-semibold text-white mb-1.5 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#45d1c6] shrink-0" />
+                  <span>Что считается уникальными фильмами</span>
+                </div>
+                <p className="text-slate-300">
+                  Это количество разных фильмов в журнале:{' '}
+                  <span className="font-semibold text-white tabular-nums">{kpis.allTimeUnique}</span>{' '}
+                  из{' '}
+                  <span className="font-semibold text-white tabular-nums">{kpis.allTimeTotal}</span>{' '}
+                  просмотров
+                  {repeatInJournal > 0
+                    ? ` (${repeatInJournal} повторных записей тех же фильмов внутри архива)`
+                    : ''}
+                  .
+                </p>
+                {kpis.allTimeRewatches > 0 && uniqueVsNewDiff > 0 && (
+                  <p className="mt-2 pt-2 border-t border-line text-slate-400">
+                    Поэтому{' '}
+                    <span className="text-slate-200 font-medium tabular-nums">
+                      {kpis.allTimeUnique}
+                    </span>{' '}
+                    уникальных фильмов ≠{' '}
+                    <span className="text-slate-200 font-medium tabular-nums">
+                      {kpis.allTimeNewCount}
+                    </span>{' '}
+                    первых просмотров (без флага пересмотра ↺) — разница{' '}
+                    <span className="text-[#45d1c6] font-medium tabular-nums">
+                      {kpis.allTimeUnique} − {kpis.allTimeNewCount} = {uniqueVsNewDiff}
+                    </span>{' '}
+                    (плюс/минус многократные пересмотры) означает фильмы, которые ты пересмотрел
+                    уже в рамках этого архива, но впервые видел ещё до него.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
           <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80 tabular-nums">
             всего {kpis.allTimeTotal} просмотров (с учётом пересмотров)
