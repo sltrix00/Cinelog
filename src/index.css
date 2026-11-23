@@ -130,3 +130,29 @@
   mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 100%);
 }
+
+.dashboard-shell {
+  width: 100%;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .dashboard-shell {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard-shell {
+    /*
+     * Keep dashboard content centered at 76rem (1216px = max-w-7xl minus 2x2rem padding)
+     * on wide viewports, while always reserving at least 11.5rem (184px) on the left
+     * so the expanded SectionDotNav (max 168px) never overlaps any page content.
+     */
+    padding-left: max(11.5rem, calc((100% - 76rem) / 2));
+    padding-right: max(
+      2rem,
+      min(calc((100% - 76rem) / 2), calc(100% - 76rem - 11.5rem))
+    );
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type FocusEvent } from 'react';
 
 export const DASHBOARD_SECTIONS = [
   { id: 'level-1', label: 'KPI' },
@@ -12,6 +12,8 @@ type SectionId = (typeof DASHBOARD_SECTIONS)[number]['id'];
 
 export function SectionDotNav() {
   const [activeId, setActiveId] = useState<SectionId>('level-1');
+  const [isOpen, setIsOpen] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let rafId: number | null = null;
@@ -49,43 +51,134 @@ export function SectionDotNav() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleOpen = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setIsOpen(true);
+  };
+
+  const handleScheduleClose = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setIsOpen(false);
+    }, 120);
+  };
+
+  const handleBlur = (e: FocusEvent<HTMLElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setIsOpen(false);
+    }
+  };
+
   return (
-    <nav
-      aria-label="Навигация по разделам"
-      className="group/rail fixed left-2 sm:left-3.5 lg:left-5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-start gap-1.5 py-1.5"
-    >
-      {DASHBOARD_SECTIONS.map((item) => {
-        const isActive = activeId === item.id;
-        return (
-          <a
-            key={item.id}
-            href={`#${item.id}`}
-            aria-label={item.label}
-            aria-current={isActive ? 'location' : undefined}
-            onClick={() => setActiveId(item.id)}
-            className="group/item w-6 h-6 flex items-center justify-center relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
-          >
-            <span
-              className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${
-                isActive
-                  ? 'bg-slate-100 scale-110 shadow-[0_0_8px_rgba(241,245,249,0.4)]'
-                  : 'bg-slate-600/60 group-hover/item:bg-slate-300 group-hover/item:scale-110'
-              }`}
-            />
-            <span className="absolute left-full top-1/2 -translate-y-1/2 pl-2.5 pointer-events-none opacity-0 -translate-x-1.5 transition-all duration-200 ease-out group-hover/rail:opacity-100 group-hover/rail:translate-x-0 group-hover/rail:pointer-events-auto group-focus-within/rail:opacity-100 group-focus-within/rail:translate-x-0 group-focus-within/rail:pointer-events-auto">
-              <span
-                className={`inline-block whitespace-nowrap px-2.5 py-1 rounded-lg text-xs font-medium border backdrop-blur-md shadow-lg transition-colors ${
-                  isActive
-                    ? 'bg-cardElevated/95 border-lineStrong text-white'
-                    : 'bg-card/90 border-line text-slate-400 group-hover/item:text-white group-hover/item:bg-cardElevated/95 group-hover/item:border-lineStrong'
+    <>
+      {/* Desktop / Tablet Fixed Left Rail */}
+      <nav
+        aria-label="Навигация по разделам"
+        onMouseEnter={handleOpen}
+        onMouseLeave={handleScheduleClose}
+        onFocus={handleOpen}
+        onBlur={handleBlur}
+        className={`fixed left-0 top-1/2 -translate-y-1/2 z-30 hidden md:flex items-center transition-[width,padding] duration-200 ease-out ${
+          isOpen ? 'w-[168px] py-10 pl-2.5 pr-1.5' : 'w-24 py-16 pl-2.5 pr-2'
+        }`}
+      >
+        <div
+          className={`w-full flex flex-col rounded-2xl border transition-all duration-200 ease-out p-1.5 ${
+            isOpen
+              ? 'gap-1.5 bg-card/90 border-lineStrong/80 backdrop-blur-md shadow-xl'
+              : 'gap-1 bg-transparent border-transparent shadow-none'
+          }`}
+        >
+          {DASHBOARD_SECTIONS.map((item) => {
+            const isActive = activeId === item.id;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                aria-label={item.label}
+                aria-current={isActive ? 'location' : undefined}
+                onClick={() => setActiveId(item.id)}
+                className={`group/item flex items-center gap-3 w-full px-2 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  isOpen
+                    ? `h-11 ${
+                        isActive
+                          ? 'bg-white/[0.06] text-white'
+                          : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'
+                      }`
+                    : 'h-6'
                 }`}
               >
-                {item.label}
-              </span>
-            </span>
-          </a>
-        );
-      })}
-    </nav>
+                <span className="w-3 h-3 flex items-center justify-center shrink-0">
+                  <span
+                    aria-hidden="true"
+                    className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${
+                      isOpen
+                        ? isActive
+                          ? 'scale-125 opacity-100 bg-white shadow-[0_0_10px_rgba(241,245,249,0.55)]'
+                          : 'scale-100 opacity-100 bg-slate-500 group-hover/item:scale-125 group-hover/item:bg-slate-200'
+                        : isActive
+                          ? 'scale-[0.75] opacity-70 bg-slate-200'
+                          : 'scale-[0.6] opacity-35 bg-slate-400'
+                    }`}
+                  />
+                </span>
+                <span
+                  className={`text-[15px] font-medium whitespace-nowrap leading-none transition-all duration-200 ${
+                    isOpen
+                      ? 'opacity-100 translate-x-0 pointer-events-auto'
+                      : 'opacity-0 -translate-x-1.5 pointer-events-none select-none'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Mobile Non-Overlapping Inline Strip */}
+      <nav
+        aria-label="Навигация по разделам"
+        className="flex md:hidden items-center gap-1.5 px-4 sm:px-6 pt-4 overflow-x-auto"
+      >
+        {DASHBOARD_SECTIONS.map((item) => {
+          const isActive = activeId === item.id;
+          return (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              aria-current={isActive ? 'location' : undefined}
+              onClick={() => setActiveId(item.id)}
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                isActive
+                  ? 'bg-cardElevated border-lineStrong text-white'
+                  : 'bg-card border-line text-slate-400 hover:text-white'
+              }`}
+            >
+              {item.label}
+            </a>
+          );
+        })}
+      </nav>
+    </>
   );
 }

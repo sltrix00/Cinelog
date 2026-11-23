@@ -48,7 +48,7 @@ import type { ParsedImportRow, ReenrichSummary, WatchEntry, YearFilter } from '.
 
 function DashboardSkeleton() {
   return (
-    <div className="max-w-7xl mx-auto pl-10 pr-4 sm:pl-12 sm:pr-6 lg:pl-14 lg:pr-8 2xl:px-8 py-8 space-y-8 animate-pulse">
+    <div className="dashboard-shell py-8 space-y-8 animate-pulse">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="h-36 rounded-2xl bg-card border border-line" />
@@ -563,7 +563,7 @@ export function App() {
           ) : (
             <>
               <SectionDotNav />
-              <main className="max-w-7xl mx-auto pl-10 pr-4 sm:pl-12 sm:pr-6 lg:pl-14 lg:pr-8 2xl:px-8 py-8 space-y-12">
+              <main className="dashboard-shell py-8 space-y-12">
               {/* Status Bar */}
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
