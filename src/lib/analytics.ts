@@ -270,23 +270,84 @@ export function getCumulativeArray365(entries: WatchEntry[], year: number): numb
   return cum;
 }
 
-export function computeCumulativeComparison365(entries: WatchEntry[]): CumulativePoint365[] {
-  const c2024 = getCumulativeArray365(entries, 2024);
-  const c2025 = getCumulativeArray365(entries, 2025);
-  const c2026 = getCumulativeArray365(entries, 2026);
+export function resolveComparisonYears(
+  entries: WatchEntry[],
+  selectedYear: YearFilter,
+  availableYears?: number[]
+): number[] {
+  const yearsWithData = new Set<number>();
+  for (const e of entries) {
+    const { year } = parseIsoDateParts(e.watched_date);
+    if (Number.isInteger(year) && year >= 1888 && year <= 2100) {
+      yearsWithData.add(year);
+    }
+  }
+
+  const pool =
+    yearsWithData.size > 0
+      ? Array.from(yearsWithData).sort((a, b) => a - b)
+      : (availableYears && availableYears.length > 0 ? [...availableYears] : [2024, 2025, 2026]).sort(
+          (a, b) => a - b
+        );
+
+  if (selectedYear !== 'all' && !pool.includes(selectedYear)) {
+    pool.push(selectedYear);
+    pool.sort((a, b) => a - b);
+  }
+
+  if (pool.length <= 3) return pool;
+
+  if (selectedYear !== 'all') {
+    const idx = pool.indexOf(selectedYear);
+    if (idx !== -1 && idx < pool.length - 3) {
+      return [selectedYear, pool[pool.length - 2], pool[pool.length - 1]];
+    }
+  }
+
+  return pool.slice(-3);
+}
+
+export function computeCumulativeComparison365(
+  entries: WatchEntry[],
+  comparisonYears: number[] = [2024, 2025, 2026]
+): CumulativePoint365[] {
+  const sortedYears = [...comparisonYears].sort((a, b) => a - b);
+  const cumByYear = new Map<number, number[]>();
+  for (const yr of sortedYears) {
+    cumByYear.set(yr, getCumulativeArray365(entries, yr));
+  }
+
+  const c2024 = cumByYear.get(2024) ?? getCumulativeArray365(entries, 2024);
+  const c2025 = cumByYear.get(2025) ?? getCumulativeArray365(entries, 2025);
+  const c2026 = cumByYear.get(2026) ?? getCumulativeArray365(entries, 2026);
+
+  const latestYear = sortedYears.length > 0 ? sortedYears[sortedYears.length - 1] : null;
+  const prevYear = sortedYears.length > 1 ? sortedYears[sortedYears.length - 2] : null;
 
   const points: CumulativePoint365[] = [];
   for (let d = 1; d <= 365; d++) {
     const idx = d - 1;
     const monthStartIdx = (MONTH_STARTS_NONLEAP as readonly number[]).indexOf(d);
+    const byYear: Record<number, number> = {};
+    for (const yr of sortedYears) {
+      byYear[yr] = cumByYear.get(yr)?.[idx] ?? 0;
+    }
+
+    const yoyDelta =
+      latestYear !== null && prevYear !== null ? byYear[latestYear] - byYear[prevYear] : null;
+
     points.push({
       doy: d,
       dateLabel: `${formatDayOfYearRu(d)} · День ${d}`,
-      monthTick: monthStartIdx !== -1 ? MONTHS_EN[monthStartIdx] : '',
+      monthTick: monthStartIdx !== -1 ? MONTHS_RU[monthStartIdx] : '',
       y2024: c2024[idx],
       y2025: c2025[idx],
       y2026: c2026[idx],
       yoyDelta26vs25: c2026[idx] - c2025[idx],
+      byYear,
+      yoyDelta,
+      latestYear,
+      prevYear,
     });
   }
   return points;
@@ -405,27 +466,43 @@ export function computeViewingIndexTrajectory(
   return points;
 }
 
-export function computeMonthlyByYear(entries: WatchEntry[]): MonthlyYearPoint[] {
-  const counts = {
-    2024: new Array<number>(12).fill(0),
-    2025: new Array<number>(12).fill(0),
-    2026: new Array<number>(12).fill(0),
-  };
-
-  for (const entry of entries) {
-    const { year, monthIndex } = parseIsoDateParts(entry.watched_date);
-    if (year === 2024 || year === 2025 || year === 2026) {
-      counts[year][monthIndex] += 1;
+export function computeMonthlyByYear(
+  entries: WatchEntry[],
+  comparisonYears: number[] = [2024, 2025, 2026]
+): MonthlyYearPoint[] {
+  const sortedYears = [...comparisonYears].sort((a, b) => a - b);
+  const countsMap = new Map<number, number[]>();
+  for (const yr of sortedYears) {
+    countsMap.set(yr, new Array<number>(12).fill(0));
+  }
+  for (const fixedYr of [2024, 2025, 2026]) {
+    if (!countsMap.has(fixedYr)) {
+      countsMap.set(fixedYr, new Array<number>(12).fill(0));
     }
   }
 
-  return MONTHS_EN.map((month, idx) => ({
-    month,
-    monthIndex: idx,
-    y2024: counts[2024][idx],
-    y2025: counts[2025][idx],
-    y2026: counts[2026][idx],
-  }));
+  for (const entry of entries) {
+    const { year, monthIndex } = parseIsoDateParts(entry.watched_date);
+    const arr = countsMap.get(year);
+    if (arr) {
+      arr[monthIndex] += 1;
+    }
+  }
+
+  return MONTHS_RU.map((month, idx) => {
+    const byYear: Record<number, number> = {};
+    for (const yr of sortedYears) {
+      byYear[yr] = countsMap.get(yr)?.[idx] ?? 0;
+    }
+    return {
+      month,
+      monthIndex: idx,
+      y2024: countsMap.get(2024)?.[idx] ?? 0,
+      y2025: countsMap.get(2025)?.[idx] ?? 0,
+      y2026: countsMap.get(2026)?.[idx] ?? 0,
+      byYear,
+    };
+  });
 }
 
 export function computeDayOfWeekDistribution(
@@ -496,6 +573,41 @@ export function computeTimeOfDayDistribution(
   };
 }
 
+function computeTrueChronologicalStreak(entries: WatchEntry[]): {
+  distinctDays: number;
+  maxStreak: number;
+} {
+  const epochDays = new Set<number>();
+  for (const entry of entries) {
+    const m = entry.watched_date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) continue;
+    const y = Number.parseInt(m[1], 10);
+    const mo = Number.parseInt(m[2], 10) - 1;
+    const d = Number.parseInt(m[3], 10);
+    const epochDay = Math.floor(Date.UTC(y, mo, d) / 86_400_000);
+    epochDays.add(epochDay);
+  }
+
+  const sorted = Array.from(epochDays).sort((a, b) => a - b);
+  let maxStreak = 0;
+  let curr = 0;
+  let prev: number | null = null;
+  for (const day of sorted) {
+    if (prev !== null && day === prev + 1) {
+      curr += 1;
+    } else {
+      curr = 1;
+    }
+    if (curr > maxStreak) maxStreak = curr;
+    prev = day;
+  }
+
+  return {
+    distinctDays: sorted.length,
+    maxStreak,
+  };
+}
+
 export function computeActivityHeatmap(
   entries: WatchEntry[],
   selectedYear: YearFilter,
@@ -521,7 +633,7 @@ export function computeActivityHeatmap(
   const labelYear = isAll ? refDate.year : selectedYear;
   const maxDoy = !isAll && selectedYear === refDate.year ? refDate.dayOfYear : 365;
   const cells: HeatmapCell[] = [];
-  let activeDays = 0;
+  let foldedActiveDays = 0;
   let maxStreak = 0;
   let currStreak = 0;
 
@@ -530,7 +642,7 @@ export function computeActivityHeatmap(
     const count = isFuture ? 0 : countsByDoy[doy];
 
     if (!isFuture && count > 0) {
-      activeDays += 1;
+      foldedActiveDays += 1;
       currStreak += 1;
       if (currStreak > maxStreak) maxStreak = currStreak;
     } else {
@@ -552,11 +664,23 @@ export function computeActivityHeatmap(
     });
   }
 
+  if (isAll) {
+    const chrono = computeTrueChronologicalStreak(scoped);
+    return {
+      year: selectedYear,
+      cells,
+      activeDays: chrono.distinctDays,
+      maxStreak: chrono.maxStreak,
+      foldedActiveDays,
+    };
+  }
+
   return {
     year: selectedYear,
     cells,
-    activeDays,
+    activeDays: foldedActiveDays,
     maxStreak,
+    foldedActiveDays,
   };
 }
 
@@ -684,6 +808,7 @@ export function computeTasteAccents(
   category: TasteCategory
 ): TasteAccentItem[] {
   const scoped = filterEntriesByYear(entries, selectedYear);
+  const totalFilmsInScope = Math.max(1, scoped.length);
   const agg = new Map<string, { name: string; count: number; ratingSum: number; ratedCount: number }>();
 
   for (const entry of scoped) {
@@ -713,11 +838,17 @@ export function computeTasteAccents(
 
   const maxCount = Math.max(1, ...top.map((item) => item.count));
 
-  return top.map((item, idx) => ({
-    rank: idx + 1,
-    name: item.name,
-    count: item.count,
-    pct: Math.round((item.count / maxCount) * 100),
-    avgRating: item.ratedCount > 0 ? (item.ratingSum / item.ratedCount).toFixed(2) : '—',
-  }));
+  return top.map((item, idx) => {
+    const barPct = Math.round((item.count / maxCount) * 100);
+    const shareOfTotalPct = Math.round((item.count / totalFilmsInScope) * 100);
+    return {
+      rank: idx + 1,
+      name: item.name,
+      count: item.count,
+      pct: barPct,
+      barPct,
+      shareOfTotalPct,
+      avgRating: item.ratedCount > 0 ? (item.ratingSum / item.ratedCount).toFixed(2) : '—',
+    };
+  });
 }

@@ -1,4 +1,5 @@
 import { ExternalLink, FileText, ShieldCheck, X } from 'lucide-react';
+import { useModalA11y } from './useModalA11y';
 
 export type LegalTab = 'privacy' | 'terms';
 
@@ -9,6 +10,11 @@ interface LegalModalProps {
 }
 
 export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
+  const modalRef = useModalA11y<HTMLDivElement>({
+    open: Boolean(tab),
+    onClose,
+  });
+
   if (!tab) return null;
 
   return (
@@ -18,47 +24,64 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="legal-modal-title"
+        tabIndex={-1}
+        className="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
           <div className="flex items-center gap-2">
             {tab === 'privacy' ? (
-              <ShieldCheck className="w-4 h-4 text-[#45d1c6]" />
+              <ShieldCheck className="w-4 h-4 text-[#45d1c6]" aria-hidden="true" />
             ) : (
-              <FileText className="w-4 h-4 text-[#d6b85a]" />
+              <FileText className="w-4 h-4 text-[#d6b85a]" aria-hidden="true" />
             )}
-            <h3 className="text-sm font-semibold text-white">Правовая информация и TMDB</h3>
+            <h3 id="legal-modal-title" className="text-sm font-semibold text-white">
+              Правовая информация и TMDB
+            </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Закрыть"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+            className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="px-5 pt-3 pb-2 border-b border-line flex items-center gap-2 shrink-0 bg-canvas/40">
+        <div
+          role="tablist"
+          aria-label="Правовые документы"
+          className="px-5 pt-3 pb-2.5 border-b border-line flex flex-wrap items-center gap-2 shrink-0 bg-canvas/40"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'privacy'}
             onClick={() => onChangeTab('privacy')}
             className={
               tab === 'privacy'
-                ? 'px-3.5 py-1.5 rounded-xl text-xs font-medium bg-cardElevated text-white border border-lineStrong cursor-pointer'
-                : 'px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer'
+                ? 'min-h-9 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-cardElevated text-white border border-lineStrong cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
+                : 'min-h-9 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
             }
           >
             Политика конфиденциальности
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'terms'}
             onClick={() => onChangeTab('terms')}
             className={
               tab === 'terms'
-                ? 'px-3.5 py-1.5 rounded-xl text-xs font-medium bg-cardElevated text-white border border-lineStrong cursor-pointer'
-                : 'px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer'
+                ? 'min-h-9 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-cardElevated text-white border border-lineStrong cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
+                : 'min-h-9 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
             }
           >
             Условия использования и TMDB
@@ -140,16 +163,16 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
                     href="https://www.themoviedb.org/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-[#45d1c6] hover:underline"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-[#45d1c6] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                   >
                     themoviedb.org
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="w-3 h-3" aria-hidden="true" />
                   </a>
                 </div>
                 <p className="text-xs text-slate-300">
                   This product uses the TMDB API but is not endorsed or certified by TMDB.
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Информация о фильмах, продолжительности, режиссёрах, жанрах и странах предоставлена
                   базой данных The Movie Database (TMDB).
                 </p>
@@ -163,7 +186,7 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-cardElevated hover:bg-lineStrong border border-line text-xs font-medium text-white transition-colors cursor-pointer"
+            className="min-h-10 px-4 py-2 rounded-xl bg-cardElevated hover:bg-lineStrong border border-line text-xs font-medium text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
           >
             Закрыть
           </button>

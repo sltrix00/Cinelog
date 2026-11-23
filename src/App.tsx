@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, RotateCcw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
 import { AddWatchModal, type AddWatchPayload } from './components/AddWatchModal';
 import { AuthModal } from './components/AuthModal';
 import { Header } from './components/Header';
@@ -26,6 +26,7 @@ import {
   DEFAULT_REFERENCE_DATE,
   extractAvailableYears,
   getReferenceDateForToday,
+  resolveComparisonYears,
 } from './lib/analytics';
 import { parseAuthCallbackError } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
@@ -83,7 +84,8 @@ export function App() {
     if (window.location.hash === '#terms') return 'terms';
     return null;
   });
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const initialHadAuthCodeRef = useRef(
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code')
@@ -95,11 +97,23 @@ export function App() {
   const [reenrichProgress, setReenrichProgress] = useState<{ done: number; total: number } | null>(null);
   const [reenrichReport, setReenrichReport] = useState<ReenrichSummary | null>(null);
 
-  const showToast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    window.setTimeout(() => {
-      setToastMsg((curr) => (curr === msg ? null : curr));
-    }, 3400);
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToast({ msg, type });
+    toastTimerRef.current = window.setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast((curr) => (curr?.msg === msg ? null : curr));
+    }, 3600);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
   }, []);
 
   const loadUserProfile = useCallback(
@@ -124,7 +138,7 @@ export function App() {
       setEntries(cloudRows);
       setIsDemoMode(false);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Ошибка загрузки данных из Supabase.');
+      showToast(err instanceof Error ? err.message : 'Ошибка загрузки данных из Supabase.', 'error');
     } finally {
       setLoadingCloud(false);
     }
@@ -149,7 +163,7 @@ export function App() {
     const callbackError = parseAuthCallbackError(window.location);
     if (callbackError) {
       handledInitialCodeRef.current = true;
-      showToast(callbackError);
+      showToast(callbackError, 'error');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
@@ -251,6 +265,10 @@ export function App() {
   }, []);
 
   const availableYears = useMemo(() => extractAvailableYears(entries), [entries]);
+  const comparisonYears = useMemo(
+    () => resolveComparisonYears(entries, selectedYear, availableYears),
+    [entries, selectedYear, availableYears]
+  );
 
   const refDate = useMemo(
     () => (isDemoMode ? DEFAULT_REFERENCE_DATE : getReferenceDateForToday()),
@@ -262,12 +280,18 @@ export function App() {
     () => computeTier1KPIs(entries, selectedYear, refDate),
     [entries, selectedYear, refDate]
   );
-  const cumulativeData = useMemo(() => computeCumulativeComparison365(entries), [entries]);
+  const cumulativeData = useMemo(
+    () => computeCumulativeComparison365(entries, comparisonYears),
+    [entries, comparisonYears]
+  );
   const indexTrajectory = useMemo(
     () => computeViewingIndexTrajectory(entries, selectedYear, refDate),
     [entries, selectedYear, refDate]
   );
-  const monthlyData = useMemo(() => computeMonthlyByYear(entries), [entries]);
+  const monthlyData = useMemo(
+    () => computeMonthlyByYear(entries, comparisonYears),
+    [entries, comparisonYears]
+  );
   const dayOfWeek = useMemo(
     () => computeDayOfWeekDistribution(entries, selectedYear),
     [entries, selectedYear]
@@ -430,7 +454,8 @@ export function App() {
         showToast(
           `Импортировано ${result.importedCount} просмотров, но TMDB недоступен: ${
             result.errorMessage ?? result.errorCode ?? 'проверьте токен TMDB'
-          }`
+          }`,
+          'error'
         );
       } else {
         showToast(
@@ -457,7 +482,7 @@ export function App() {
         setEntries((prev) => prev.filter((e) => e.id !== id));
         showToast('Запись удалена.');
       } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Ошибка удаления.');
+        showToast(err instanceof Error ? err.message : 'Ошибка удаления.', 'error');
       }
       return;
     }
@@ -481,7 +506,7 @@ export function App() {
       setReenrichReport(report);
 
       if (!report.tmdbConfigured || report.errorCode === 'TMDB_AUTH_ERROR') {
-        showToast(report.errorMessage ?? 'TMDB не настроен или вернул ошибку авторизации.');
+        showToast(report.errorMessage ?? 'TMDB не настроен или вернул ошибку авторизации.', 'error');
       } else {
         const enrichedTotal = report.matchedCount + report.mergedCount + report.refreshedCount;
         showToast(
@@ -489,7 +514,7 @@ export function App() {
         );
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Ошибка дообогащения фильмов через TMDB.');
+      showToast(err instanceof Error ? err.message : 'Ошибка дообогащения фильмов через TMDB.', 'error');
     } finally {
       setReenriching(false);
       setReenrichProgress(null);
@@ -580,15 +605,15 @@ export function App() {
                     <button
                       type="button"
                       onClick={handleResetDemo}
-                      className="inline-flex items-center gap-1.5 text-xs text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/30 px-3 py-2 rounded-xl hover:bg-[#d6b85a]/20 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 min-h-9 text-xs text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/30 px-3 py-2 rounded-xl hover:bg-[#d6b85a]/20 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Сбросить демо</span>
                     </button>
                   )}
-                  <div className="inline-flex items-center gap-2 text-xs text-slate-400 bg-card border border-line px-3.5 py-2 rounded-xl">
-                    <span className="w-2 h-2 rounded-full bg-[#45d1c6] animate-pulse" />
-                    <span className="tabular-nums text-[11px] text-slate-300">{statusBadgeText}</span>
+                  <div className="inline-flex items-center gap-2 min-h-9 text-xs text-slate-300 bg-card border border-line px-3.5 py-2 rounded-xl">
+                    <span className="w-2 h-2 rounded-full bg-[#45d1c6] animate-pulse" aria-hidden="true" />
+                    <span className="tabular-nums text-xs text-slate-300">{statusBadgeText}</span>
                   </div>
                 </div>
               </div>
@@ -598,12 +623,14 @@ export function App() {
                 cumulativeData={cumulativeData}
                 indexTrajectory={indexTrajectory}
                 selectedYear={selectedYear}
+                comparisonYears={comparisonYears}
               />
               <Tier3RhythmSection
                 monthlyData={monthlyData}
                 dayOfWeek={dayOfWeek}
                 timeOfDay={timeOfDay}
                 selectedYear={selectedYear}
+                comparisonYears={comparisonYears}
               />
               <Tier4DeepAnalyticsSection
                 heatmap={heatmap}
@@ -632,38 +659,38 @@ export function App() {
                 onDismissReenrichReport={() => setReenrichReport(null)}
               />
 
-              <footer className="pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-500">
+              <footer className="pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-400">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
-                    <span>·</span>
+                    <span className="font-bold tracking-wider text-slate-200">CINELOG</span>
+                    <span aria-hidden="true">·</span>
                     <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
                   </div>
-                  <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
+                  <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
                     <button
                       type="button"
                       onClick={() => openLegalModal('privacy')}
-                      className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="min-h-9 px-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
                       Политика конфиденциальности
                     </button>
                     <button
                       type="button"
                       onClick={() => openLegalModal('terms')}
-                      className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="min-h-9 px-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
                       Условия и TMDB
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500/90">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
                   <span>
                     This product uses the{' '}
                     <a
                       href="https://www.themoviedb.org/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#45d1c6] hover:underline"
+                      className="text-[#45d1c6] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
                       TMDB API
                     </a>{' '}
@@ -680,11 +707,23 @@ export function App() {
         </>
       )}
 
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-cardElevated border border-[#45d1c6]/40 shadow-2xl text-xs text-slate-100">
-          <CheckCircle2 className="w-4 h-4 text-[#45d1c6] shrink-0" />
-          <span>{toastMsg}</span>
+      {/* Semantic Toast Notification */}
+      {toast && (
+        <div
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-cardElevated shadow-2xl text-xs max-w-sm ${
+            toast.type === 'error'
+              ? 'border border-[#f06292]/45 text-[#f8d7e3]'
+              : 'border border-[#45d1c6]/45 text-slate-100'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-[#f06292] shrink-0" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
+          )}
+          <span>{toast.msg}</span>
         </div>
       )}
 

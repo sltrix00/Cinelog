@@ -11,17 +11,33 @@ interface Tier1KpiSectionProps {
 
 export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
   const [uniqueInfoOpen, setUniqueInfoOpen] = useState(false);
+  const [rewatchInfoOpen, setRewatchInfoOpen] = useState(false);
   const uniqueInfoRef = useRef<HTMLDivElement>(null);
+  const rewatchInfoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!uniqueInfoOpen) return;
+    if (!uniqueInfoOpen && !rewatchInfoOpen) return;
     const handleOutside = (e: MouseEvent) => {
-      if (uniqueInfoRef.current && !uniqueInfoRef.current.contains(e.target as Node)) {
+      if (
+        uniqueInfoOpen &&
+        uniqueInfoRef.current &&
+        !uniqueInfoRef.current.contains(e.target as Node)
+      ) {
         setUniqueInfoOpen(false);
+      }
+      if (
+        rewatchInfoOpen &&
+        rewatchInfoRef.current &&
+        !rewatchInfoRef.current.contains(e.target as Node)
+      ) {
+        setRewatchInfoOpen(false);
       }
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setUniqueInfoOpen(false);
+      if (e.key === 'Escape') {
+        setUniqueInfoOpen(false);
+        setRewatchInfoOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleOutside);
     document.addEventListener('keydown', handleKey);
@@ -29,7 +45,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
       document.removeEventListener('mousedown', handleOutside);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [uniqueInfoOpen]);
+  }, [uniqueInfoOpen, rewatchInfoOpen]);
 
   const yearLabel = selectedYear === 'all' ? 'За всё время' : `За ${selectedYear} год`;
   const yearDotColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
@@ -40,8 +56,8 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
   return (
     <section id="level-1" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 01</span>
-        <span className="text-slate-700">/</span>
+        <span className="text-xs tabular-nums uppercase tracking-widest text-slate-400">Уровень 01</span>
+        <span className="text-slate-600" aria-hidden="true">/</span>
         <h2 className="text-sm font-bold tracking-tight text-slate-200">KPI и индекс просмотра</h2>
       </div>
 
@@ -55,7 +71,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">Всего просмотрено</span>
             <span className="p-1.5 rounded-lg bg-cardElevated border border-line text-slate-400">
-              <Film className="w-3.5 h-3.5" />
+              <Film className="w-3.5 h-3.5" aria-hidden="true" />
             </span>
           </div>
           <div className="flex items-baseline gap-2">
@@ -68,24 +84,26 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
                 onClick={() => setUniqueInfoOpen((v) => !v)}
                 aria-expanded={uniqueInfoOpen}
                 aria-label="Что означает «уникальных»"
-                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-help focus:outline-none"
+                className="inline-flex items-center gap-1 min-h-8 px-1.5 py-1 rounded-lg text-xs text-slate-300 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
               >
-                <span className="underline decoration-dotted underline-offset-4 decoration-slate-500">
+                <span className="underline decoration-dotted underline-offset-4 decoration-slate-400">
                   уникальных
                 </span>
-                <Info className="w-3.5 h-3.5 text-[#45d1c6]" />
+                <Info className="w-3.5 h-3.5 text-[#45d1c6]" aria-hidden="true" />
               </button>
 
               {/* Tooltip / Popover explaining unique count vs first watches */}
               <div
-                className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-[11px] leading-relaxed text-slate-300 transition-opacity duration-150 ${
+                role="region"
+                aria-label="Пояснение подсчёта уникальных фильмов"
+                className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs leading-relaxed text-slate-300 transition-opacity duration-150 ${
                   uniqueInfoOpen
                     ? 'opacity-100 pointer-events-auto'
                     : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
                 }`}
               >
                 <div className="font-semibold text-white mb-1.5 flex items-center gap-1.5">
-                  <Info className="w-3.5 h-3.5 text-[#45d1c6] shrink-0" />
+                  <Info className="w-3.5 h-3.5 text-[#45d1c6] shrink-0" aria-hidden="true" />
                   <span>Что считается уникальными фильмами</span>
                 </div>
                 <p className="text-slate-300">
@@ -125,52 +143,65 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
           </p>
         </div>
 
-        {/* 2. За год + бейдж пересмотров с тултипом */}
+        {/* 2. За год + интерактивный бейдж пересмотров с поповером */}
         <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">{yearLabel}</span>
             <span
               className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: yearDotColor }}
+              aria-hidden="true"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
               {kpis.yearTotal}
             </span>
-            <div className="relative group">
-              <span
+            <div ref={rewatchInfoRef} className="relative group">
+              <button
+                type="button"
+                onClick={() => setRewatchInfoOpen((v) => !v)}
+                aria-expanded={rewatchInfoOpen}
+                aria-label={`Последние пересмотры: ${kpis.yearRewatches}`}
                 className={
                   kpis.yearRewatches > 0
-                    ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30 cursor-help transition-colors hover:bg-[#d6b85a]/20'
-                    : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line cursor-help'
+                    ? 'inline-flex items-center gap-1 min-h-8 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30 cursor-pointer transition-colors hover:bg-[#d6b85a]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b85a]'
+                    : 'inline-flex items-center gap-1 min-h-8 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-cardElevated text-slate-300 border border-line cursor-pointer hover:border-lineStrong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
                 }
               >
                 ↺ {kpis.yearRewatches} {rewatchWord(kpis.yearRewatches)}
-              </span>
+              </button>
 
-              {/* Tooltip with recent rewatches */}
-              <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs">
+              {/* Accessible Tooltip / Popover with recent rewatches */}
+              <div
+                role="region"
+                aria-label="Последние пересмотры"
+                className={`transition-opacity duration-150 absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs ${
+                  rewatchInfoOpen
+                    ? 'opacity-100 pointer-events-auto'
+                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                }`}
+              >
                 <div className="font-semibold text-slate-200 mb-2 flex items-center justify-between">
                   <span>Последние пересмотры</span>
                   <span className="tabular-nums text-[#d6b85a]">{kpis.yearRewatchPct}%</span>
                 </div>
-                <ul className="space-y-1.5 text-[11px] text-slate-400">
+                <ul className="space-y-1.5 text-xs text-slate-300">
                   {kpis.recentRewatches.length > 0 ? (
                     kpis.recentRewatches.map((r) => (
                       <li key={r.id} className="flex justify-between gap-2">
                         <span className="truncate text-slate-200">{r.title}</span>
-                        <span className="tabular-nums text-slate-500 shrink-0">{r.dateLabel}</span>
+                        <span className="tabular-nums text-slate-400 shrink-0">{r.dateLabel}</span>
                       </li>
                     ))
                   ) : (
-                    <li className="text-slate-500">Нет пересмотров</li>
+                    <li className="text-slate-400">Нет пересмотров</li>
                   )}
                 </ul>
               </div>
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-4 pt-3 border-t border-line/80">
+          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80 tabular-nums">
             Новых фильмов: {kpis.yearNewCount}
           </p>
         </div>
@@ -179,7 +210,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
         <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">{kpis.activeMonthLabel}</span>
-            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+            <Calendar className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
@@ -188,14 +219,14 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             <span
               className={
                 kpis.monthRewatches > 0
-                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
-                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line'
+                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
+                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-cardElevated text-slate-300 border border-line'
               }
             >
               ↺ {kpis.monthRewatches} {rewatchWord(kpis.monthRewatches)}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-4 pt-3 border-t border-line/80">
+          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80">
             {kpis.activeMonthSubtitle}
           </p>
         </div>
@@ -204,7 +235,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
         <div className="rounded-2xl bg-card border border-line p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-400">За неделю</span>
-            <span className="text-[11px] tabular-nums text-slate-500">7 дней</span>
+            <span className="text-xs tabular-nums text-slate-400">7 дней</span>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-4xl font-extrabold tracking-tight text-white tabular-nums">
@@ -213,14 +244,14 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             <span
               className={
                 kpis.weekRewatches > 0
-                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
-                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] tabular-nums font-medium bg-cardElevated text-slate-400 border border-line'
+                  ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/30'
+                  : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs tabular-nums font-medium bg-cardElevated text-slate-300 border border-line'
               }
             >
               ↺ {kpis.weekRewatches} {rewatchWord(kpis.weekRewatches)}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-4 pt-3 border-t border-line/80">
+          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-line/80">
             {kpis.weekRewatches === 0
               ? 'Без пересмотров за 7 дней'
               : `Включая ${kpis.weekRewatches} ${rewatchWord(kpis.weekRewatches)}`}
@@ -228,13 +259,13 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
         </div>
       </div>
 
-      {/* 5. Выделенная карточка: Индекс просмотра (Год и Месяц рядом, без недельного) */}
+      {/* 5. Выделенная карточка: Индекс просмотра */}
       <div className="rounded-2xl bg-gradient-to-r from-card via-[#14192c] to-card border border-lineStrong p-5 sm:p-6 relative overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#f06292] via-[#45d1c6] to-[#d6b85a]" />
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#f06292] via-[#45d1c6] to-[#d6b85a]" aria-hidden="true" />
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center pl-2">
           <div className="md:col-span-4 space-y-1">
             <div className="inline-flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-[#45d1c6]" />
+              <Gauge className="w-4 h-4 text-[#45d1c6]" aria-hidden="true" />
               <h3 className="text-sm font-bold tracking-tight text-white">Индекс просмотра</h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
@@ -247,21 +278,21 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             {/* Индекс за год */}
             <div className="rounded-xl bg-canvas/70 border border-line p-4 flex items-center justify-between gap-3">
               <div>
-                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
                   {selectedYear === 'all' ? 'Индекс за всё время' : 'Индекс за год'}
                 </span>
                 <div className="flex items-baseline gap-2.5 mt-1">
                   <span className="text-3xl font-extrabold tracking-tight text-[#f06292] tabular-nums">
                     {kpis.yearIndex.toFixed(2)}
                   </span>
-                  <span className="text-[11px] text-slate-500">фильм/день</span>
+                  <span className="text-xs text-slate-400">фильм/день</span>
                 </div>
-                <p className="text-[11px] tabular-nums text-slate-400 mt-1.5">
+                <p className="text-xs tabular-nums text-slate-400 mt-1.5">
                   {kpis.yearTotal} {filmWord(kpis.yearTotal)} / {kpis.daysElapsedYear} дн.
                 </p>
               </div>
               <div className="text-right hidden sm:block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 block">
+                <span className="text-[11px] uppercase tracking-wider text-slate-400 block">
                   {kpis.yearProjection !== null ? 'Прогноз' : 'Итог'}
                 </span>
                 <span className="text-sm font-semibold text-slate-200 tabular-nums">
@@ -273,21 +304,21 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
             {/* Индекс за месяц */}
             <div className="rounded-xl bg-canvas/70 border border-line p-4 flex items-center justify-between gap-3">
               <div>
-                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
                   Индекс за месяц
                 </span>
                 <div className="flex items-baseline gap-2.5 mt-1">
                   <span className="text-3xl font-extrabold tracking-tight text-[#45d1c6] tabular-nums">
                     {kpis.monthIndex.toFixed(2)}
                   </span>
-                  <span className="text-[11px] text-slate-500">фильм/день</span>
+                  <span className="text-xs text-slate-400">фильм/день</span>
                 </div>
-                <p className="text-[11px] tabular-nums text-slate-400 mt-1.5">
+                <p className="text-xs tabular-nums text-slate-400 mt-1.5">
                   {kpis.monthTotal} {filmWord(kpis.monthTotal)} / {kpis.monthDaysElapsed} дн.
                 </p>
               </div>
               <div className="text-right hidden sm:block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 block">Ритм</span>
+                <span className="text-[11px] uppercase tracking-wider text-slate-400 block">Ритм</span>
                 <span
                   className={
                     kpis.isMonthAboveYearPace

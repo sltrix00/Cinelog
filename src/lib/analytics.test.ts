@@ -16,6 +16,7 @@ import {
   filmWord,
   filterEntriesByYear,
   getDayOfYear,
+  resolveComparisonYears,
   rewatchWord,
   timeStringToBucket,
 } from './analytics';
@@ -167,6 +168,8 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(directors[0].name).toBe('Tarkovsky');
     expect(directors[0].count).toBe(2);
     expect(directors[0].pct).toBe(100);
+    expect(directors[0].barPct).toBe(100);
+    expect(directors[0].shareOfTotalPct).toBe(50);
   });
 
   it('handles DST-safe dayOfYear, timeStringToBucket, and Russian pluralization', () => {
@@ -202,12 +205,13 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(filtered2021.map((e) => e.id)).toEqual(['1', '3']);
   });
 
-  it('aggregates all years into a single 365-day heatmap when selectedYear is all', () => {
+  it('aggregates all years into a single 365-day heatmap with chronological streaks when selectedYear is all', () => {
     const entries = [
       makeCsvOnlyEntry({ id: '1', watched_date: '2024-01-01', title: 'Film A' }),
       makeCsvOnlyEntry({ id: '2', watched_date: '2025-01-01', title: 'Film B' }),
       makeCsvOnlyEntry({ id: '3', watched_date: '2026-01-02', title: 'Film C' }),
       makeCsvOnlyEntry({ id: '4', watched_date: '2024-12-25', title: 'Film D' }),
+      makeCsvOnlyEntry({ id: '5', watched_date: '2024-12-31', title: 'Film E' }),
     ];
 
     const heatmapAll = computeActivityHeatmap(entries, 'all', DEFAULT_REFERENCE_DATE);
@@ -215,9 +219,31 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(heatmapAll.cells).toHaveLength(365);
     expect(heatmapAll.cells[0].count).toBe(2);
     expect(heatmapAll.cells[0].titles).toEqual(['Film A (2024)', 'Film B (2025)']);
-    expect(heatmapAll.activeDays).toBe(3);
-    expect(heatmapAll.maxStreak).toBe(2);
+    expect(heatmapAll.foldedActiveDays).toBe(4);
+    expect(heatmapAll.activeDays).toBe(5);
+    expect(heatmapAll.maxStreak).toBe(2); // 2024-12-31 -> 2025-01-01 chronological streak
     expect(heatmapAll.cells.every((c) => !c.isFuture)).toBe(true);
+  });
+
+  it('resolves dynamic comparison years for historical imported datasets', () => {
+    const historical = [
+      makeCsvOnlyEntry({ id: '1', watched_date: '2019-03-10' }),
+      makeCsvOnlyEntry({ id: '2', watched_date: '2020-07-12' }),
+      makeCsvOnlyEntry({ id: '3', watched_date: '2021-11-22' }),
+      makeCsvOnlyEntry({ id: '4', watched_date: '2022-05-05' }),
+    ];
+
+    expect(resolveComparisonYears(historical, 'all')).toEqual([2020, 2021, 2022]);
+    expect(resolveComparisonYears(historical, 2019)).toEqual([2019, 2021, 2022]);
+
+    const monthly = computeMonthlyByYear(historical, [2020, 2021, 2022]);
+    expect(monthly[2].month).toBe('Мар');
+    expect(monthly[10].byYear[2021]).toBe(1);
+
+    const cum = computeCumulativeComparison365(historical, [2020, 2021, 2022]);
+    expect(cum[0].monthTick).toBe('Янв');
+    expect(cum[364].byYear[2020]).toBe(1);
+    expect(cum[364].byYear[2022]).toBe(1);
   });
 
   it('computes all-time Viewing Index trajectory from earliest year through reference date', () => {

@@ -97,14 +97,14 @@ export function SectionDotNav() {
         onFocus={handleOpen}
         onBlur={handleBlur}
         className={`fixed left-0 top-1/2 -translate-y-1/2 z-30 hidden md:flex items-center transition-[width,padding] duration-200 ease-out ${
-          isOpen ? 'w-[168px] py-10 pl-2.5 pr-1.5' : 'w-24 py-16 pl-2.5 pr-2'
+          isOpen ? 'w-[168px] py-10 pl-2.5 pr-1.5' : 'w-16 py-12 pl-2.5 pr-2'
         }`}
       >
         <div
           className={`w-full flex flex-col rounded-2xl border transition-all duration-200 ease-out p-1.5 ${
             isOpen
-              ? 'gap-1.5 bg-card/90 border-lineStrong/80 backdrop-blur-md shadow-xl'
-              : 'gap-1 bg-transparent border-transparent shadow-none'
+              ? 'gap-1.5 bg-card/95 border-lineStrong/90 backdrop-blur-md shadow-xl'
+              : 'gap-1 bg-card/55 border-line/70 backdrop-blur-sm shadow-md'
           }`}
         >
           {DASHBOARD_SECTIONS.map((item) => {
@@ -116,14 +116,14 @@ export function SectionDotNav() {
                 aria-label={item.label}
                 aria-current={isActive ? 'location' : undefined}
                 onClick={() => setActiveId(item.id)}
-                className={`group/item flex items-center gap-3 w-full px-2 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                className={`group/item flex items-center w-full px-2 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
                   isOpen
-                    ? `h-11 ${
+                    ? `gap-3 h-11 ${
                         isActive
-                          ? 'bg-white/[0.06] text-white'
-                          : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'
+                          ? 'bg-white/[0.08] text-white'
+                          : 'text-slate-300 hover:bg-white/[0.05] hover:text-white'
                       }`
-                    : 'h-6'
+                    : `gap-0 h-9 justify-center ${isActive ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`
                 }`}
               >
                 <span className="w-3 h-3 flex items-center justify-center shrink-0">
@@ -133,18 +133,18 @@ export function SectionDotNav() {
                       isOpen
                         ? isActive
                           ? 'scale-125 opacity-100 bg-white shadow-[0_0_10px_rgba(241,245,249,0.55)]'
-                          : 'scale-100 opacity-100 bg-slate-500 group-hover/item:scale-125 group-hover/item:bg-slate-200'
+                          : 'scale-100 opacity-100 bg-slate-400 group-hover/item:scale-125 group-hover/item:bg-slate-200'
                         : isActive
-                          ? 'scale-[0.75] opacity-70 bg-slate-200'
-                          : 'scale-[0.6] opacity-35 bg-slate-400'
+                          ? 'scale-95 opacity-95 bg-[#45d1c6] shadow-[0_0_8px_rgba(69,209,198,0.45)]'
+                          : 'scale-75 opacity-60 bg-slate-400 group-hover/item:opacity-90'
                     }`}
                   />
                 </span>
                 <span
-                  className={`text-[15px] font-medium whitespace-nowrap leading-none transition-all duration-200 ${
+                  className={`text-sm font-medium whitespace-nowrap leading-none transition-all duration-200 ${
                     isOpen
                       ? 'opacity-100 translate-x-0 pointer-events-auto'
-                      : 'opacity-0 -translate-x-1.5 pointer-events-none select-none'
+                      : 'opacity-0 -translate-x-1.5 pointer-events-none select-none w-0 overflow-hidden'
                   }`}
                 >
                   {item.label}
@@ -158,7 +158,7 @@ export function SectionDotNav() {
       {/* Mobile Non-Overlapping Inline Strip */}
       <nav
         aria-label="Навигация по разделам"
-        className="flex md:hidden items-center gap-1.5 px-4 sm:px-6 pt-4 overflow-x-auto"
+        className="flex md:hidden items-center gap-2 px-4 sm:px-6 pt-4 overflow-x-auto"
       >
         {DASHBOARD_SECTIONS.map((item) => {
           const isActive = activeId === item.id;
@@ -168,10 +168,10 @@ export function SectionDotNav() {
               href={`#${item.id}`}
               aria-current={isActive ? 'location' : undefined}
               onClick={() => setActiveId(item.id)}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              className={`shrink-0 inline-flex items-center min-h-10 px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
                 isActive
                   ? 'bg-cardElevated border-lineStrong text-white'
-                  : 'bg-card border-line text-slate-400 hover:text-white'
+                  : 'bg-card border-line text-slate-300 hover:text-white'
               }`}
             >
               {item.label}

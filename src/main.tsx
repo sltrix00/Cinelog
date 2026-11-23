@@ -25,7 +25,7 @@ function FrameBlockedNotice() {
           href={window.location.href}
           target="_top"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#45d1c6] text-[#0b0e17] text-xs font-semibold"
+          className="inline-flex items-center justify-center min-h-10 px-4 py-2.5 rounded-xl bg-[#45d1c6] text-[#0b0e17] text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         >
           Открыть в отдельной вкладке
         </a>

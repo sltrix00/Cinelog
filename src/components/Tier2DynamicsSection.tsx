@@ -12,16 +12,17 @@ import {
   YAxis,
 } from 'recharts';
 import { filmWord, MONTH_STARTS_NONLEAP, MONTHS_RU } from '../lib/analytics';
-import { getYearColor, YEAR_COLORS } from '../lib/demoData';
+import { getYearColor } from '../lib/demoData';
 import type { CumulativePoint365, IndexTrajectoryPoint, YearFilter } from '../types/cinelog';
 
 interface Tier2DynamicsSectionProps {
   cumulativeData: CumulativePoint365[];
   indexTrajectory: IndexTrajectoryPoint[];
   selectedYear: YearFilter;
+  comparisonYears?: number[];
 }
 
-const YEARS: Array<2024 | 2025 | 2026> = [2024, 2025, 2026];
+const DEFAULT_COMPARISON_YEARS = [2024, 2025, 2026];
 
 interface CustomTooltipPayloadItem {
   dataKey?: string;
@@ -40,11 +41,11 @@ function CumulativeTooltip({
 }) {
   if (!active || !payload || payload.length === 0 || !payload[0].payload) return null;
   const row = payload[0].payload;
-  const diff = row.yoyDelta26vs25;
-  const sign = diff >= 0 ? '+' : '';
+  const diff = row.yoyDelta;
+  const sign = diff !== null && diff >= 0 ? '+' : '';
 
   return (
-    <div className="rounded-xl bg-[#0b0e17] border border-lineStrong p-3 shadow-2xl text-xs min-w-[200px]">
+    <div className="rounded-xl bg-[#0b0e17] border border-lineStrong p-3 shadow-2xl text-xs min-w-[210px]">
       <div className="font-semibold text-slate-100 mb-2 tabular-nums">{row.dateLabel}</div>
       <div className="space-y-1">
         {payload.map((entry) => {
@@ -65,13 +66,17 @@ function CumulativeTooltip({
           );
         })}
       </div>
-      <div className="mt-2 pt-2 border-t border-line tabular-nums text-[11px] flex items-center justify-between text-slate-400">
-        <span>2026 vs 2025:</span>
-        <span className={diff >= 0 ? 'text-[#45d1c6] font-semibold' : 'text-[#f06292] font-semibold'}>
-          {sign}
-          {diff} {filmWord(Math.abs(diff))}
-        </span>
-      </div>
+      {diff !== null && row.latestYear !== null && row.prevYear !== null && (
+        <div className="mt-2 pt-2 border-t border-line tabular-nums text-xs flex items-center justify-between text-slate-400">
+          <span>
+            {row.latestYear} vs {row.prevYear}:
+          </span>
+          <span className={diff >= 0 ? 'text-[#45d1c6] font-semibold' : 'text-[#f06292] font-semibold'}>
+            {sign}
+            {diff} {filmWord(Math.abs(diff))}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,25 +117,21 @@ export function Tier2DynamicsSection({
   cumulativeData,
   indexTrajectory,
   selectedYear,
+  comparisonYears = DEFAULT_COMPARISON_YEARS,
 }: Tier2DynamicsSectionProps) {
-  const [visibleYears, setVisibleYears] = useState<Record<2024 | 2025 | 2026, boolean>>({
-    2024: true,
-    2025: true,
-    2026: true,
-  });
+  const [hiddenYears, setHiddenYears] = useState<Record<number, boolean>>({});
 
-  const toggleYear = (yr: 2024 | 2025 | 2026) => {
-    setVisibleYears((prev) => ({ ...prev, [yr]: !prev[yr] }));
+  const toggleYear = (yr: number) => {
+    setHiddenYears((prev) => ({ ...prev, [yr]: !prev[yr] }));
   };
 
   const isAllYears = selectedYear === 'all';
   const trajectoryColor = isAllYears ? '#45d1c6' : getYearColor(selectedYear);
 
-  // Extract start year for all-time X-axis month/year formatting (e.g. "10 янв 2024" -> 2024)
   const allTimeStartYear = (() => {
     const firstTitle = indexTrajectory[0]?.tooltipTitle ?? '';
     const m = firstTitle.match(/\b(19\d{2}|20\d{2})\b/);
-    return m ? Number.parseInt(m[1], 10) : 2024;
+    return m ? Number.parseInt(m[1], 10) : comparisonYears[0] ?? 2024;
   })();
   const maxTrajectoryDoy = indexTrajectory[indexTrajectory.length - 1]?.doy ?? 365;
   const allTimeMonthTicks: number[] = [];
@@ -150,47 +151,53 @@ export function Tier2DynamicsSection({
       }
     }
   }
+
   const maxCumValue = Math.max(
-    125,
-    ...cumulativeData.map((d) => Math.max(d.y2024, d.y2025, d.y2026))
+    40,
+    ...cumulativeData.map((d) =>
+      Math.max(0, ...comparisonYears.map((yr) => d.byYear[yr] ?? 0))
+    )
   );
   const yMax = Math.ceil((maxCumValue + 10) / 20) * 20;
 
   return (
     <section id="level-2" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 02</span>
-        <span className="text-slate-700">/</span>
+        <span className="text-xs tabular-nums uppercase tracking-widest text-slate-400">Уровень 02</span>
+        <span className="text-slate-600" aria-hidden="true">/</span>
         <h2 className="text-sm font-bold tracking-tight text-slate-200">Главный блок динамики</h2>
       </div>
 
-      {/* 1. Полноширинная карточка: CUMULATIVE FILMS — ALL YEARS COMPARED (DAY OF YEAR) */}
+      {/* 1. Накопительная динамика просмотров — сравнение по годам */}
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="mb-5">
-          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
-            CUMULATIVE FILMS — ALL YEARS COMPARED (DAY OF YEAR)
+          <h3 className="text-base font-bold tracking-tight text-white">
+            Накопительная динамика просмотров — сравнение по годам
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Сравнение накопленных просмотров по дням года (с 1 января по 31 декабря)
           </p>
         </div>
 
-        {/* Centered Custom Legend (Outlined Rectangles, Transparent Fill, 2px Colored Border) */}
-        <div className="flex flex-wrap items-center justify-center gap-5 mb-5">
-          {YEARS.map((yr) => {
-            const visible = visibleYears[yr];
+        {/* Centered Custom Legend with proper touch targets */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-5">
+          {comparisonYears.map((yr) => {
+            const visible = !hiddenYears[yr];
+            const color = getYearColor(yr);
             return (
               <button
                 key={yr}
                 type="button"
+                aria-pressed={visible}
                 onClick={() => toggleYear(yr)}
-                className={`inline-flex items-center gap-2 text-xs tabular-nums text-slate-300 hover:text-white transition-opacity cursor-pointer ${
-                  visible ? '' : 'opacity-35 line-through'
+                className={`inline-flex items-center gap-2 min-h-9 px-3 py-1.5 rounded-xl bg-canvas/60 border border-line hover:border-lineStrong text-xs tabular-nums text-slate-200 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  visible ? '' : 'opacity-40 line-through'
                 }`}
               >
                 <span
-                  className="w-8 h-3.5 rounded-[2px] border-2 bg-transparent inline-block"
-                  style={{ borderColor: YEAR_COLORS[yr] }}
+                  className="w-7 h-3 rounded-[2px] border-2 bg-transparent inline-block"
+                  style={{ borderColor: color }}
+                  aria-hidden="true"
                 />
                 <span>{yr}</span>
               </button>
@@ -213,50 +220,32 @@ export function Tier2DynamicsSection({
                   return pt?.monthTick ?? '';
                 }}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 domain={[0, yMax]}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<CumulativeTooltip />} />
-              {visibleYears[2024] && (
-                <Line
-                  type="monotone"
-                  dataKey="y2024"
-                  name="2024"
-                  stroke={YEAR_COLORS[2024]}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: YEAR_COLORS[2024], strokeWidth: 0 }}
-                  isAnimationActive={false}
-                />
-              )}
-              {visibleYears[2025] && (
-                <Line
-                  type="monotone"
-                  dataKey="y2025"
-                  name="2025"
-                  stroke={YEAR_COLORS[2025]}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: YEAR_COLORS[2025], strokeWidth: 0 }}
-                  isAnimationActive={false}
-                />
-              )}
-              {visibleYears[2026] && (
-                <Line
-                  type="monotone"
-                  dataKey="y2026"
-                  name="2026"
-                  stroke={YEAR_COLORS[2026]}
-                  strokeWidth={2.3}
-                  dot={false}
-                  activeDot={{ r: 4.5, fill: YEAR_COLORS[2026], strokeWidth: 0 }}
-                  isAnimationActive={false}
-                />
-              )}
+              {comparisonYears.map((yr, idx) => {
+                if (hiddenYears[yr]) return null;
+                const color = getYearColor(yr);
+                const isLatest = idx === comparisonYears.length - 1;
+                return (
+                  <Line
+                    key={yr}
+                    type="monotone"
+                    dataKey={`byYear.${yr}`}
+                    name={String(yr)}
+                    stroke={color}
+                    strokeWidth={isLatest ? 2.3 : 2}
+                    dot={false}
+                    activeDot={{ r: isLatest ? 4.5 : 4, fill: color, strokeWidth: 0 }}
+                    isAnimationActive={false}
+                  />
+                );
+              })}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -277,8 +266,8 @@ export function Tier2DynamicsSection({
                 : 'Изменение соотношения «фильмы / прошедший день года» с ориентиром 1.0 (темп 1 фильм в день)'}
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 text-[11px] tabular-nums text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/25 px-3 py-1 rounded-lg self-start sm:self-auto">
-            <span className="w-4 border-t-2 border-dashed border-[#d6b85a]" />
+          <div className="inline-flex items-center gap-2 text-xs tabular-nums text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/25 px-3 py-1 rounded-lg self-start sm:self-auto">
+            <span className="w-4 border-t-2 border-dashed border-[#d6b85a]" aria-hidden="true" />
             <span>1.0 · Темп 1 фильм в день</span>
           </div>
         </div>
@@ -309,21 +298,21 @@ export function Tier2DynamicsSection({
                     return MONTHS_RU[mIdx];
                   }}
                   stroke="#1e2438"
-                  tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
               ) : (
                 <XAxis
                   dataKey="label"
                   minTickGap={34}
                   stroke="#1e2438"
-                  tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
               )}
               <YAxis
                 domain={[0, (dataMax: number) => Math.max(1.15, +(dataMax + 0.1).toFixed(2))]}
                 tickFormatter={(v: number) => v.toFixed(2)}
                 stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<TrajectoryTooltip />} />
               {isAllYears &&
@@ -331,7 +320,7 @@ export function Tier2DynamicsSection({
                   <ReferenceLine
                     key={boundaryDoy}
                     x={boundaryDoy}
-                    stroke="rgba(124, 134, 162, 0.35)"
+                    stroke="rgba(148, 163, 184, 0.35)"
                     strokeDasharray="4 4"
                     strokeWidth={1}
                   />

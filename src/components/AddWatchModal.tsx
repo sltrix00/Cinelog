@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   AlertCircle,
   Loader2,
@@ -24,6 +32,7 @@ import type {
   TmdbSearchResult,
   WatchEntry,
 } from '../types/cinelog';
+import { useModalA11y } from './useModalA11y';
 
 export interface AddWatchPayload {
   tmdbId: number | null;
@@ -54,6 +63,7 @@ interface AddWatchModalProps {
 }
 
 type BucketOption = 'none' | '0' | '1' | '2' | '3';
+type ModalTab = 'manual' | 'import';
 
 export function AddWatchModal({
   open,
@@ -65,6 +75,8 @@ export function AddWatchModal({
   onConfirmImport,
 }: AddWatchModalProps) {
   const isEditing = Boolean(initialEntry);
+  const [activeTab, setActiveTab] = useState<ModalTab>('manual');
+
   const [title, setTitle] = useState('');
   const [tmdbId, setTmdbId] = useState<number | null>(null);
   const [rating, setRating] = useState<string>('4');
@@ -82,10 +94,12 @@ export function AddWatchModal({
   const [allowSearch, setAllowSearch] = useState(false);
 
   const [suggestions, setSuggestions] = useState<TmdbSearchResult[]>([]);
+  const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(-1);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [importRows, setImportRows] = useState<ParsedImportRow[]>([]);
@@ -95,10 +109,30 @@ export function AddWatchModal({
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
 
+  const busy = submitting || importing;
+
+  const handleCloseAttempt = useCallback(() => {
+    if (suggestions.length > 0) {
+      setSuggestions([]);
+      setActiveSuggestionIdx(-1);
+      return;
+    }
+    if (!busy) onClose();
+  }, [suggestions.length, busy, onClose]);
+
+  const modalRef = useModalA11y<HTMLDivElement>({
+    open,
+    onClose: handleCloseAttempt,
+    disabled: busy && suggestions.length === 0,
+    initialFocusRef: titleInputRef,
+  });
+
   useEffect(() => {
     if (!open) return;
+    setActiveTab('manual');
     setErrorMsg(null);
     setSuggestions([]);
+    setActiveSuggestionIdx(-1);
     setImportRows([]);
     setFileLabels([]);
     setImportProgress(null);
@@ -152,15 +186,15 @@ export function AddWatchModal({
   }, [open, isDemoMode, initialEntry]);
 
   useEffect(() => {
-    if (!open || !allowSearch) return;
+    if (!open || !allowSearch || activeTab !== 'manual') return;
     const q = title.trim();
     if (q.length < 2 || tmdbId !== null) {
       setSuggestions([]);
+      setActiveSuggestionIdx(-1);
       return;
     }
 
     const timer = window.setTimeout(async () => {
-      // Always provide instant catalog matches; supplement with live TMDB Edge Function when signed in
       const localMatches: TmdbSearchResult[] = DEMO_MOVIE_CATALOG.filter((m) =>
         m.title.toLowerCase().includes(q.toLowerCase())
       )
@@ -178,36 +212,43 @@ export function AddWatchModal({
         setSearching(true);
         try {
           const remote = await searchTmdbViaProxy(q);
-          setSuggestions(remote.length > 0 ? remote.slice(0, 6) : localMatches);
+          const next = remote.length > 0 ? remote.slice(0, 6) : localMatches;
+          setSuggestions(next);
+          setActiveSuggestionIdx(-1);
         } catch {
           setSuggestions(localMatches);
+          setActiveSuggestionIdx(-1);
         } finally {
           setSearching(false);
         }
       } else {
         setSuggestions(localMatches);
+        setActiveSuggestionIdx(-1);
       }
     }, 280);
 
     return () => window.clearTimeout(timer);
-  }, [title, open, isDemoMode, tmdbId, allowSearch]);
+  }, [title, open, isDemoMode, tmdbId, allowSearch, activeTab]);
 
   if (!open) return null;
 
-  const hasImportRows = !isEditing && importRows.length > 0;
+  const isImportMode = !isEditing && Boolean(onConfirmImport) && activeTab === 'import';
+  const hasImportRows = importRows.length > 0;
   const newRowsCount = importRows.filter((r) => !r.isDuplicate).length;
   const duplicateCount = importRows.filter((r) => r.isDuplicate).length;
   const autoRewatchCount = importRows.filter((r) => !r.isDuplicate && r.autoRewatchDetected).length;
   const withoutTimeCount = importRows.filter((r) => !r.isDuplicate && !r.watchedTime).length;
-  const busy = submitting || importing;
-  const canSave =
-    !busy && !parsing && (!hasImportRows || newRowsCount > 0 || Boolean(title.trim()));
+
+  const canSave = isImportMode
+    ? !busy && !parsing && hasImportRows && newRowsCount > 0
+    : !busy && !parsing;
 
   const handleSelectSuggestion = async (item: TmdbSearchResult) => {
     setTitle(item.title);
     setTmdbId(item.tmdbId > 0 ? item.tmdbId : null);
     if (item.releaseYear) setReleaseYear(String(item.releaseYear));
     setSuggestions([]);
+    setActiveSuggestionIdx(-1);
     setAllowSearch(false);
 
     const catalogHit = DEMO_MOVIE_CATALOG.find(
@@ -234,6 +275,27 @@ export function AddWatchModal({
       } finally {
         setSearching(false);
       }
+    }
+  };
+
+  const handleTitleKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestionIdx((prev) => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestionIdx((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+    } else if (e.key === 'Enter' && activeSuggestionIdx >= 0) {
+      e.preventDefault();
+      const target = suggestions[activeSuggestionIdx];
+      if (target) void handleSelectSuggestion(target);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setSuggestions([]);
+      setActiveSuggestionIdx(-1);
     }
   };
 
@@ -333,9 +395,8 @@ export function AddWatchModal({
     e.preventDefault();
     if (busy || parsing) return;
 
-    const cleanTitle = title.trim();
-
-    if (isEditing || !hasImportRows) {
+    if (!isImportMode) {
+      const cleanTitle = title.trim();
       if (!cleanTitle) {
         setErrorMsg('Введите название фильма.');
         return;
@@ -354,46 +415,41 @@ export function AddWatchModal({
       return;
     }
 
-    if (!cleanTitle && newRowsCount === 0) {
+    if (!hasImportRows) {
+      setErrorMsg('Сначала выберите или перетащите CSV, TXT или JSON файл.');
+      return;
+    }
+    if (newRowsCount === 0) {
       setErrorMsg('Все записи из файла уже есть в журнале.');
       return;
     }
 
     setErrorMsg(null);
+    setImporting(true);
     try {
-      if (cleanTitle) {
-        setSubmitting(true);
-        await onSave(buildManualPayload(cleanTitle));
-        resetManualFields();
-        setSubmitting(false);
-      }
-
-      if (newRowsCount > 0 && onConfirmImport) {
-        setImporting(true);
+      if (onConfirmImport) {
         await onConfirmImport(importRows, isDemoMode && replaceDemo, (done, total) => {
           setImportProgress({ done, total });
         });
-        setImportRows([]);
-        setFileLabels([]);
-        setImportProgress(null);
       }
-
+      setImportRows([]);
+      setFileLabels([]);
+      setImportProgress(null);
       onClose();
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'Не удалось сохранить или импортировать просмотры.'
-      );
+      setErrorMsg(err instanceof Error ? err.message : 'Не удалось импортировать просмотры.');
     } finally {
-      setSubmitting(false);
       setImporting(false);
     }
   };
 
   const submitButtonLabel = isEditing
     ? 'Сохранить изменения'
-    : hasImportRows && !title.trim()
-      ? `Сохранить (${newRowsCount})`
-      : 'Сохранить';
+    : isImportMode
+      ? newRowsCount > 0
+        ? `Импортировать (${newRowsCount})`
+        : 'Импортировать'
+      : 'Сохранить просмотр';
 
   return (
     <div
@@ -403,18 +459,23 @@ export function AddWatchModal({
       }}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-watch-modal-title"
+        tabIndex={-1}
         className={`w-full ${
-          hasImportRows ? 'max-w-2xl' : 'max-w-lg'
-        } rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)] transition-[max-width] duration-200`}
+          isImportMode && hasImportRows ? 'max-w-2xl' : 'max-w-lg'
+        } rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)] transition-[max-width] duration-200 focus:outline-none`}
       >
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-line shrink-0">
           <div className="flex items-center gap-2">
             {isEditing ? (
-              <Pencil className="w-4 h-4 text-[#45d1c6]" />
+              <Pencil className="w-4 h-4 text-[#45d1c6]" aria-hidden="true" />
             ) : (
-              <PlusCircle className="w-4 h-4 text-[#f06292]" />
+              <PlusCircle className="w-4 h-4 text-[#f06292]" aria-hidden="true" />
             )}
-            <h3 className="text-sm font-semibold text-white">
+            <h3 id="add-watch-modal-title" className="text-sm font-semibold text-white">
               {isEditing ? 'Редактировать просмотр' : 'Добавить просмотр'}
             </h3>
           </div>
@@ -423,225 +484,303 @@ export function AddWatchModal({
             disabled={busy}
             onClick={onClose}
             aria-label="Закрыть"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer"
+            className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
+        {/* Segmented Tab Bar separating Manual Entry vs File Import */}
+        {!isEditing && onConfirmImport && (
+          <div className="px-5 py-2.5 border-b border-line bg-canvas/40 shrink-0">
+            <div
+              role="tablist"
+              aria-label="Способ добавления просмотра"
+              className="grid grid-cols-2 p-1 rounded-xl bg-canvas border border-line gap-1"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'manual'}
+                disabled={busy}
+                onClick={() => {
+                  setActiveTab('manual');
+                  setErrorMsg(null);
+                }}
+                className={`inline-flex items-center justify-center gap-1.5 min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  activeTab === 'manual'
+                    ? 'bg-cardElevated text-white border border-lineStrong shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-[#f06292]" aria-hidden="true" />
+                <span>Добавить вручную</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'import'}
+                disabled={busy}
+                onClick={() => {
+                  setActiveTab('import');
+                  setErrorMsg(null);
+                  setSuggestions([]);
+                }}
+                className={`inline-flex items-center justify-center gap-1.5 min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  activeTab === 'import'
+                    ? 'bg-cardElevated text-white border border-lineStrong shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5 text-[#45d1c6]" aria-hidden="true" />
+                <span>
+                  Импорт файла{hasImportRows ? ` (${newRowsCount})` : ''}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {/* Movie Title + TMDB Autocomplete */}
-            <div className="relative">
-              <label htmlFor="fTitle" className="block text-xs font-medium text-slate-300 mb-1.5">
-                Название фильма (TMDB поиск)
-              </label>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="fTitle"
-                  type="text"
-                  required={!hasImportRows}
-                  autoFocus
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    setTmdbId(null);
-                    setDirectors([]);
-                    setCountries([]);
-                    setGenres([]);
-                    setAllowSearch(true);
-                  }}
-                  placeholder="Например: Одиссея или Дюна"
-                  className="w-full pl-9 pr-9 py-2 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#f06292]"
-                />
-                {searching && (
-                  <Loader2 className="w-3.5 h-3.5 text-[#45d1c6] animate-spin absolute right-3.5 top-1/2 -translate-y-1/2" />
-                )}
-              </div>
-
-              {suggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-line">
-                  {suggestions.map((item) => (
-                    <button
-                      key={`${item.tmdbId}-${item.title}`}
-                      type="button"
-                      onClick={() => void handleSelectSuggestion(item)}
-                      className="w-full px-3.5 py-2.5 text-left hover:bg-cardElevated transition-colors flex items-center justify-between gap-2 cursor-pointer"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-white truncate">{item.title}</div>
-                        {item.overview && (
-                          <div className="text-[11px] text-slate-400 truncate">{item.overview}</div>
-                        )}
-                      </div>
-                      {item.releaseYear && (
-                        <span className="text-[11px] font-mono text-[#45d1c6] shrink-0">
-                          {item.releaseYear}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="fRating" className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Оценка (0.5–5)
-                </label>
-                <select
-                  id="fRating"
-                  value={rating}
-                  onChange={(e) => setRating(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
-                >
-                  <option value="5">5.0 ★</option>
-                  <option value="4.5">4.5 ★</option>
-                  <option value="4">4.0 ★</option>
-                  <option value="3.5">3.5 ★</option>
-                  <option value="3">3.0 ★</option>
-                  <option value="2.5">2.5 ★</option>
-                  <option value="2">2.0 ★</option>
-                  <option value="1.5">1.5 ★</option>
-                  <option value="1">1.0 ★</option>
-                  <option value="0.5">0.5 ★</option>
-                  <option value="">Без оценки</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="fRuntime"
-                  className="block text-xs font-medium text-slate-300 mb-1.5"
-                >
-                  Длительность (мин)
-                </label>
-                <input
-                  id="fRuntime"
-                  type="number"
-                  min={1}
-                  max={1500}
-                  value={runtime}
-                  onChange={(e) => setRuntime(e.target.value)}
-                  required={!hasImportRows}
-                  className="w-full px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="fReleaseYear"
-                  className="block text-xs font-medium text-slate-300 mb-1.5"
-                >
-                  Год выхода
-                </label>
-                <input
-                  id="fReleaseYear"
-                  type="number"
-                  min={1870}
-                  max={2030}
-                  value={releaseYear}
-                  onChange={(e) => setReleaseYear(e.target.value)}
-                  required={!hasImportRows}
-                  className="w-full px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="fDate" className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Дата просмотра
-                </label>
-                <input
-                  id="fDate"
-                  type="date"
-                  value={watchedDate}
-                  onChange={(e) => setWatchedDate(e.target.value)}
-                  required={!hasImportRows}
-                  className="w-full px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="fTimeOfDay"
-                  className="block text-xs font-medium text-slate-300 mb-1.5"
-                >
-                  Время суток
-                </label>
-                <select
-                  id="fTimeOfDay"
-                  value={timeOfDayBucket}
-                  onChange={(e) => {
-                    setTimeOfDayBucket(e.target.value as BucketOption);
-                    setExactTime('');
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-canvas border border-line text-sm text-white focus:outline-none focus:border-[#f06292]"
-                >
-                  <option value="0">05:00–11:59</option>
-                  <option value="1">12:00–16:59</option>
-                  <option value="2">17:00–22:59</option>
-                  <option value="3">23:00–04:59</option>
-                  <option value="none">Не указано (без времени)</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="fExactTime"
-                  className="block text-xs font-medium text-slate-300 mb-1.5"
-                >
-                  Точное время (опц.)
-                </label>
-                <input
-                  id="fExactTime"
-                  type="time"
-                  value={exactTime}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setExactTime(val);
-                    if (val) {
-                      const b = timeStringToBucket(`${val}:00`);
-                      if (b !== null) setTimeOfDayBucket(String(b) as BucketOption);
-                    }
-                  }}
-                  className="w-full px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center justify-between p-2.5 rounded-xl bg-canvas border border-line cursor-pointer">
-              <div>
-                <span className="text-xs font-medium text-slate-200 block">
-                  Пересмотр (Rewatch)
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Отметит фильм как повторный просмотр
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={isRewatch}
-                onChange={(e) => setIsRewatch(e.target.checked)}
-                className="w-4 h-4 rounded accent-[#d6b85a] cursor-pointer"
-              />
-            </label>
-
-            {/* CSV / TXT / JSON Import Section below manual form */}
-            {!isEditing && onConfirmImport && (
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
+            {!isImportMode ? (
               <>
-                <div className="relative flex items-center py-0.5">
-                  <div className="flex-grow border-t border-line" />
-                  <span className="shrink mx-3 text-xs text-slate-400">или</span>
-                  <div className="flex-grow border-t border-line" />
+                {/* Movie Title + Keyboard-Accessible TMDB Autocomplete */}
+                <div className="relative">
+                  <label htmlFor="fTitle" className="block text-xs font-medium text-slate-300 mb-1.5">
+                    Название фильма (TMDB поиск)
+                  </label>
+                  <div className="relative">
+                    <Search
+                      className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                      aria-hidden="true"
+                    />
+                    <input
+                      ref={titleInputRef}
+                      id="fTitle"
+                      type="text"
+                      required
+                      role="combobox"
+                      aria-expanded={suggestions.length > 0}
+                      aria-controls="tmdb-suggestions-listbox"
+                      aria-autocomplete="list"
+                      aria-activedescendant={
+                        activeSuggestionIdx >= 0 ? `tmdb-opt-${activeSuggestionIdx}` : undefined
+                      }
+                      value={title}
+                      onChange={(e) => {
+                        setTitle(e.target.value);
+                        setTmdbId(null);
+                        setDirectors([]);
+                        setCountries([]);
+                        setGenres([]);
+                        setAllowSearch(true);
+                      }}
+                      onKeyDown={handleTitleKeyDown}
+                      placeholder="Например: Одиссея или Дюна"
+                      className="w-full min-h-10 pl-9 pr-9 py-2 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    />
+                    {searching && (
+                      <Loader2
+                        className="w-3.5 h-3.5 text-[#45d1c6] animate-spin absolute right-3.5 top-1/2 -translate-y-1/2"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </div>
+
+                  {suggestions.length > 0 && (
+                    <div
+                      id="tmdb-suggestions-listbox"
+                      role="listbox"
+                      aria-label="Результаты поиска фильма"
+                      className="absolute left-0 right-0 mt-1.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-line"
+                    >
+                      {suggestions.map((item, idx) => {
+                        const isActive = idx === activeSuggestionIdx;
+                        return (
+                          <button
+                            id={`tmdb-opt-${idx}`}
+                            key={`${item.tmdbId}-${item.title}`}
+                            type="button"
+                            role="option"
+                            aria-selected={isActive}
+                            onMouseEnter={() => setActiveSuggestionIdx(idx)}
+                            onClick={() => void handleSelectSuggestion(item)}
+                            className={`w-full min-h-10 px-3.5 py-2.5 text-left transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                              isActive ? 'bg-cardElevated text-white' : 'hover:bg-cardElevated'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium text-white truncate">{item.title}</div>
+                              {item.overview && (
+                                <div className="text-xs text-slate-400 truncate">{item.overview}</div>
+                              )}
+                            </div>
+                            {item.releaseYear && (
+                              <span className="text-xs font-mono text-[#45d1c6] shrink-0">
+                                {item.releaseYear}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="fRating" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Оценка (0.5–5)
+                    </label>
+                    <select
+                      id="fRating"
+                      value={rating}
+                      onChange={(e) => setRating(e.target.value)}
+                      className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    >
+                      <option value="5">5.0 ★</option>
+                      <option value="4.5">4.5 ★</option>
+                      <option value="4">4.0 ★</option>
+                      <option value="3.5">3.5 ★</option>
+                      <option value="3">3.0 ★</option>
+                      <option value="2.5">2.5 ★</option>
+                      <option value="2">2.0 ★</option>
+                      <option value="1.5">1.5 ★</option>
+                      <option value="1">1.0 ★</option>
+                      <option value="0.5">0.5 ★</option>
+                      <option value="">Без оценки</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="fRuntime"
+                      className="block text-xs font-medium text-slate-300 mb-1.5"
+                    >
+                      Длительность (мин)
+                    </label>
+                    <input
+                      id="fRuntime"
+                      type="number"
+                      min={1}
+                      max={1500}
+                      value={runtime}
+                      onChange={(e) => setRuntime(e.target.value)}
+                      required
+                      className="w-full min-h-10 px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      htmlFor="fReleaseYear"
+                      className="block text-xs font-medium text-slate-300 mb-1.5"
+                    >
+                      Год выхода
+                    </label>
+                    <input
+                      id="fReleaseYear"
+                      type="number"
+                      min={1870}
+                      max={2030}
+                      value={releaseYear}
+                      onChange={(e) => setReleaseYear(e.target.value)}
+                      required
+                      className="w-full min-h-10 px-3.5 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="fDate" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Дата просмотра
+                    </label>
+                    <input
+                      id="fDate"
+                      type="date"
+                      value={watchedDate}
+                      onChange={(e) => setWatchedDate(e.target.value)}
+                      required
+                      className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      htmlFor="fTimeOfDay"
+                      className="block text-xs font-medium text-slate-300 mb-1.5"
+                    >
+                      Время суток
+                    </label>
+                    <select
+                      id="fTimeOfDay"
+                      value={timeOfDayBucket}
+                      onChange={(e) => {
+                        setTimeOfDayBucket(e.target.value as BucketOption);
+                        setExactTime('');
+                      }}
+                      className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    >
+                      <option value="0">05:00–11:59</option>
+                      <option value="1">12:00–16:59</option>
+                      <option value="2">17:00–22:59</option>
+                      <option value="3">23:00–04:59</option>
+                      <option value="none">Не указано (без времени)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="fExactTime"
+                      className="block text-xs font-medium text-slate-300 mb-1.5"
+                    >
+                      Точное время (опц.)
+                    </label>
+                    <input
+                      id="fExactTime"
+                      type="time"
+                      value={exactTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setExactTime(val);
+                        if (val) {
+                          const b = timeStringToBucket(`${val}:00`);
+                          if (b !== null) setTimeOfDayBucket(String(b) as BucketOption);
+                        }
+                      }}
+                      className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-center justify-between p-3 rounded-xl bg-canvas border border-line cursor-pointer focus-within:ring-2 focus-within:ring-[#45d1c6]">
+                  <div>
+                    <span className="text-xs font-medium text-slate-200 block">
+                      Пересмотр (Rewatch)
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Отметит фильм как повторный просмотр
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isRewatch}
+                    onChange={(e) => setIsRewatch(e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#d6b85a] cursor-pointer focus:outline-none"
+                  />
+                </label>
+              </>
+            ) : (
+              /* Dedicated File Import Tab */
+              <div className="space-y-3">
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Загрузить файлы CSV, TXT или JSON для импорта"
                   onDragOver={(e) => {
                     e.preventDefault();
                     if (!busy && !parsing) setDragging(true);
@@ -651,7 +790,13 @@ export function AddWatchModal({
                   onClick={() => {
                     if (!busy && !parsing) fileInputRef.current?.click();
                   }}
-                  className={`rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all ${
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !busy && !parsing) {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className={`rounded-xl border-2 border-dashed p-5 text-center cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
                     dragging
                       ? 'border-[#45d1c6] bg-[#45d1c6]/10'
                       : 'border-lineStrong bg-canvas/60 hover:border-[#45d1c6]/60'
@@ -662,37 +807,38 @@ export function AddWatchModal({
                     type="file"
                     accept=".csv,.txt,.json"
                     multiple
+                    tabIndex={-1}
                     className="hidden"
                     onChange={(e) => {
                       void processFiles(Array.from(e.target.files ?? []));
                       e.target.value = '';
                     }}
                   />
-                  <div className="w-8 h-8 rounded-xl bg-cardElevated border border-line flex items-center justify-center mx-auto mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-cardElevated border border-line flex items-center justify-center mx-auto mb-2.5">
                     {parsing ? (
-                      <Loader2 className="w-4 h-4 text-[#45d1c6] animate-spin" />
+                      <Loader2 className="w-5 h-5 text-[#45d1c6] animate-spin" aria-hidden="true" />
                     ) : (
-                      <Upload className="w-4 h-4 text-[#45d1c6]" />
+                      <Upload className="w-5 h-5 text-[#45d1c6]" aria-hidden="true" />
                     )}
                   </div>
                   <p className="text-xs font-medium text-white">
                     Импорт CSV (Letterboxd / IMDb), .txt или .json
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Перетащите файлы сюда или нажмите для выбора
+                  <p className="text-xs text-slate-400 mt-1">
+                    Перетащите файлы сюда или нажмите для выбора с диска
                   </p>
                 </div>
 
                 {importRows.length > 0 && (
                   <div className="space-y-3">
                     {isDemoMode && (
-                      <label className="flex items-center justify-between p-2.5 rounded-xl bg-canvas border border-line cursor-pointer text-xs">
+                      <label className="flex items-center justify-between p-3 rounded-xl bg-canvas border border-line cursor-pointer text-xs focus-within:ring-2 focus-within:ring-[#45d1c6]">
                         <div>
                           <span className="font-medium text-slate-200 block">
                             Заменить демо-данные на импортированный архив
                           </span>
-                          <span className="text-[11px] text-slate-500">
-                            Удобно для проверки графика «Время суток» на чистом CSV без времени
+                          <span className="text-xs text-slate-400">
+                            Скрывает учебные данные 2024–2026 и показывает только ваш архив
                           </span>
                         </div>
                         <input
@@ -704,14 +850,14 @@ export function AddWatchModal({
                             const baseline = next ? [] : existingEntries;
                             setImportRows((prev) => annotateImportBatch(prev, baseline));
                           }}
-                          className="w-4 h-4 accent-[#45d1c6] cursor-pointer"
+                          className="w-4 h-4 accent-[#45d1c6] cursor-pointer focus:outline-none"
                         />
                       </label>
                     )}
 
                     {/* Summary Badges + Clear */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
                         <span className="px-2 py-1 rounded-lg bg-cardElevated border border-line text-slate-200">
                           Файлы: {fileLabels.join(', ')}
                         </span>
@@ -719,7 +865,7 @@ export function AddWatchModal({
                           К импорту: {newRowsCount}
                         </span>
                         {duplicateCount > 0 && (
-                          <span className="px-2 py-1 rounded-lg bg-cardElevated border border-line text-slate-400">
+                          <span className="px-2 py-1 rounded-lg bg-cardElevated border border-line text-slate-300">
                             Дубликатов пропущено: {duplicateCount}
                           </span>
                         )}
@@ -729,7 +875,7 @@ export function AddWatchModal({
                           </span>
                         )}
                         {withoutTimeCount > 0 && (
-                          <span className="px-2 py-1 rounded-lg bg-cardElevated border border-line text-slate-400">
+                          <span className="px-2 py-1 rounded-lg bg-cardElevated border border-line text-slate-300">
                             Без времени суток: {withoutTimeCount}
                           </span>
                         )}
@@ -739,17 +885,17 @@ export function AddWatchModal({
                         type="button"
                         disabled={busy}
                         onClick={clearImport}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-slate-400 hover:text-[#f06292] hover:bg-cardElevated transition-colors cursor-pointer disabled:opacity-40"
+                        className="inline-flex items-center gap-1 min-h-9 px-2.5 py-1 rounded-lg text-xs text-slate-300 hover:text-[#f06292] hover:bg-cardElevated transition-colors cursor-pointer disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292]"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>Очистить</span>
                       </button>
                     </div>
 
                     {/* Preview Table */}
-                    <div className="rounded-xl border border-line bg-canvas/50 overflow-hidden max-h-48 overflow-y-auto">
+                    <div className="rounded-xl border border-line bg-canvas/50 overflow-hidden max-h-52 overflow-y-auto">
                       <table className="w-full text-left border-collapse text-xs">
-                        <thead className="bg-cardElevated text-[10px] font-mono uppercase text-slate-400 sticky top-0">
+                        <thead className="bg-cardElevated text-xs font-mono uppercase text-slate-300 sticky top-0">
                           <tr>
                             <th className="py-2 px-3">Фильм</th>
                             <th className="py-2 px-3">Дата</th>
@@ -759,24 +905,24 @@ export function AddWatchModal({
                         </thead>
                         <tbody className="divide-y divide-line/60">
                           {importRows.slice(0, 50).map((r) => (
-                            <tr key={r.tempId} className={r.isDuplicate ? 'opacity-45' : ''}>
+                            <tr key={r.tempId} className={r.isDuplicate ? 'opacity-50' : ''}>
                               <td className="py-2 px-3 text-slate-200">
                                 {r.title}{' '}
                                 {r.releaseYear && (
-                                  <span className="font-mono text-slate-500">
+                                  <span className="font-mono text-slate-400">
                                     ({r.releaseYear})
                                   </span>
                                 )}
                               </td>
-                              <td className="py-2 px-3 font-mono text-slate-400">
+                              <td className="py-2 px-3 font-mono text-slate-300">
                                 {r.watchedDate}
                               </td>
                               <td className="py-2 px-3 font-mono text-[#d6b85a]">
                                 {r.rating !== null ? `${r.rating.toFixed(1)}★` : '—'}
                               </td>
-                              <td className="py-2 px-3 font-mono text-[10px]">
+                              <td className="py-2 px-3 font-mono text-xs">
                                 {r.isDuplicate ? (
-                                  <span className="text-slate-500">Дубликат</span>
+                                  <span className="text-slate-400">Дубликат</span>
                                 ) : r.isRewatch ? (
                                   <span className="text-[#d6b85a]">↺ Пересмотр</span>
                                 ) : (
@@ -790,14 +936,14 @@ export function AddWatchModal({
                     </div>
 
                     {importRows.length > 50 && (
-                      <p className="text-[11px] font-mono text-slate-500">
+                      <p className="text-xs font-mono text-slate-400">
                         Показаны первые 50 из {importRows.length} строк.
                       </p>
                     )}
 
                     {importProgress && (
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                        <div className="flex justify-between text-xs font-mono text-slate-300">
                           <span>Обогащение метаданных через TMDB Edge Function...</span>
                           <span>
                             {importProgress.done} / {importProgress.total}
@@ -817,12 +963,15 @@ export function AddWatchModal({
                     )}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {errorMsg && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-[#f06292]/10 border border-[#f06292]/30 text-xs text-[#f06292]">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div
+                role="alert"
+                className="flex items-start gap-2 p-3 rounded-xl bg-[#f06292]/10 border border-[#f06292]/30 text-xs text-[#f06292]"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -833,16 +982,16 @@ export function AddWatchModal({
               type="button"
               disabled={busy}
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer"
+              className="min-h-10 px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-10 px-4 py-2 rounded-xl text-xs font-semibold bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
             >
-              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
               {submitButtonLabel}
             </button>
           </div>

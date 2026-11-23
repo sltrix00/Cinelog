@@ -26,6 +26,7 @@ import {
   signUpWithEmail,
   updateAccountPassword,
 } from '../lib/supabase';
+import { useModalA11y } from './useModalA11y';
 
 interface AuthModalProps {
   open: boolean;
@@ -98,6 +99,23 @@ export function AuthModal({
   const [loggingOut, setLoggingOut] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
 
+  const busy = loading || googleLoading || savingNickname || loggingOut;
+
+  const handleClose = () => {
+    setMessage(null);
+    if (isPasswordRecovery) {
+      onCancelPasswordRecovery?.();
+      return;
+    }
+    onClose();
+  };
+
+  const modalRef = useModalA11y<HTMLDivElement>({
+    open,
+    onClose: handleClose,
+    disabled: busy,
+  });
+
   useEffect(() => {
     if (!open) return;
     setShowEmail(false);
@@ -117,7 +135,6 @@ export function AuthModal({
 
   if (!open) return null;
 
-  const busy = loading || googleLoading || savingNickname || loggingOut;
   const isProfileView = !isPasswordRecovery && Boolean(userEmail);
 
   const nicknameValidation = validateNicknameInput(nicknameDraft);
@@ -128,15 +145,6 @@ export function AuthModal({
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setMessage(null);
-  };
-
-  const handleClose = () => {
-    setMessage(null);
-    if (isPasswordRecovery) {
-      onCancelPasswordRecovery?.();
-      return;
-    }
-    onClose();
   };
 
   const hasRequiredPasswordComplexity = (pwd: string) =>
@@ -323,12 +331,19 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isPasswordRecovery && !busy) handleClose();
       }}
     >
-      <div className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        tabIndex={-1}
+        className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+      >
         {isProfileView && userEmail ? (
           <>
             {/* Profile Hero Header */}
@@ -342,9 +357,9 @@ export function AuthModal({
                 disabled={busy}
                 onClick={handleClose}
                 aria-label="Закрыть"
-                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer"
+                className="absolute top-3.5 right-3.5 w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
 
               <div className="flex flex-col items-center text-center">
@@ -355,30 +370,30 @@ export function AuthModal({
                         {profileInitials}
                       </span>
                     ) : (
-                      <CircleUserRound className="w-7 h-7 text-[#45d1c6]" />
+                      <CircleUserRound className="w-7 h-7 text-[#45d1c6]" aria-hidden="true" />
                     )}
                   </div>
                 </div>
 
-                <h3 className="mt-3 text-lg font-bold tracking-tight text-white">
+                <h3 id="auth-modal-title" className="mt-3 text-lg font-bold tracking-tight text-white">
                   {currentNickname ?? 'Профиль'}
                 </h3>
 
-                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#45d1c6]/10 border border-[#45d1c6]/25 text-[11px] font-medium text-[#45d1c6]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#45d1c6] animate-pulse" />
+                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#45d1c6]/10 border border-[#45d1c6]/25 text-xs font-medium text-[#45d1c6]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#45d1c6] animate-pulse" aria-hidden="true" />
                   <span>Облачная синхронизация</span>
                 </div>
 
                 {watchCount !== undefined && (
                   <div className="mt-4 w-full grid grid-cols-2 gap-2.5">
                     <div className="rounded-xl bg-canvas/75 border border-line px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">Просмотров</div>
+                      <div className="text-xs text-slate-400">Просмотров</div>
                       <div className="text-sm font-bold font-mono tabular-nums text-white mt-0.5">
                         {watchCount}
                       </div>
                     </div>
                     <div className="rounded-xl bg-canvas/75 border border-line px-3 py-2 text-center">
-                      <div className="text-[11px] text-slate-400">Уникальных фильмов</div>
+                      <div className="text-xs text-slate-400">Уникальных фильмов</div>
                       <div className="text-sm font-bold font-mono tabular-nums text-[#45d1c6] mt-0.5">
                         {uniqueFilmsCount ?? watchCount}
                       </div>
@@ -400,10 +415,10 @@ export function AuthModal({
                     htmlFor="profileNickname"
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300"
                   >
-                    <AtSign className="w-3.5 h-3.5 text-[#f06292]" />
+                    <AtSign className="w-3.5 h-3.5 text-[#f06292]" aria-hidden="true" />
                     <span>Никнейм</span>
                   </label>
-                  <span className="text-[11px] text-slate-500">3–32 симв. · A–Z, 0–9, _ . -</span>
+                  <span className="text-xs text-slate-400">3–32 симв. · A–Z, 0–9, _ . -</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -415,7 +430,7 @@ export function AuthModal({
                     onChange={(e) => setNicknameDraft(e.target.value)}
                     placeholder="Придумайте никнейм"
                     disabled={savingNickname || loggingOut}
-                    className="min-w-0 flex-1 px-3 py-2 rounded-xl bg-card border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6] disabled:opacity-50"
+                    className="min-w-0 flex-1 min-h-10 px-3 py-2 rounded-xl bg-card border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6] disabled:opacity-50"
                   />
                   <button
                     type="submit"
@@ -425,22 +440,22 @@ export function AuthModal({
                       savingNickname ||
                       loggingOut
                     }
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#45d1c6] hover:bg-[#5ee0d6] disabled:opacity-40 text-[#0b0e17] text-xs font-semibold transition-colors cursor-pointer"
+                    className="shrink-0 inline-flex items-center gap-1.5 min-h-10 px-3.5 py-2 rounded-xl bg-[#45d1c6] hover:bg-[#5ee0d6] disabled:opacity-40 text-[#0b0e17] text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                   >
                     {savingNickname ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                     )}
                     <span>Сохранить</span>
                   </button>
                 </div>
 
                 {!nicknameValidation.valid && nicknameDraft.trim().length > 0 && (
-                  <p className="text-[11px] text-[#f06292]">{nicknameValidation.error}</p>
+                  <p className="text-xs text-[#f06292]">{nicknameValidation.error}</p>
                 )}
                 {currentNickname && nicknameDraft.trim().length === 0 && (
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     Оставьте пустым, чтобы скрыть никнейм
                   </p>
                 )}
@@ -449,15 +464,15 @@ export function AuthModal({
               {/* Masked Email Section */}
               <div className="rounded-xl bg-canvas/80 border border-line p-4 space-y-2">
                 <div className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300">
-                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <Mail className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
                   <span>Электронная почта</span>
                 </div>
-                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-card border border-line">
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-card border border-line">
                   <span
                     className={
                       showEmail
                         ? 'font-mono text-sm text-slate-100 truncate select-all'
-                        : 'tracking-[0.2em] text-sm text-slate-400 select-none truncate'
+                        : 'tracking-[0.2em] text-sm text-slate-300 select-none truncate'
                     }
                   >
                     {showEmail ? userEmail : maskEmailAsPassword(userEmail)}
@@ -467,15 +482,20 @@ export function AuthModal({
                     onClick={() => setShowEmail((prev) => !prev)}
                     aria-label={showEmail ? 'Скрыть почту' : 'Показать почту'}
                     aria-pressed={showEmail}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer shrink-0"
+                    className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                   >
-                    {showEmail ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showEmail ? (
+                      <EyeOff className="w-4 h-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="w-4 h-4" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
               </div>
 
               {message && (
                 <div
+                  role={message.type === 'error' ? 'alert' : 'status'}
                   className={`p-3 rounded-xl text-xs border leading-relaxed ${
                     message.type === 'error'
                       ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
@@ -490,12 +510,12 @@ export function AuthModal({
                 type="button"
                 disabled={busy}
                 onClick={() => void handleLogout()}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292]/10 hover:bg-[#f06292]/20 disabled:opacity-50 border border-[#f06292]/25 text-xs font-semibold text-[#f06292] transition-colors cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2 min-h-10 px-4 py-2.5 rounded-xl bg-[#f06292]/10 hover:bg-[#f06292]/20 disabled:opacity-50 border border-[#f06292]/25 text-xs font-semibold text-[#f06292] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292]"
               >
                 {loggingOut ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 ) : (
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
                 <span>Выйти из аккаунта</span>
               </button>
@@ -506,13 +526,16 @@ export function AuthModal({
             <div className="relative px-6 pt-6 pb-2 text-center">
               <button
                 type="button"
+                disabled={busy}
                 onClick={handleClose}
                 aria-label="Закрыть"
-                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+                className="absolute top-3.5 right-3.5 w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
-              <h3 className="text-lg font-semibold tracking-tight text-white">{modalTitle}</h3>
+              <h3 id="auth-modal-title" className="text-lg font-semibold tracking-tight text-white">
+                {modalTitle}
+              </h3>
               <p className="text-xs text-slate-400 mt-1">{modalSubtitle}</p>
             </div>
 
@@ -520,8 +543,11 @@ export function AuthModal({
               {isPasswordRecovery ? (
                 <form onSubmit={handlePasswordRecoverySubmit} className="space-y-3.5">
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">Новый пароль</label>
+                    <label htmlFor="authNewPassword" className="block text-xs text-slate-300 mb-1">
+                      Новый пароль
+                    </label>
                     <input
+                      id="authNewPassword"
                       type="password"
                       required
                       minLength={8}
@@ -530,13 +556,19 @@ export function AuthModal({
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Минимум 8 символов (буквы и цифры)"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                      className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">Повторите пароль</label>
+                    <label
+                      htmlFor="authConfirmPassword"
+                      className="block text-xs text-slate-300 mb-1"
+                    >
+                      Повторите пароль
+                    </label>
                     <input
+                      id="authConfirmPassword"
                       type="password"
                       required
                       minLength={8}
@@ -545,12 +577,13 @@ export function AuthModal({
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Введите пароль ещё раз"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                      className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
                     />
                   </div>
 
                   {message && (
                     <div
+                      role={message.type === 'error' ? 'alert' : 'status'}
                       className={`p-3 rounded-xl text-xs border leading-relaxed ${
                         message.type === 'error'
                           ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
@@ -564,9 +597,9 @@ export function AuthModal({
                   <button
                     type="submit"
                     disabled={busy}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
+                    className="w-full inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                   >
-                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                     Сохранить новый пароль
                   </button>
                 </form>
@@ -587,10 +620,10 @@ export function AuthModal({
                         type="button"
                         disabled={busy || !isSupabaseConfigured}
                         onClick={() => void handleGoogle()}
-                        className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-sm font-medium border border-white/15 shadow-sm transition-all cursor-pointer"
+                        className="w-full inline-flex items-center justify-center gap-2.5 min-h-11 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-sm font-medium border border-white/15 shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                       >
                         {googleLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-600" aria-hidden="true" />
                         ) : (
                           <GoogleIcon />
                         )}
@@ -601,7 +634,7 @@ export function AuthModal({
 
                       <div className="relative flex items-center py-0.5">
                         <div className="flex-grow border-t border-line" />
-                        <span className="shrink mx-3 text-[11px] font-mono uppercase text-slate-500">
+                        <span className="shrink mx-3 text-xs font-mono uppercase text-slate-400">
                           или
                         </span>
                         <div className="flex-grow border-t border-line" />
@@ -612,37 +645,44 @@ export function AuthModal({
                   <form onSubmit={handleSubmit} className="space-y-3.5">
                     {mode === 'register' && (
                       <div>
-                        <label className="block text-xs text-slate-300 mb-1">
+                        <label htmlFor="authUsername" className="block text-xs text-slate-300 mb-1">
                           Никнейм (необязательно)
                         </label>
                         <input
+                          id="authUsername"
                           type="text"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           placeholder="cinephile_2026"
                           pattern="^[A-Za-z0-9_.-]{3,32}$"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                          className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
                         />
                       </div>
                     )}
 
                     <div>
-                      <label className="block text-xs text-slate-300 mb-1">Email</label>
+                      <label htmlFor="authEmail" className="block text-xs text-slate-300 mb-1">
+                        Email
+                      </label>
                       <input
+                        id="authEmail"
                         type="email"
                         required
                         autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                        className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
                       />
                     </div>
 
                     {(mode === 'login' || mode === 'register') && (
                       <div>
-                        <label className="block text-xs text-slate-300 mb-1">Пароль</label>
+                        <label htmlFor="authPassword" className="block text-xs text-slate-300 mb-1">
+                          Пароль
+                        </label>
                         <input
+                          id="authPassword"
                           type="password"
                           required
                           minLength={mode === 'register' ? 8 : 6}
@@ -655,13 +695,14 @@ export function AuthModal({
                               ? 'Минимум 8 символов (буквы и цифры)'
                               : 'Введите пароль'
                           }
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#45d1c6]"
+                          className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
                         />
                       </div>
                     )}
 
                     {message && (
                       <div
+                        role={message.type === 'error' ? 'alert' : 'status'}
                         className={`p-3 rounded-xl text-xs border leading-relaxed ${
                           message.type === 'error'
                             ? 'bg-[#f06292]/10 border-[#f06292]/30 text-[#f06292]'
@@ -675,9 +716,9 @@ export function AuthModal({
                     <button
                       type="submit"
                       disabled={busy || !isSupabaseConfigured}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer"
+                      className="w-full inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
-                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                       {mode === 'login'
                         ? 'Войти'
                         : mode === 'register'
@@ -690,7 +731,7 @@ export function AuthModal({
                         <button
                           type="button"
                           onClick={() => switchMode('reset')}
-                          className="text-xs text-[#45d1c6] hover:text-[#6ee3da] transition-colors cursor-pointer"
+                          className="min-h-9 px-2 text-xs text-[#45d1c6] hover:text-[#6ee3da] transition-colors cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                         >
                           Забыли пароль?
                         </button>
@@ -705,7 +746,7 @@ export function AuthModal({
                         <button
                           type="button"
                           onClick={() => switchMode('register')}
-                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                         >
                           Зарегистрироваться
                         </button>
@@ -717,7 +758,7 @@ export function AuthModal({
                         <button
                           type="button"
                           onClick={() => switchMode('login')}
-                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                         >
                           Войти
                         </button>
@@ -729,7 +770,7 @@ export function AuthModal({
                         <button
                           type="button"
                           onClick={() => switchMode('login')}
-                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer"
+                          className="text-[#45d1c6] hover:text-[#6ee3da] font-medium transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                         >
                           Вернуться ко входу
                         </button>

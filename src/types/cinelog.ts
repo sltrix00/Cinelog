@@ -105,6 +105,10 @@ export interface CumulativePoint365 {
   y2025: number;
   y2026: number;
   yoyDelta26vs25: number;
+  byYear: Record<number, number>;
+  yoyDelta: number | null;
+  latestYear: number | null;
+  prevYear: number | null;
 }
 
 export interface IndexTrajectoryPoint {
@@ -121,6 +125,7 @@ export interface MonthlyYearPoint {
   y2024: number;
   y2025: number;
   y2026: number;
+  byYear: Record<number, number>;
 }
 
 export interface DayOfWeekPoint {
@@ -165,6 +170,7 @@ export interface HeatmapSummary {
   cells: HeatmapCell[];
   activeDays: number;
   maxStreak: number;
+  foldedActiveDays?: number;
 }
 
 export interface RatingDistPoint {
@@ -216,6 +222,8 @@ export interface TasteAccentItem {
   name: string;
   count: number;
   pct: number;
+  barPct: number;
+  shareOfTotalPct: number;
   avgRating: string;
 }
 

@@ -107,6 +107,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-pulse,
+  .animate-bounce {
+    animation: none !important;
+  }
+
   .landing-reveal {
     opacity: 1;
     transform: none;

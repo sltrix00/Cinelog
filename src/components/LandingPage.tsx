@@ -65,11 +65,26 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
   const containerRef = useRef<HTMLDivElement>(null);
   const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * SLOGANS.length));
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [isSloganPaused, setIsSloganPaused] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 
-  // Rotate slogan every 12 seconds with a slow, soft cross-fade
   useEffect(() => {
-    let swapTimeoutId: number | undefined;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setPrefersReducedMotion(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
+  // Rotate slogan every 12 seconds unless paused on hover/focus or prefers-reduced-motion is enabled
+  useEffect(() => {
+    if (prefersReducedMotion || isSloganPaused) return;
+
+    let swapTimeoutId: number | undefined;
     const intervalId = window.setInterval(() => {
       setIsFadingOut(true);
       swapTimeoutId = window.setTimeout(() => {
@@ -84,7 +99,7 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
         window.clearTimeout(swapTimeoutId);
       }
     };
-  }, []);
+  }, [prefersReducedMotion, isSloganPaused]);
 
   // Scroll-reveal via IntersectionObserver
   useEffect(() => {
@@ -135,21 +150,21 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
           <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-[520px] h-[220px] rounded-full bg-[#d6b85a]/8 blur-[120px]" />
         </div>
 
-        {/* Minimalist Top Bar (Only Logo + Войти) */}
+        {/* Minimalist Top Bar (Unified Brand Mark + Войти) */}
         <header className="relative z-20 w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 pt-6 pb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6] p-[1.5px]">
               <div className="w-full h-full rounded-[10.5px] bg-canvas flex items-center justify-center">
-                <Clapperboard className="w-4 h-4 text-[#f06292]" />
+                <Clapperboard className="w-4 h-4 text-[#f06292]" aria-hidden="true" />
               </div>
             </div>
-            <span className="text-lg sm:text-xl font-bold tracking-tight text-white">Cinelog</span>
+            <span className="text-lg sm:text-xl font-bold tracking-tight text-white">CINELOG</span>
           </div>
 
           <button
             type="button"
             onClick={onOpenLogin}
-            className="px-4 sm:px-5 py-2 rounded-xl bg-cardElevated/90 hover:bg-line text-slate-100 border border-lineStrong text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+            className="min-h-10 px-4 sm:px-5 py-2 rounded-xl bg-cardElevated/90 hover:bg-line text-slate-100 border border-lineStrong text-xs sm:text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
           >
             Войти
           </button>
@@ -158,8 +173,14 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
         {/* Hero Main Content */}
         <main className="relative z-10 flex-1 flex flex-col justify-center w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-6 sm:py-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-center">
-            {/* Left: Rotating Slogan (no badge above) */}
-            <div className="lg:col-span-6 text-left">
+            {/* Left: Rotating Slogan (pauses on hover/focus or reduced motion) */}
+            <div
+              className="lg:col-span-6 text-left"
+              onMouseEnter={() => setIsSloganPaused(true)}
+              onMouseLeave={() => setIsSloganPaused(false)}
+              onFocus={() => setIsSloganPaused(true)}
+              onBlur={() => setIsSloganPaused(false)}
+            >
               <div
                 className={`min-h-[130px] sm:min-h-[180px] lg:min-h-[220px] flex flex-col justify-center transition-[opacity,transform] ${
                   isFadingOut
@@ -187,7 +208,7 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
 
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
-                    <div className="text-[11px] sm:text-xs text-slate-400">Накопительный темп · 365 дней</div>
+                    <div className="text-xs text-slate-400">Накопительный темп · 365 дней</div>
                     <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono tabular-nums text-white mt-0.5">
                       148 фильмов <span className="text-xs sm:text-sm font-normal text-[#45d1c6]">(+23 к 2025)</span>
                     </div>
@@ -252,24 +273,24 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
 
                 <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mt-4 pt-3.5 border-t border-line text-center">
                   <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
-                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Часов кино</div>
-                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-white mt-1">294 ч</div>
+                    <div className="text-xs text-slate-400 leading-tight">Часов кино</div>
+                    <div className="text-sm sm:text-base font-mono font-bold tabular-nums text-white mt-1">294 ч</div>
                   </div>
                   <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
-                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Средняя за месяц</div>
-                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-[#d6b85a] mt-1 flex items-center justify-center gap-1">
-                      <span>7.8</span>
+                    <div className="text-xs text-slate-400 leading-tight">Средняя за месяц</div>
+                    <div className="text-sm sm:text-base font-mono font-bold tabular-nums text-[#d6b85a] mt-1 flex items-center justify-center gap-1">
+                      <span>4.2 ★</span>
                       <span
-                        className="inline-flex items-center text-[10px] sm:text-xs text-[#45d1c6]"
-                        title="+0.4 к прошлому месяцу"
+                        className="inline-flex items-center text-xs text-[#45d1c6]"
+                        title="+0.3 к прошлому месяцу"
                       >
-                        ▲+0.4
+                        ▲+0.3
                       </span>
                     </div>
                   </div>
                   <div className="rounded-xl bg-cardElevated p-2.5 sm:p-3">
-                    <div className="text-[10px] sm:text-xs text-slate-400 leading-tight">Пик ритма</div>
-                    <div className="text-xs sm:text-base font-mono font-bold tabular-nums text-[#45d1c6] mt-1">
+                    <div className="text-xs text-slate-400 leading-tight">Пик ритма</div>
+                    <div className="text-sm sm:text-base font-mono font-bold tabular-nums text-[#45d1c6] mt-1">
                       Сб 22:00
                     </div>
                   </div>
@@ -283,10 +304,10 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
             <button
               type="button"
               onClick={onOpenRegister}
-              className="group inline-flex items-center gap-2.5 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_35px_rgba(240,98,146,0.4)] hover:shadow-[0_0_48px_rgba(240,98,146,0.55)] transition-all cursor-pointer"
+              className="group inline-flex items-center gap-2.5 min-h-12 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_35px_rgba(240,98,146,0.4)] hover:shadow-[0_0_48px_rgba(240,98,146,0.55)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <span>Начать вести кинодневник</span>
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </button>
             <span className="text-xs sm:text-sm text-slate-400">Импорт истории с Letterboxd и IMDb в пару кликов</span>
           </div>
@@ -296,10 +317,10 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
         <div className="relative z-10 pb-6 pt-2 flex justify-center">
           <a
             href="#compare"
-            className="flex flex-col items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            className="flex flex-col items-center gap-1.5 min-h-11 px-3 py-1 rounded-xl text-xs text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
           >
             <span>Листай вниз, чтобы узнать больше</span>
-            <ChevronDown className="w-4 h-4 animate-bounce" />
+            <ChevronDown className="w-4 h-4 animate-bounce" aria-hidden="true" />
           </a>
         </div>
       </div>
@@ -325,24 +346,24 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
             className="landing-reveal landing-reveal-delay-1 rounded-2xl bg-card/60 border border-line p-6 sm:p-8"
           >
             <div className="flex items-center justify-between mb-6">
-              <span className="text-sm font-semibold text-slate-400">IMDb / Letterboxd</span>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-line text-slate-400">Базовый учёт</span>
+              <span className="text-sm font-semibold text-slate-300">IMDb / Letterboxd</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-line text-slate-300">Базовый учёт</span>
             </div>
-            <ul className="space-y-4 text-sm text-slate-400">
+            <ul className="space-y-4 text-sm text-slate-300">
               <li className="flex items-start gap-3">
-                <span className="text-slate-600 mt-0.5">✕</span>
+                <span className="text-slate-400 mt-0.5" aria-hidden="true">✕</span>
                 <span>Просто хронологический список оценок без динамики</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-slate-600 mt-0.5">✕</span>
+                <span className="text-slate-400 mt-0.5" aria-hidden="true">✕</span>
                 <span>Не видно, в какие дни недели и часы ты смотришь кино чаще</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-slate-600 mt-0.5">✕</span>
+                <span className="text-slate-400 mt-0.5" aria-hidden="true">✕</span>
                 <span>Нет сравнения темпа год к году на одном графике</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-slate-600 mt-0.5">✕</span>
+                <span className="text-slate-400 mt-0.5" aria-hidden="true">✕</span>
                 <span>Поверхностная статистика (или платная подписка ради простых цифр)</span>
               </li>
             </ul>
@@ -360,28 +381,28 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
             </div>
             <ul className="space-y-4 text-sm text-slate-200">
               <li className="flex items-start gap-3">
-                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span className="text-[#45d1c6] mt-0.5" aria-hidden="true">✓</span>
                 <span>
                   <strong className="text-white">Гонка годов:</strong> накопительная кривая 365 дней — обгоняешь ли ты
                   себя прошлогоднего
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span className="text-[#45d1c6] mt-0.5" aria-hidden="true">✓</span>
                 <span>
                   <strong className="text-white">Ритм жизни:</strong> тепловая карта года, пики по дням недели и
                   времени суток
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span className="text-[#45d1c6] mt-0.5" aria-hidden="true">✓</span>
                 <span>
                   <strong className="text-white">Индекс просмотров и вкус:</strong> траектория активности, эпохи
                   релизов, жанры и режиссёры
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-[#45d1c6] mt-0.5">✓</span>
+                <span className="text-[#45d1c6] mt-0.5" aria-hidden="true">✓</span>
                 <span>
                   <strong className="text-white">Чистый интерфейс:</strong> никакой рекламы, ленты чужих рецензий и
                   лишнего шума
@@ -482,7 +503,7 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
                 <div key={bar.label} className={`flex-1 rounded-t ${bar.colorClass} ${bar.heightClass}`} />
               ))}
             </div>
-            <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1.5">
+            <div className="flex justify-between text-xs font-mono text-slate-400 mt-1.5">
               {WEEKDAY_BARS.map((bar) => (
                 <span key={bar.label}>{bar.label}</span>
               ))}
@@ -511,7 +532,7 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
                 </linearGradient>
               </defs>
               <line x1="0" y1="52" x2="260" y2="52" stroke="#2c3450" strokeDasharray="4 4" />
-              <text x="2" y="48" fill="#64748b" fontSize="9" fontFamily="monospace">
+              <text x="2" y="48" fill="#94a3b8" fontSize="10" fontFamily="monospace">
                 1.00
               </text>
               <path
@@ -579,14 +600,14 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
             <button
               type="button"
               onClick={onOpenRegister}
-              className="px-8 py-3.5 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_30px_rgba(240,98,146,0.35)] hover:shadow-[0_0_40px_rgba(240,98,146,0.5)] transition-all cursor-pointer"
+              className="min-h-12 px-8 py-3.5 rounded-xl bg-[#f06292] hover:bg-[#f475a0] text-canvas font-semibold text-sm sm:text-base shadow-[0_0_30px_rgba(240,98,146,0.35)] hover:shadow-[0_0_40px_rgba(240,98,146,0.5)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               Зарегистрироваться бесплатно
             </button>
             <button
               type="button"
               onClick={onOpenDemo}
-              className="px-6 py-3.5 rounded-xl bg-card hover:bg-cardElevated text-slate-200 border border-lineStrong font-medium text-sm transition-colors cursor-pointer"
+              className="min-h-12 px-6 py-3.5 rounded-xl bg-card hover:bg-cardElevated text-slate-200 border border-lineStrong font-medium text-sm transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
             >
               Посмотреть демо-дашборд
             </button>
@@ -595,51 +616,57 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
       </section>
 
       {/* Minimal Footer */}
-      <footer className="max-w-6xl mx-auto px-5 sm:px-6 pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-500">
+      <footer className="max-w-6xl mx-auto px-5 sm:px-6 pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-400">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
-            <span>·</span>
+            <span className="font-bold tracking-wider text-slate-200">CINELOG</span>
+            <span aria-hidden="true">·</span>
             <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
             {onOpenLegal ? (
               <>
                 <button
                   type="button"
                   onClick={() => onOpenLegal('privacy')}
-                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="min-h-9 px-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                 >
                   Политика конфиденциальности
                 </button>
                 <button
                   type="button"
                   onClick={() => onOpenLegal('terms')}
-                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="min-h-9 px-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                 >
                   Условия и TMDB
                 </button>
               </>
             ) : (
               <>
-                <a href="#privacy" className="text-slate-400 hover:text-white transition-colors">
+                <a
+                  href="#privacy"
+                  className="text-slate-300 hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                >
                   Политика конфиденциальности
                 </a>
-                <a href="#terms" className="text-slate-400 hover:text-white transition-colors">
+                <a
+                  href="#terms"
+                  className="text-slate-300 hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                >
                   Условия и TMDB
                 </a>
               </>
             )}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500/90">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
           <span>
             This product uses the{' '}
             <a
               href="https://www.themoviedb.org/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#45d1c6] hover:underline"
+              className="text-[#45d1c6] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
             >
               TMDB API
             </a>{' '}

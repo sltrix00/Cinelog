@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { filmWord, MONTHS_EN } from '../lib/analytics';
+import { filmWord, MONTHS_RU } from '../lib/analytics';
 import type {
   HeatmapCell,
   HeatmapSummary,
@@ -69,7 +69,34 @@ export function Tier4DeepAnalyticsSection({
     cell: HeatmapCell;
     x: number;
     y: number;
+    pinned?: boolean;
   } | null>(null);
+  const heatmapContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hoveredCell?.pinned) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (
+        heatmapContainerRef.current &&
+        !heatmapContainerRef.current.contains(e.target as Node)
+      ) {
+        setHoveredCell(null);
+      }
+    };
+    const handleScrollOrEsc = (e: Event) => {
+      if (e.type === 'scroll' || (e instanceof KeyboardEvent && e.key === 'Escape')) {
+        setHoveredCell(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    window.addEventListener('scroll', handleScrollOrEsc, { passive: true });
+    document.addEventListener('keydown', handleScrollOrEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('scroll', handleScrollOrEsc);
+      document.removeEventListener('keydown', handleScrollOrEsc);
+    };
+  }, [hoveredCell?.pinned]);
 
   const activeTasteItems =
     tasteTab === 'directors'
@@ -80,46 +107,54 @@ export function Tier4DeepAnalyticsSection({
 
   const scopeWord = selectedYear === 'all' ? 'за всё время' : `за ${selectedYear} год`;
 
+  const trendValues = ratings.monthlyTrend
+    .map((p) => p.avgRating)
+    .filter((v): v is number => v !== null);
+  const minTrendRating = trendValues.length > 0 ? Math.min(...trendValues) : 1.0;
+  const ratingYDomainMin = minTrendRating < 1.0 ? 0.5 : 1.0;
+
   return (
     <section id="level-4" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] tabular-nums uppercase tracking-widest text-slate-500">Уровень 04</span>
-        <span className="text-slate-700">/</span>
+        <span className="text-xs tabular-nums uppercase tracking-widest text-slate-400">Уровень 04</span>
+        <span className="text-slate-600" aria-hidden="true">/</span>
         <h2 className="text-sm font-bold tracking-tight text-slate-200">Глубокая аналитика</h2>
       </div>
 
       {/* 1. GitHub-Style Activity Heatmap */}
-      <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
+      <div ref={heatmapContainerRef} className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-bold tracking-tight text-white">
               {heatmap.year === 'all'
-                ? 'Тепловая карта активности (за всё время)'
-                : `Тепловая карта активности (Heatmap ${heatmap.year})`}
+                ? 'Тепловая карта активности за всё время'
+                : `Тепловая карта активности за ${heatmap.year} год`}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
-              Активных дней: {heatmap.activeDays} · Макс. серия: {heatmap.maxStreak} дн.
+              {heatmap.year === 'all'
+                ? `Плотность по календарным дням (365 дн.) · Всего активных дат: ${heatmap.activeDays} · Макс. серия подряд: ${heatmap.maxStreak} дн.`
+                : `Активных дней: ${heatmap.activeDays} · Макс. серия: ${heatmap.maxStreak} дн.`}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] tabular-nums text-slate-400">
+          <div className="flex items-center gap-1.5 text-xs tabular-nums text-slate-400">
             <span>0</span>
-            <span className="w-3 h-3 rounded-[3px] bg-[#161c2e] border border-line" />
-            <span className="w-3 h-3 rounded-[3px] bg-[#194549]" />
-            <span className="w-3 h-3 rounded-[3px] bg-[#2a8b87]" />
-            <span className="w-3 h-3 rounded-[3px] bg-[#45d1c6]" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#161c2e] border border-line" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#194549]" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#2a8b87]" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#45d1c6]" aria-hidden="true" />
             <span>3+</span>
           </div>
         </div>
 
         <div className="overflow-x-auto pb-2">
-          <div className="min-w-[740px]">
-            <div className="grid grid-cols-12 text-[11px] tabular-nums text-slate-500 mb-1.5 pl-7">
-              {MONTHS_EN.map((m) => (
+          <div className="min-w-[780px]">
+            <div className="grid grid-cols-12 text-xs tabular-nums text-slate-400 mb-1.5 pl-7">
+              {MONTHS_RU.map((m) => (
                 <span key={m}>{m}</span>
               ))}
             </div>
             <div className="flex gap-2">
-              <div className="flex flex-col justify-between text-[10px] tabular-nums text-slate-500 py-0.5 w-5 shrink-0">
+              <div className="flex flex-col justify-between text-[11px] tabular-nums text-slate-400 py-0.5 w-5 shrink-0">
                 <span>Пн</span>
                 <span>Ср</span>
                 <span>Пт</span>
@@ -133,17 +168,49 @@ export function Tier4DeepAnalyticsSection({
                   else if (cell.intensity === 2) bgClass = 'bg-[#2a8b87]';
                   else if (cell.intensity === 3) bgClass = 'bg-[#45d1c6]';
 
+                  const showAtRect = (el: HTMLElement, pinned = false) => {
+                    const rect = el.getBoundingClientRect();
+                    setHoveredCell({
+                      cell,
+                      x: rect.left + rect.width / 2,
+                      y: rect.top,
+                      pinned,
+                    });
+                  };
+
                   return (
-                    <div
+                    <button
                       key={cell.doy}
-                      className={`w-3 h-3 rounded-[3px] transition-transform duration-100 hover:scale-125 cursor-pointer ${bgClass}`}
+                      type="button"
+                      disabled={cell.isFuture}
+                      aria-label={
+                        cell.isFuture
+                          ? `${cell.dateLabel} — будущая дата`
+                          : `${cell.dateLabel}: ${cell.count} ${filmWord(cell.count)}`
+                      }
+                      className={`w-3.5 h-3.5 rounded-[3px] transition-transform duration-100 hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default cursor-pointer ${bgClass}`}
                       onMouseEnter={(e) =>
-                        setHoveredCell({ cell, x: e.clientX, y: e.clientY })
+                        setHoveredCell({ cell, x: e.clientX, y: e.clientY, pinned: false })
                       }
-                      onMouseMove={(e) =>
-                        setHoveredCell({ cell, x: e.clientX, y: e.clientY })
-                      }
-                      onMouseLeave={() => setHoveredCell(null)}
+                      onMouseMove={(e) => {
+                        if (!hoveredCell?.pinned) {
+                          setHoveredCell({ cell, x: e.clientX, y: e.clientY, pinned: false });
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (!hoveredCell?.pinned) setHoveredCell(null);
+                      }}
+                      onFocus={(e) => showAtRect(e.currentTarget, false)}
+                      onBlur={() => {
+                        if (!hoveredCell?.pinned) setHoveredCell(null);
+                      }}
+                      onClick={(e) => {
+                        if (hoveredCell?.pinned && hoveredCell.cell.doy === cell.doy) {
+                          setHoveredCell(null);
+                        } else {
+                          showAtRect(e.currentTarget, true);
+                        }
+                      }}
                     />
                   );
                 })}
@@ -167,25 +234,33 @@ export function Tier4DeepAnalyticsSection({
                 </span>
               </p>
             </div>
-            <div className="inline-flex items-center p-0.5 rounded-xl bg-canvas border border-line text-[11px]">
+            <div
+              role="tablist"
+              aria-label="Режим графика оценок"
+              className="inline-flex items-center p-0.5 rounded-xl bg-canvas border border-line text-xs"
+            >
               <button
                 type="button"
+                role="tab"
+                aria-selected={ratingView === 'dist'}
                 onClick={() => setRatingView('dist')}
                 className={
                   ratingView === 'dist'
-                    ? 'px-2.5 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer'
-                    : 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
+                    ? 'min-h-8 px-3 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
+                    : 'min-h-8 px-3 py-1 rounded-lg font-medium text-slate-300 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
                 }
               >
                 Распределение
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={ratingView === 'trend'}
                 onClick={() => setRatingView('trend')}
                 className={
                   ratingView === 'trend'
-                    ? 'px-2.5 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer'
-                    : 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
+                    ? 'min-h-8 px-3 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
+                    : 'min-h-8 px-3 py-1 rounded-lg font-medium text-slate-300 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
                 }
               >
                 Тренд по месяцам
@@ -201,12 +276,12 @@ export function Tier4DeepAnalyticsSection({
                   <XAxis
                     dataKey="bucket"
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 10, fontFamily: 'var(--font-sans)' }}
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
                     allowDecimals={false}
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -229,13 +304,13 @@ export function Tier4DeepAnalyticsSection({
                   <XAxis
                     dataKey="month"
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11 }}
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
-                    domain={[2.0, 5.0]}
+                    domain={[ratingYDomainMin, 5.0]}
                     tickFormatter={(v: number) => `${v.toFixed(1)}★`}
                     stroke="#1e2438"
-                    tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -258,14 +333,14 @@ export function Tier4DeepAnalyticsSection({
           </div>
         </div>
 
-        {/* Годы выхода фильмов (Release Year) */}
+        {/* Годы выхода фильмов */}
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex items-start justify-between gap-2 mb-5">
             <div>
-              <h3 className="text-base font-bold tracking-tight text-white">Годы выхода фильмов (Release Year)</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Годы выхода фильмов</h3>
               <p className="text-xs text-slate-400 mt-0.5">Распределение просмотренного по эпохам</p>
             </div>
-            <span className="text-[11px] tabular-nums px-2.5 py-1 rounded-lg bg-cardElevated text-slate-300 border border-line">
+            <span className="text-xs tabular-nums px-2.5 py-1 rounded-lg bg-cardElevated text-slate-300 border border-line shrink-0">
               до 2000: {releaseEras.classicSharePct}%
             </span>
           </div>
@@ -277,12 +352,12 @@ export function Tier4DeepAnalyticsSection({
                 <XAxis
                   dataKey="label"
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <YAxis
                   allowDecimals={false}
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -302,24 +377,24 @@ export function Tier4DeepAnalyticsSection({
         </div>
       </div>
 
-      {/* 3. Длительность (Runtime) + Вкусовые акценты */}
+      {/* 3. Длительность просмотров + Вкусовые акценты */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Длительность (Runtime) */}
+        {/* Длительность просмотров */}
         <div className="rounded-2xl bg-card border border-line p-5 sm:p-6 flex flex-col justify-between">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
             <div>
-              <h3 className="text-base font-bold tracking-tight text-white">Длительность (Runtime)</h3>
+              <h3 className="text-base font-bold tracking-tight text-white">Длительность просмотров</h3>
               <p className="text-xs text-slate-400 mt-0.5">Просмотренные часы кино по месяцам</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="px-2.5 py-1.5 rounded-xl bg-canvas border border-line text-right">
-                <span className="block text-[10px] text-slate-500 leading-none">Всего часов</span>
+                <span className="block text-[11px] text-slate-400 leading-none mb-0.5">Всего часов</span>
                 <span className="text-xs font-semibold text-white tabular-nums">
                   {runtime.totalHours} ч
                 </span>
               </div>
               <div className="px-2.5 py-1.5 rounded-xl bg-canvas border border-line text-right">
-                <span className="block text-[10px] text-slate-500 leading-none">В сутках</span>
+                <span className="block text-[11px] text-slate-400 leading-none mb-0.5">В сутках</span>
                 <span className="text-xs font-semibold text-[#45d1c6] tabular-nums">
                   {runtime.totalDays} сут
                 </span>
@@ -334,12 +409,12 @@ export function Tier4DeepAnalyticsSection({
                 <XAxis
                   dataKey="month"
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <YAxis
                   tickFormatter={(v: number) => `${v}ч`}
                   stroke="#1e2438"
-                  tick={{ fill: '#8b95b0', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -359,9 +434,13 @@ export function Tier4DeepAnalyticsSection({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
               <h3 className="text-base font-bold tracking-tight text-white">Вкусовые акценты</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Топ-6 {scopeWord}</p>
+              <p className="text-xs text-slate-400 mt-0.5">Топ-6 {scopeWord} (доля от просмотров)</p>
             </div>
-            <div className="inline-flex items-center p-0.5 rounded-xl bg-canvas border border-line text-[11px]">
+            <div
+              role="tablist"
+              aria-label="Категории вкусовых акцентов"
+              className="inline-flex items-center p-0.5 rounded-xl bg-canvas border border-line text-xs"
+            >
               {(
                 [
                   { id: 'directors', label: 'Режиссёры' },
@@ -372,11 +451,13 @@ export function Tier4DeepAnalyticsSection({
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={tasteTab === tab.id}
                   onClick={() => setTasteTab(tab.id)}
                   className={
                     tasteTab === tab.id
-                      ? 'px-2.5 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer'
-                      : 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
+                      ? 'min-h-8 px-3 py-1 rounded-lg font-medium bg-cardElevated text-white border border-lineStrong transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
+                      : 'min-h-8 px-3 py-1 rounded-lg font-medium text-slate-300 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]'
                   }
                 >
                   {tab.label}
@@ -389,29 +470,41 @@ export function Tier4DeepAnalyticsSection({
             <div className="space-y-3.5 my-auto">
               {activeTasteItems.map((item) => (
                 <div key={item.name} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="tabular-nums text-[11px] text-slate-500 w-4">{item.rank}.</span>
+                      <span className="tabular-nums text-xs text-slate-400 w-5">{item.rank}.</span>
                       <span className="font-medium text-slate-200 truncate">{item.name}</span>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0 tabular-nums text-[11px]">
-                      <span className="text-slate-400">
-                        {item.count} {filmWord(item.count)}
+                    <div className="flex items-center gap-3 shrink-0 tabular-nums text-xs">
+                      <span className="text-slate-300">
+                        {item.count} {filmWord(item.count)}{' '}
+                        <span className="text-slate-400">({item.shareOfTotalPct}%)</span>
                       </span>
-                      <span className="text-[#d6b85a]">{item.avgRating} ★</span>
+                      <span className="text-[#d6b85a] w-12 text-right">{item.avgRating} ★</span>
                     </div>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-canvas border border-line overflow-hidden">
+                  <div
+                    className="relative h-2 w-full rounded-full bg-canvas border border-line overflow-hidden"
+                    title={`Доля от всех просмотров: ${item.shareOfTotalPct}%`}
+                  >
+                    {/* Subtle leader-relative backdrop */}
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#45d1c6] to-[#f06292] transition-all duration-500"
-                      style={{ width: `${item.pct}%` }}
+                      className="absolute inset-y-0 left-0 rounded-full bg-white/[0.06] transition-all duration-500"
+                      style={{ width: `${item.barPct}%` }}
+                    />
+                    {/* Honest share-of-total foreground bar */}
+                    <div
+                      className="relative h-full rounded-full bg-gradient-to-r from-[#45d1c6] to-[#f06292] transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(item.count > 0 ? 4 : 0, item.shareOfTotalPct))}%`,
+                      }}
                     />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="my-auto py-10 text-center text-xs text-slate-500">
+            <div className="my-auto py-10 text-center text-xs text-slate-400">
               Недостаточно метаданных для выбранного фильтра. Подключите TMDB или добавьте фильмы вручную.
             </div>
           )}
@@ -421,14 +514,18 @@ export function Tier4DeepAnalyticsSection({
       {/* Floating Heatmap Tooltip */}
       {hoveredCell && (
         <div
+          role="tooltip"
           className="pointer-events-none fixed z-50 px-3 py-2 rounded-lg bg-[#0b0e17] border border-lineStrong shadow-2xl text-xs text-slate-200 tabular-nums max-w-xs"
           style={{
-            left: Math.min(hoveredCell.x + 14, typeof window !== 'undefined' ? window.innerWidth - 260 : hoveredCell.x + 14),
+            left: Math.min(
+              Math.max(12, hoveredCell.x + 14),
+              typeof window !== 'undefined' ? window.innerWidth - 260 : hoveredCell.x + 14
+            ),
             top: Math.max(10, hoveredCell.y - 44),
           }}
         >
           {hoveredCell.cell.isFuture ? (
-            <span className="text-slate-500">{hoveredCell.cell.dateLabel} · будущая дата</span>
+            <span className="text-slate-400">{hoveredCell.cell.dateLabel} · будущая дата</span>
           ) : (
             <div>
               <div>
@@ -438,7 +535,7 @@ export function Tier4DeepAnalyticsSection({
                 <span className="text-slate-400">· {hoveredCell.cell.dateLabel}</span>
               </div>
               {hoveredCell.cell.titles.length > 0 && (
-                <div className="mt-1 text-[10px] text-[#45d1c6] truncate">
+                <div className="mt-1 text-xs text-[#45d1c6] truncate">
                   {hoveredCell.cell.titles.slice(0, 3).join(', ')}
                   {hoveredCell.cell.titles.length > 3
                     ? ` +${hoveredCell.cell.titles.length - 3}`
