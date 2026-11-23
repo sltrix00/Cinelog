@@ -93,7 +93,9 @@ export function Tier4DeepAnalyticsSection({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-bold tracking-tight text-white">
-              Тепловая карта активности (Heatmap {heatmap.year})
+              {heatmap.year === 'all'
+                ? 'Тепловая карта активности (за всё время)'
+                : `Тепловая карта активности (Heatmap ${heatmap.year})`}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
               Активных дней: {heatmap.activeDays} · Макс. серия: {heatmap.maxStreak} дн.
@@ -110,43 +112,55 @@ export function Tier4DeepAnalyticsSection({
         </div>
 
         <div className="overflow-x-auto pb-2">
-          <div className="min-w-[740px]">
-            <div className="grid grid-cols-12 text-[11px] tabular-nums text-slate-500 mb-1.5 pl-7">
+          <div className="min-w-[740px] space-y-4">
+            <div className="grid grid-cols-12 text-[11px] tabular-nums text-slate-500 pl-7">
               {MONTHS_EN.map((m) => (
                 <span key={m}>{m}</span>
               ))}
             </div>
-            <div className="flex gap-2">
-              <div className="flex flex-col justify-between text-[10px] tabular-nums text-slate-500 py-0.5 w-5 shrink-0">
-                <span>Пн</span>
-                <span>Ср</span>
-                <span>Пт</span>
-                <span>Вс</span>
-              </div>
-              <div className="grid grid-flow-col grid-rows-7 gap-[3px] flex-1">
-                {heatmap.cells.map((cell) => {
-                  let bgClass = 'bg-[#161c2e] border border-line';
-                  if (cell.isFuture) bgClass = 'bg-[#0d111d] opacity-35';
-                  else if (cell.intensity === 1) bgClass = 'bg-[#194549]';
-                  else if (cell.intensity === 2) bgClass = 'bg-[#2a8b87]';
-                  else if (cell.intensity === 3) bgClass = 'bg-[#45d1c6]';
+            {(heatmap.years ?? [{ year: Number(heatmap.year), cells: heatmap.cells, activeDays: heatmap.activeDays }]).map(
+              (yearRow) => (
+                <div key={yearRow.year} className="space-y-1.5">
+                  {heatmap.year === 'all' && (
+                    <div className="flex items-center gap-2 pl-7 text-[11px] tabular-nums">
+                      <span className="font-semibold text-slate-300">{yearRow.year}</span>
+                      <span className="text-slate-500">· {yearRow.activeDays} акт. дн.</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <div className="flex flex-col justify-between text-[10px] tabular-nums text-slate-500 py-0.5 w-5 shrink-0">
+                      <span>Пн</span>
+                      <span>Ср</span>
+                      <span>Пт</span>
+                      <span>Вс</span>
+                    </div>
+                    <div className="grid grid-flow-col grid-rows-7 gap-[3px] flex-1">
+                      {yearRow.cells.map((cell) => {
+                        let bgClass = 'bg-[#161c2e] border border-line';
+                        if (cell.isFuture) bgClass = 'bg-[#0d111d] opacity-35';
+                        else if (cell.intensity === 1) bgClass = 'bg-[#194549]';
+                        else if (cell.intensity === 2) bgClass = 'bg-[#2a8b87]';
+                        else if (cell.intensity === 3) bgClass = 'bg-[#45d1c6]';
 
-                  return (
-                    <div
-                      key={cell.doy}
-                      className={`w-3 h-3 rounded-[3px] transition-transform duration-100 hover:scale-125 cursor-pointer ${bgClass}`}
-                      onMouseEnter={(e) =>
-                        setHoveredCell({ cell, x: e.clientX, y: e.clientY })
-                      }
-                      onMouseMove={(e) =>
-                        setHoveredCell({ cell, x: e.clientX, y: e.clientY })
-                      }
-                      onMouseLeave={() => setHoveredCell(null)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+                        return (
+                          <div
+                            key={`${yearRow.year}-${cell.doy}`}
+                            className={`w-3 h-3 rounded-[3px] transition-transform duration-100 hover:scale-125 cursor-pointer ${bgClass}`}
+                            onMouseEnter={(e) =>
+                              setHoveredCell({ cell, x: e.clientX, y: e.clientY })
+                            }
+                            onMouseMove={(e) =>
+                              setHoveredCell({ cell, x: e.clientX, y: e.clientY })
+                            }
+                            onMouseLeave={() => setHoveredCell(null)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )
+            )}
           </div>
         </div>
       </div>

@@ -158,8 +158,15 @@ export interface HeatmapCell {
   titles: string[];
 }
 
-export interface HeatmapSummary {
+export interface HeatmapYearRow {
   year: number;
+  cells: HeatmapCell[];
+  activeDays: number;
+}
+
+export interface HeatmapSummary {
+  year: number | 'all';
+  years?: HeatmapYearRow[];
   cells: HeatmapCell[];
   activeDays: number;
   maxStreak: number;

@@ -201,4 +201,19 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(filtered2021).toHaveLength(2);
     expect(filtered2021.map((e) => e.id)).toEqual(['1', '3']);
   });
+
+  it('computes all-time multi-year heatmap with cross-year streak when selectedYear is all', () => {
+    const entries = [
+      makeCsvOnlyEntry({ id: '1', watched_date: '2025-12-30' }),
+      makeCsvOnlyEntry({ id: '2', watched_date: '2025-12-31' }),
+      makeCsvOnlyEntry({ id: '3', watched_date: '2026-01-01' }),
+      makeCsvOnlyEntry({ id: '4', watched_date: '2024-06-15' }),
+    ];
+
+    const heatmapAll = computeActivityHeatmap(entries, 'all', DEFAULT_REFERENCE_DATE);
+    expect(heatmapAll.year).toBe('all');
+    expect(heatmapAll.years?.map((y) => y.year)).toEqual([2026, 2025, 2024]);
+    expect(heatmapAll.activeDays).toBe(4);
+    expect(heatmapAll.maxStreak).toBe(3);
+  });
 });

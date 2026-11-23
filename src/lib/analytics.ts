@@ -416,39 +416,31 @@ export function computeTimeOfDayDistribution(
   };
 }
 
-export function computeActivityHeatmap(
+function buildYearHeatmapRow(
   entries: WatchEntry[],
-  selectedYear: YearFilter,
-  refDate: ReferenceDateContext = DEFAULT_REFERENCE_DATE
-): HeatmapSummary {
-  const year = selectedYear === 'all' ? refDate.year : selectedYear;
-  const scoped = entries.filter((e) => parseIsoDateParts(e.watched_date).year === year);
-
+  year: number,
+  refDate: ReferenceDateContext
+): { year: number; cells: HeatmapCell[]; activeDays: number } {
   const countsByDoy = new Array<number>(366).fill(0);
   const titlesByDoy = Array.from({ length: 366 }, () => [] as string[]);
 
-  for (const entry of scoped) {
+  for (const entry of entries) {
+    if (parseIsoDateParts(entry.watched_date).year !== year) continue;
     const doy = Math.min(365, Math.max(1, getDayOfYear(entry.watched_date)));
     countsByDoy[doy] += 1;
     titlesByDoy[doy].push(entry.title);
   }
 
-  const maxDoy = year === refDate.year ? refDate.dayOfYear : 365;
+  const maxDoy = year === refDate.year ? refDate.dayOfYear : year > refDate.year ? 0 : 365;
   const cells: HeatmapCell[] = [];
   let activeDays = 0;
-  let maxStreak = 0;
-  let currStreak = 0;
 
   for (let doy = 1; doy <= 365; doy++) {
-    const isFuture = year === refDate.year && doy > maxDoy;
+    const isFuture = year > refDate.year || (year === refDate.year && doy > maxDoy);
     const count = isFuture ? 0 : countsByDoy[doy];
 
     if (!isFuture && count > 0) {
       activeDays += 1;
-      currStreak += 1;
-      if (currStreak > maxStreak) maxStreak = currStreak;
-    } else {
-      currStreak = 0;
     }
 
     const intensity: 0 | 1 | 2 | 3 =
@@ -466,9 +458,73 @@ export function computeActivityHeatmap(
     });
   }
 
+  return { year, cells, activeDays };
+}
+
+export function computeActivityHeatmap(
+  entries: WatchEntry[],
+  selectedYear: YearFilter,
+  refDate: ReferenceDateContext = DEFAULT_REFERENCE_DATE
+): HeatmapSummary {
+  if (selectedYear !== 'all') {
+    const row = buildYearHeatmapRow(entries, selectedYear, refDate);
+    let maxStreak = 0;
+    let currStreak = 0;
+    for (const cell of row.cells) {
+      if (!cell.isFuture && cell.count > 0) {
+        currStreak += 1;
+        if (currStreak > maxStreak) maxStreak = currStreak;
+      } else {
+        currStreak = 0;
+      }
+    }
+
+    return {
+      year: selectedYear,
+      years: [row],
+      cells: row.cells,
+      activeDays: row.activeDays,
+      maxStreak,
+    };
+  }
+
+  const yearSet = new Set<number>();
+  for (const entry of entries) {
+    const { year } = parseIsoDateParts(entry.watched_date);
+    if (Number.isInteger(year) && year >= 1888 && year <= 2100) {
+      yearSet.add(year);
+    }
+  }
+  const targetYearsDesc =
+    yearSet.size > 0 ? Array.from(yearSet).sort((a, b) => b - a) : [refDate.year];
+
+  const years = targetYearsDesc.map((y) => buildYearHeatmapRow(entries, y, refDate));
+  const activeDays = years.reduce((sum, r) => sum + r.activeDays, 0);
+
+  // Compute max streak chronologically across all years (handling year boundaries & gaps)
+  const yearsAsc = [...years].sort((a, b) => a.year - b.year);
+  let maxStreak = 0;
+  let currStreak = 0;
+  let prevYear: number | null = null;
+  for (const row of yearsAsc) {
+    if (prevYear !== null && row.year !== prevYear + 1) {
+      currStreak = 0;
+    }
+    for (const cell of row.cells) {
+      if (!cell.isFuture && cell.count > 0) {
+        currStreak += 1;
+        if (currStreak > maxStreak) maxStreak = currStreak;
+      } else {
+        currStreak = 0;
+      }
+    }
+    prevYear = row.year;
+  }
+
   return {
-    year,
-    cells,
+    year: 'all',
+    years,
+    cells: years[0]?.cells ?? [],
     activeDays,
     maxStreak,
   };
