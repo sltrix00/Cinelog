@@ -50,7 +50,7 @@ export function JournalSection({
   const [rewatchesOnly, setRewatchesOnly] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [visibleLimit, setVisibleLimit] = useState(18);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<WatchEntry | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -331,49 +331,26 @@ export function JournalSection({
                         )}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        {confirmDeleteId === entry.id ? (
-                          <div className="inline-flex items-center gap-1.5">
-                            <span className="text-[11px] text-slate-400">Удалить?</span>
+                        <div className="inline-flex items-center gap-1">
+                          {onEditEntry && (
                             <button
                               type="button"
-                              onClick={() => {
-                                setConfirmDeleteId(null);
-                                onDeleteEntry(entry.id);
-                              }}
-                              className="px-2 py-1 rounded-lg bg-[#f06292]/15 hover:bg-[#f06292]/25 border border-[#f06292]/40 text-[11px] font-medium text-[#f06292] transition-colors cursor-pointer"
+                              onClick={() => onEditEntry(entry)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#45d1c6] hover:bg-[#45d1c6]/10 transition-colors cursor-pointer"
+                              title="Редактировать запись"
                             >
-                              Да
+                              <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="px-2 py-1 rounded-lg bg-cardElevated hover:bg-lineStrong text-[11px] text-slate-300 transition-colors cursor-pointer"
-                            >
-                              Отмена
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-1">
-                            {onEditEntry && (
-                              <button
-                                type="button"
-                                onClick={() => onEditEntry(entry)}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#45d1c6] hover:bg-[#45d1c6]/10 transition-colors cursor-pointer"
-                                title="Редактировать запись"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(entry.id)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#f06292] hover:bg-[#f06292]/10 transition-colors cursor-pointer"
-                              title="Удалить запись"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setPendingDeleteEntry(entry)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#f06292] hover:bg-[#f06292]/10 transition-colors cursor-pointer"
+                            title="Удалить запись"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -399,6 +376,72 @@ export function JournalSection({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {pendingDeleteEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPendingDeleteEntry(null);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-[#f06292]" />
+                <h3 className="text-sm font-semibold text-white">Удалить запись?</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDeleteEntry(null)}
+                aria-label="Закрыть"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-2">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Запись о просмотре фильма{' '}
+                <span className="font-semibold text-white">«{pendingDeleteEntry.title}»</span>
+                {pendingDeleteEntry.release_year ? (
+                  <span className="text-slate-400"> ({pendingDeleteEntry.release_year})</span>
+                ) : null}{' '}
+                от{' '}
+                <span className="tabular-nums text-slate-200">
+                  {formatShortDateRu(pendingDeleteEntry.watched_date)}{' '}
+                  {pendingDeleteEntry.watched_date.slice(0, 4)}
+                </span>{' '}
+                будет удалена из журнала.
+              </p>
+              <p className="text-[11px] text-slate-500">Это действие нельзя отменить.</p>
+            </div>
+
+            <div className="px-5 py-3.5 border-t border-line bg-canvas/40 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteEntry(null)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-cardElevated transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = pendingDeleteEntry.id;
+                  setPendingDeleteEntry(null);
+                  onDeleteEntry(id);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#f06292] hover:bg-[#f47ba4] text-[#0b0e17] transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
