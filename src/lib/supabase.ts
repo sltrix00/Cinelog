@@ -490,6 +490,42 @@ export async function deleteWatchLogById(logId: string): Promise<void> {
   }
 }
 
+export async function deleteWatchLogsByIds(logIds: string[]): Promise<number> {
+  const uniqueIds = Array.from(
+    new Set(logIds.map((id) => id.trim()).filter((id) => isValidWatchLogId(id)))
+  );
+  if (uniqueIds.length === 0) {
+    return 0;
+  }
+
+  const client = requireClient();
+  const chunkSize = 100;
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+    const { error } = await client.from('watch_logs').delete().in('id', chunk);
+    if (error) {
+      throw new Error(`Не удалось удалить выбранные записи: ${error.message}`);
+    }
+  }
+  return uniqueIds.length;
+}
+
+export async function deleteAllWatchLogs(): Promise<void> {
+  const client = requireClient();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user?.id) {
+    throw new Error('Пользователь не авторизован.');
+  }
+
+  const { error } = await client
+    .from('watch_logs')
+    .delete()
+    .eq('user_id', userData.user.id);
+  if (error) {
+    throw new Error(`Не удалось очистить журнал: ${error.message}`);
+  }
+}
+
 export interface BatchImportResult {
   importedCount: number;
   moviesResolved: number;

@@ -34,7 +34,9 @@ import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
 import { formatDashboardSubtitle, resolveProfileNickname } from './lib/headerHelpers';
 import {
   batchUpsertImportedRows,
+  deleteAllWatchLogs,
   deleteWatchLogById,
+  deleteWatchLogsByIds,
   fetchUserProfile,
   fetchWatchEntries,
   getVerifiedUser,
@@ -492,6 +494,47 @@ export function App() {
     showToast('Запись удалена из демо-журнала.');
   };
 
+  const handleDeleteSelectedEntries = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+
+    if (!isDemoMode && isSupabaseConfigured && userEmail) {
+      try {
+        const deletedCount = await deleteWatchLogsByIds(ids);
+        setEntries((prev) => prev.filter((e) => !idSet.has(e.id)));
+        showToast(`Удалено записей: ${deletedCount}.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Ошибка удаления выбранных записей.';
+        showToast(msg, 'error');
+        throw err;
+      }
+      return;
+    }
+
+    setEntries((prev) => prev.filter((e) => !idSet.has(e.id)));
+    setDemoWasModified(true);
+    showToast(`Удалено записей из демо-журнала: ${ids.length}.`);
+  };
+
+  const handleDeleteAllEntries = async () => {
+    if (!isDemoMode && isSupabaseConfigured && userEmail) {
+      try {
+        await deleteAllWatchLogs();
+        setEntries([]);
+        showToast('Весь журнал просмотров удалён.');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Ошибка очистки журнала.';
+        showToast(msg, 'error');
+        throw err;
+      }
+      return;
+    }
+
+    setEntries([]);
+    setDemoWasModified(true);
+    showToast('Демо-журнал полностью очищен.');
+  };
+
   const handleReenrichMovies = async () => {
     if (reenriching || pendingEnrichMovieIds.length === 0) return;
     setReenriching(true);
@@ -645,11 +688,16 @@ export function App() {
               <JournalSection
                 entries={entries}
                 selectedYear={selectedYear}
+                userEmail={userEmail}
+                userNickname={userNickname}
+                isDemoMode={isDemoMode}
                 onEditEntry={(entry) => {
                   setEditingEntry(entry);
                   setAddModalOpen(true);
                 }}
                 onDeleteEntry={(id) => void handleDeleteEntry(id)}
+                onDeleteSelected={(ids) => handleDeleteSelectedEntries(ids)}
+                onDeleteAll={() => handleDeleteAllEntries()}
                 pendingEnrichCount={pendingEnrichMovieIds.length}
                 unmatchedCount={unmatchedMovieCount}
                 reenriching={reenriching}
