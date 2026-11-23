@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f06292"/>
+      <stop offset="50%" stop-color="#45d1c6"/>
+      <stop offset="100%" stop-color="#d6b85a"/>
+    </linearGradient>
+    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f06292" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f06292" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glowLeft" cx="0.15" cy="0.2" r="0.55">
+      <stop offset="0%" stop-color="#f06292" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0b0e17" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRight" cx="0.85" cy="0.8" r="0.55">
+      <stop offset="0%" stop-color="#45d1c6" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#0b0e17" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Canvas background -->
+  <rect width="1200" height="630" fill="#0b0e17"/>
+  <rect width="1200" height="630" fill="url(#glowLeft)"/>
+  <rect width="1200" height="630" fill="url(#glowRight)"/>
+
+  <!-- Subtle outer frame -->
+  <rect x="28" y="28" width="1144" height="574" rx="28" fill="#111524" fill-opacity="0.82" stroke="#1e2438" stroke-width="2"/>
+
+  <!-- Top Brand Pill -->
+  <g transform="translate(84, 84)">
+    <rect width="56" height="56" rx="16" fill="#171c2e" stroke="url(#accentGrad)" stroke-width="2.5"/>
+    <path d="M14 39 L23 26 L30 32 L43 16" fill="none" stroke="url(#accentGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="76" y="27" fill="#ffffff" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="28" font-weight="800" letter-spacing="1.5">CINELOG</text>
+    <text x="76" y="50" fill="#94a3b8" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="16" font-weight="500">Персональная аналитика кино</text>
+  </g>
+
+  <!-- Main Headline & Subtitle -->
+  <text x="84" y="230" fill="#ffffff" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="48" font-weight="800">Твой кинодневник</text>
+  <text x="84" y="288" fill="#ffffff" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="48" font-weight="800">в живых графиках</text>
+
+  <text x="84" y="344" fill="#94a3b8" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="400">Индекс просмотра, гонка год к году, тепловая карта</text>
+  <text x="84" y="376" fill="#94a3b8" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="400">и импорт из Letterboxd / IMDb с обогащением TMDB.</text>
+
+  <!-- Bottom Feature Pills -->
+  <g transform="translate(84, 434)" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">
+    <rect x="0" y="0" width="168" height="40" rx="12" fill="#f06292" fill-opacity="0.14" stroke="#f06292" stroke-opacity="0.4"/>
+    <text x="20" y="25" fill="#f06292">365-дневная гонка</text>
+
+    <rect x="184" y="0" width="174" height="40" rx="12" fill="#45d1c6" fill-opacity="0.14" stroke="#45d1c6" stroke-opacity="0.4"/>
+    <text x="204" y="25" fill="#45d1c6">Тепловая карта</text>
+
+    <rect x="374" y="0" width="172" height="40" rx="12" fill="#d6b85a" fill-opacity="0.14" stroke="#d6b85a" stroke-opacity="0.4"/>
+    <text x="394" y="25" fill="#d6b85a">Вкусовые акценты</text>
+  </g>
+
+  <!-- Right Side Dashboard Preview Cards -->
+  <!-- KPI Card 1 -->
+  <g transform="translate(700, 92)">
+    <rect width="204" height="122" rx="18" fill="#161b2e" stroke="#262e48" stroke-width="1.5"/>
+    <text x="20" y="32" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="500">Индекс просмотра</text>
+    <text x="20" y="78" fill="#f06292" font-family="JetBrains Mono, monospace" font-size="38" font-weight="800">0.38</text>
+    <text x="20" y="102" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-size="12">Прогноз: 137 / год</text>
+  </g>
+
+  <!-- KPI Card 2 -->
+  <g transform="translate(920, 92)">
+    <rect width="204" height="122" rx="18" fill="#161b2e" stroke="#262e48" stroke-width="1.5"/>
+    <text x="20" y="32" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="500">Всего фильмов</text>
+    <text x="20" y="78" fill="#45d1c6" font-family="JetBrains Mono, monospace" font-size="38" font-weight="800">298</text>
+    <text x="20" y="102" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-size="12">314 просмотров с ↺</text>
+  </g>
+
+  <!-- Cumulative Chart Card -->
+  <g transform="translate(700, 234)">
+    <rect width="424" height="176" rx="18" fill="#161b2e" stroke="#262e48" stroke-width="1.5"/>
+    <text x="20" y="32" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="700">CUMULATIVE FILMS · YEAR TO YEAR</text>
+    <!-- Grid lines -->
+    <line x1="20" y1="70" x2="404" y2="70" stroke="#232b42" stroke-width="1"/>
+    <line x1="20" y1="106" x2="404" y2="106" stroke="#232b42" stroke-width="1"/>
+    <line x1="20" y1="142" x2="404" y2="142" stroke="#232b42" stroke-width="1"/>
+    <!-- 2024 gold -->
+    <path d="M24 148 L95 138 L170 128 L250 116 L330 104 L400 92" fill="none" stroke="#d6b85a" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- 2025 teal -->
+    <path d="M24 148 L95 130 L170 115 L250 96 L330 82 L400 68" fill="none" stroke="#45d1c6" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- 2026 pink + area -->
+    <path d="M24 148 L95 120 L170 100 L250 78 L330 58 L400 54 L400 154 L24 154 Z" fill="url(#chartGrad)"/>
+    <path d="M24 148 L95 120 L170 100 L250 78 L330 58 L400 54" fill="none" stroke="#f06292" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Heatmap Preview Card -->
+  <g transform="translate(700, 428)">
+    <rect width="424" height="108" rx="18" fill="#161b2e" stroke="#262e48" stroke-width="1.5"/>
+    <text x="20" y="30" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="700">ACTIVITY HEATMAP</text>
+    <!-- Heatmap cells -->
+    <g transform="translate(20, 44)">
+      <rect x="0" y="0" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="20" y="0" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="40" y="0" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="60" y="0" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="80" y="0" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="100" y="0" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="120" y="0" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="140" y="0" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="160" y="0" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="180" y="0" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="200" y="0" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="220" y="0" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="240" y="0" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="260" y="0" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="280" y="0" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="300" y="0" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="320" y="0" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="340" y="0" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="360" y="0" width="14" height="14" rx="3" fill="#45d1c6"/>
+
+      <rect x="0" y="22" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="20" y="22" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="40" y="22" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="60" y="22" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="80" y="22" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="100" y="22" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="120" y="22" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="140" y="22" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="160" y="22" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="180" y="22" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="200" y="22" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="220" y="22" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="240" y="22" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="260" y="22" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="280" y="22" width="14" height="14" rx="3" fill="#1b2236"/>
+      <rect x="300" y="22" width="14" height="14" rx="3" fill="#45d1c6"/>
+      <rect x="320" y="22" width="14" height="14" rx="3" fill="#2a8b87"/>
+      <rect x="340" y="22" width="14" height="14" rx="3" fill="#194549"/>
+      <rect x="360" y="22" width="14" height="14" rx="3" fill="#1b2236"/>
+    </g>
+  </g>
+
+  <!-- Footer URL -->
+  <text x="84" y="556" fill="#64748b" font-family="JetBrains Mono, monospace" font-size="15">sltrix00.github.io/Cinelog</text>
+</svg>

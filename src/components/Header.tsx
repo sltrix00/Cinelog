@@ -3,6 +3,7 @@ import type { YearFilter } from '../types/cinelog';
 
 interface HeaderProps {
   selectedYear: YearFilter;
+  availableYears?: number[];
   onSelectYear: (year: YearFilter) => void;
   onOpenAddModal: () => void;
   onOpenImportModal: () => void;
@@ -12,12 +13,7 @@ interface HeaderProps {
   userEmail: string | null;
 }
 
-const YEAR_OPTIONS: Array<{ value: YearFilter; label: string }> = [
-  { value: 2024, label: '2024' },
-  { value: 2025, label: '2025' },
-  { value: 2026, label: '2026' },
-  { value: 'all', label: 'Все' },
-];
+const DEFAULT_YEARS = [2024, 2025, 2026];
 
 const NAV_ITEMS = [
   { href: '#level-1', label: 'KPI' },
@@ -29,6 +25,7 @@ const NAV_ITEMS = [
 
 export function Header({
   selectedYear,
+  availableYears = DEFAULT_YEARS,
   onSelectYear,
   onOpenAddModal,
   onOpenImportModal,
@@ -37,6 +34,12 @@ export function Header({
   isDemoMode,
   userEmail,
 }: HeaderProps) {
+  const sortedYears = [...availableYears].sort((a, b) => a - b);
+  const useCompactOverflow = sortedYears.length > 5;
+  const olderYears = useCompactOverflow ? sortedYears.slice(0, -3) : [];
+  const pillYears = useCompactOverflow ? sortedYears.slice(-3) : sortedYears;
+  const selectedIsOlderYear =
+    typeof selectedYear === 'number' && olderYears.includes(selectedYear);
   const logoContent = (
     <>
       <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f06292]/20 via-[#45d1c6]/15 to-[#d6b85a]/20 border border-lineStrong flex items-center justify-center">
@@ -96,23 +99,58 @@ export function Header({
               role="group"
               aria-label="Выбор года"
             >
-              {YEAR_OPTIONS.map((opt) => {
-                const active = selectedYear === opt.value;
+              {useCompactOverflow && (
+                <select
+                  aria-label="Выбрать более ранний год"
+                  value={selectedIsOlderYear ? String(selectedYear) : ''}
+                  onChange={(e) => {
+                    const yr = Number.parseInt(e.target.value, 10);
+                    if (!Number.isNaN(yr)) onSelectYear(yr);
+                  }}
+                  className={
+                    selectedIsOlderYear
+                      ? 'px-2 py-1 rounded-lg text-xs font-medium tabular-nums bg-cardElevated text-white border border-lineStrong shadow-sm transition-all cursor-pointer focus:outline-none'
+                      : 'px-2 py-1 rounded-lg text-xs font-medium tabular-nums bg-transparent text-slate-400 hover:text-slate-200 transition-all cursor-pointer focus:outline-none'
+                  }
+                >
+                  <option value="" disabled className="bg-card text-slate-400">
+                    Ранее
+                  </option>
+                  {olderYears.map((yr) => (
+                    <option key={yr} value={yr} className="bg-card text-slate-100">
+                      {yr}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {pillYears.map((yr) => {
+                const active = selectedYear === yr;
                 return (
                   <button
-                    key={String(opt.value)}
+                    key={yr}
                     type="button"
-                    onClick={() => onSelectYear(opt.value)}
+                    onClick={() => onSelectYear(yr)}
                     className={
                       active
                         ? 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums bg-cardElevated text-white border border-lineStrong shadow-sm transition-all cursor-pointer'
                         : 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
                     }
                   >
-                    {opt.label}
+                    {yr}
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => onSelectYear('all')}
+                className={
+                  selectedYear === 'all'
+                    ? 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums bg-cardElevated text-white border border-lineStrong shadow-sm transition-all cursor-pointer'
+                    : 'px-2.5 py-1 rounded-lg text-xs font-medium tabular-nums text-slate-400 hover:text-slate-200 transition-all cursor-pointer'
+                }
+              >
+                Все
+              </button>
             </div>
 
             {/* CSV Import Button */}

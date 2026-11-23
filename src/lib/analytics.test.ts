@@ -12,7 +12,9 @@ import {
   computeTimeOfDayDistribution,
   computeViewingIndexTrajectory,
   DEFAULT_REFERENCE_DATE,
+  extractAvailableYears,
   filmWord,
+  filterEntriesByYear,
   getDayOfYear,
   rewatchWord,
   timeStringToBucket,
@@ -185,5 +187,18 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(rewatchWord(1)).toBe('пересмотр');
     expect(rewatchWord(3)).toBe('пересмотра');
     expect(rewatchWord(14)).toBe('пересмотров');
+  });
+
+  it('extracts available years sorted ascending and filters non-2024..2026 years', () => {
+    const entries = [
+      makeCsvOnlyEntry({ id: '1', watched_date: '2021-03-14' }),
+      makeCsvOnlyEntry({ id: '2', watched_date: '2027-01-09' }),
+      makeCsvOnlyEntry({ id: '3', watched_date: '2021-11-02' }),
+    ];
+
+    expect(extractAvailableYears(entries)).toEqual([2021, 2024, 2025, 2026, 2027]);
+    const filtered2021 = filterEntriesByYear(entries, 2021);
+    expect(filtered2021).toHaveLength(2);
+    expect(filtered2021.map((e) => e.id)).toEqual(['1', '3']);
   });
 });

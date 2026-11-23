@@ -1,0 +1,19 @@
+{
+  "name": "Cinelog — Персональная аналитика кино",
+  "short_name": "Cinelog",
+  "description": "Персональная аналитика кино: индекс просмотра, накопительные графики год к году, тепловая карта активности и вкусовые акценты.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0e17",
+  "theme_color": "#0b0e17",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

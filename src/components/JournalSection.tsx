@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Download,
   Loader2,
+  Pencil,
   RefreshCw,
   RotateCcw,
   Search,
@@ -18,6 +19,7 @@ import type { ReenrichSummary, WatchEntry, YearFilter } from '../types/cinelog';
 interface JournalSectionProps {
   entries: WatchEntry[];
   selectedYear: YearFilter;
+  onEditEntry?: (entry: WatchEntry) => void;
   onDeleteEntry: (id: string) => void;
   pendingEnrichCount?: number;
   unmatchedCount?: number;
@@ -33,6 +35,7 @@ type SortKey = 'date-desc' | 'date-asc' | 'rating-desc' | 'rating-asc' | 'title-
 export function JournalSection({
   entries,
   selectedYear,
+  onEditEntry,
   onDeleteEntry,
   pendingEnrichCount = 0,
   unmatchedCount = 0,
@@ -47,6 +50,7 @@ export function JournalSection({
   const [rewatchesOnly, setRewatchesOnly] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [visibleLimit, setVisibleLimit] = useState(18);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -326,15 +330,50 @@ export function JournalSection({
                           <span className="text-slate-600">—</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onDeleteEntry(entry.id)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#f06292] hover:bg-[#f06292]/10 transition-colors cursor-pointer"
-                          title="Удалить запись"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        {confirmDeleteId === entry.id ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="text-[11px] text-slate-400">Удалить?</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                onDeleteEntry(entry.id);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-[#f06292]/15 hover:bg-[#f06292]/25 border border-[#f06292]/40 text-[11px] font-medium text-[#f06292] transition-colors cursor-pointer"
+                            >
+                              Да
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-1 rounded-lg bg-cardElevated hover:bg-lineStrong text-[11px] text-slate-300 transition-colors cursor-pointer"
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1">
+                            {onEditEntry && (
+                              <button
+                                type="button"
+                                onClick={() => onEditEntry(entry)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#45d1c6] hover:bg-[#45d1c6]/10 transition-colors cursor-pointer"
+                                title="Редактировать запись"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(entry.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#f06292] hover:bg-[#f06292]/10 transition-colors cursor-pointer"
+                              title="Удалить запись"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

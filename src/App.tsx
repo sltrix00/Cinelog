@@ -6,6 +6,7 @@ import { CsvImportModal } from './components/CsvImportModal';
 import { Header } from './components/Header';
 import { JournalSection } from './components/JournalSection';
 import { LandingPage } from './components/LandingPage';
+import { LegalModal, type LegalTab } from './components/LegalModal';
 import { Tier1KpiSection } from './components/Tier1KpiSection';
 import { Tier2DynamicsSection } from './components/Tier2DynamicsSection';
 import { Tier3RhythmSection } from './components/Tier3RhythmSection';
@@ -23,6 +24,7 @@ import {
   computeTimeOfDayDistribution,
   computeViewingIndexTrajectory,
   DEFAULT_REFERENCE_DATE,
+  extractAvailableYears,
   getReferenceDateForToday,
 } from './lib/analytics';
 import { parseAuthCallbackError } from './lib/authHelpers';
@@ -38,6 +40,7 @@ import {
   onAuthChanged,
   reenrichUserMovies,
   signOutAccount,
+  updateWatchLogById,
 } from './lib/supabase';
 import type { ParsedImportRow, ReenrichSummary, WatchEntry, YearFilter } from './types/cinelog';
 
@@ -66,11 +69,18 @@ export function App() {
   const [loadingCloud, setLoadingCloud] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<WatchEntry | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('login');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [authNotice, setAuthNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [legalTab, setLegalTab] = useState<LegalTab | null>(() => {
+    if (typeof window === 'undefined') return null;
+    if (window.location.hash === '#privacy') return 'privacy';
+    if (window.location.hash === '#terms') return 'terms';
+    return null;
+  });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const initialHadAuthCodeRef = useRef(
@@ -184,6 +194,42 @@ export function App() {
     };
   }, [loadCloudEntries, showToast]);
 
+  useEffect(() => {
+    const syncLegalFromHash = () => {
+      if (window.location.hash === '#privacy') setLegalTab('privacy');
+      else if (window.location.hash === '#terms') setLegalTab('terms');
+    };
+    window.addEventListener('hashchange', syncLegalFromHash);
+    return () => window.removeEventListener('hashchange', syncLegalFromHash);
+  }, []);
+
+  const openLegalModal = useCallback((tab: LegalTab) => {
+    setLegalTab(tab);
+    if (typeof window !== 'undefined' && window.location.hash !== `#${tab}`) {
+      window.history.replaceState(
+        {},
+        document.title,
+        `${window.location.pathname}${window.location.search}#${tab}`
+      );
+    }
+  }, []);
+
+  const closeLegalModal = useCallback(() => {
+    setLegalTab(null);
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.hash === '#privacy' || window.location.hash === '#terms')
+    ) {
+      window.history.replaceState(
+        {},
+        document.title,
+        `${window.location.pathname}${window.location.search}`
+      );
+    }
+  }, []);
+
+  const availableYears = useMemo(() => extractAvailableYears(entries), [entries]);
+
   const refDate = useMemo(
     () => (isDemoMode ? DEFAULT_REFERENCE_DATE : getReferenceDateForToday()),
     [isDemoMode]
@@ -249,11 +295,56 @@ export function App() {
   }, [entries, isDemoMode, userEmail]);
 
   const handleSaveWatch = async (payload: AddWatchPayload) => {
+    const yr = Number.parseInt(payload.watchedDate.slice(0, 4), 10);
+    const isValidYear = Number.isInteger(yr) && yr >= 1888 && yr <= 2100;
+
+    if (editingEntry) {
+      if (!isDemoMode && isSupabaseConfigured && userEmail) {
+        const updated = await updateWatchLogById(editingEntry.id, editingEntry, payload);
+        setEntries((prev) => prev.map((e) => (e.id === editingEntry.id ? updated : e)));
+        if (isValidYear && selectedYear !== 'all') {
+          setSelectedYear(yr);
+        }
+        showToast(
+          `«${updated.title}» (${updated.rating !== null ? `${updated.rating.toFixed(1)}★` : 'без оценки'}${
+            updated.is_rewatch ? ' · ↺ пересмотр' : ''
+          }) обновлён в Supabase!`
+        );
+        return;
+      }
+
+      const updatedLocal: WatchEntry = {
+        ...editingEntry,
+        tmdb_id: payload.tmdbId,
+        title: payload.title,
+        release_year: payload.releaseYear,
+        watched_date: payload.watchedDate,
+        watched_time: payload.watchedTime,
+        rating: payload.rating,
+        is_rewatch: payload.isRewatch,
+        runtime_minutes: payload.runtimeMinutes,
+        runtime_override_minutes: null,
+        genres: payload.genres,
+        directors: payload.directors,
+        countries: payload.countries,
+      };
+      setEntries((prev) => prev.map((e) => (e.id === editingEntry.id ? updatedLocal : e)));
+      setDemoWasModified(true);
+      if (isValidYear && selectedYear !== 'all') {
+        setSelectedYear(yr);
+      }
+      showToast(
+        `«${payload.title}» (${payload.rating !== null ? `${payload.rating.toFixed(1)}★` : 'без оценки'}${
+          payload.isRewatch ? ' · ↺ пересмотр' : ''
+        }) обновлён!`
+      );
+      return;
+    }
+
     if (!isDemoMode && isSupabaseConfigured && userEmail) {
       const saved = await insertManualWatchLog(payload);
       setEntries((prev) => [saved, ...prev]);
-      const yr = Number.parseInt(payload.watchedDate.slice(0, 4), 10);
-      if (yr === 2024 || yr === 2025 || yr === 2026) {
+      if (isValidYear) {
         setSelectedYear(yr);
       }
       showToast(
@@ -295,8 +386,7 @@ export function App() {
 
     setEntries((prev) => [newEntry, ...prev]);
     setDemoWasModified(true);
-    const yr = Number.parseInt(payload.watchedDate.slice(0, 4), 10);
-    if (yr === 2024 || yr === 2025 || yr === 2026) {
+    if (isValidYear) {
       setSelectedYear(yr);
     }
     showToast(
@@ -333,13 +423,12 @@ export function App() {
     setDemoWasModified(true);
     const latestYear = importedEntries
       .map((e) => Number.parseInt(e.watched_date.slice(0, 4), 10))
-      .find((y) => y === 2024 || y === 2025 || y === 2026);
+      .find((y) => Number.isInteger(y) && y >= 1888 && y <= 2100);
     if (latestYear) setSelectedYear(latestYear);
     showToast(`Импортировано ${importedEntries.length} записей!`);
   };
 
   const handleDeleteEntry = async (id: string) => {
-    if (!window.confirm('Удалить эту запись из журнала просмотров?')) return;
     if (!isDemoMode && isSupabaseConfigured && userEmail) {
       try {
         await deleteWatchLogById(id);
@@ -393,11 +482,16 @@ export function App() {
     showToast('Демо-данные 2024–2026 восстановлены.');
   };
 
+  const archiveSpan =
+    availableYears.length > 1
+      ? `${availableYears[0]}–${availableYears[availableYears.length - 1]}`
+      : String(availableYears[0] ?? SIM_YEAR);
+
   const statusBadgeText =
     isDemoMode && selectedYear === SIM_YEAR
       ? `20 ноя ${SIM_YEAR} · День ${SIM_DAY_OF_YEAR} / 365`
       : selectedYear === 'all'
-        ? `Архив 2024–2026 · ${entries.length} записей`
+        ? `Архив ${archiveSpan} · ${entries.length} записей`
         : selectedYear === refDate.year
           ? `День ${refDate.dayOfYear} / 365`
           : `Архив ${selectedYear} года · 365 / 365 дней`;
@@ -423,13 +517,18 @@ export function App() {
           onOpenRegister={() => openAuthModal('register')}
           onOpenLogin={() => openAuthModal('login')}
           onOpenDemo={openDemoDashboard}
+          onOpenLegal={openLegalModal}
         />
       ) : (
         <>
           <Header
             selectedYear={selectedYear}
+            availableYears={availableYears}
             onSelectYear={setSelectedYear}
-            onOpenAddModal={() => setAddModalOpen(true)}
+            onOpenAddModal={() => {
+              setEditingEntry(null);
+              setAddModalOpen(true);
+            }}
             onOpenImportModal={() => setImportModalOpen(true)}
             onOpenAuthModal={() => openAuthModal('login')}
             onLogoClick={isDemoMode ? () => setShowDemoDashboard(false) : undefined}
@@ -497,6 +596,10 @@ export function App() {
               <JournalSection
                 entries={entries}
                 selectedYear={selectedYear}
+                onEditEntry={(entry) => {
+                  setEditingEntry(entry);
+                  setAddModalOpen(true);
+                }}
                 onDeleteEntry={(id) => void handleDeleteEntry(id)}
                 pendingEnrichCount={pendingEnrichMovieIds.length}
                 unmatchedCount={unmatchedMovieCount}
@@ -507,15 +610,47 @@ export function App() {
                 onDismissReenrichReport={() => setReenrichReport(null)}
               />
 
-              <footer className="pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
-                  <span>·</span>
-                  <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+              <footer className="pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-500">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
+                    <span>·</span>
+                    <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => openLegalModal('privacy')}
+                      className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Политика конфиденциальности
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openLegalModal('terms')}
+                      className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Условия и TMDB
+                    </button>
+                  </div>
                 </div>
-                <span className="tabular-nums text-[11px]">
-                  {isDemoMode ? 'Симуляция данных на 20.11.2026' : 'Supabase PostgreSQL RLS Sync'}
-                </span>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500/90">
+                  <span>
+                    This product uses the{' '}
+                    <a
+                      href="https://www.themoviedb.org/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#45d1c6] hover:underline"
+                    >
+                      TMDB API
+                    </a>{' '}
+                    but is not endorsed or certified by TMDB.
+                  </span>
+                  <span className="tabular-nums">
+                    {isDemoMode ? 'Симуляция данных на 20.11.2026' : 'Supabase PostgreSQL RLS Sync'}
+                  </span>
+                </div>
               </footer>
             </main>
           )}
@@ -532,9 +667,13 @@ export function App() {
 
       <AddWatchModal
         open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
+        onClose={() => {
+          setAddModalOpen(false);
+          setEditingEntry(null);
+        }}
         onSave={handleSaveWatch}
         isDemoMode={isDemoMode}
+        initialEntry={editingEntry}
       />
       <CsvImportModal
         open={importModalOpen}
@@ -543,6 +682,7 @@ export function App() {
         onConfirmImport={handleConfirmImport}
         isDemoMode={isDemoMode}
       />
+      <LegalModal tab={legalTab} onChangeTab={openLegalModal} onClose={closeLegalModal} />
       <AuthModal
         open={authModalOpen}
         onClose={() => {

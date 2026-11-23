@@ -12,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import { filmWord, MONTH_STARTS_NONLEAP } from '../lib/analytics';
-import { YEAR_COLORS } from '../lib/demoData';
+import { getYearColor, YEAR_COLORS } from '../lib/demoData';
 import type { CumulativePoint365, IndexTrajectoryPoint, YearFilter } from '../types/cinelog';
 
 interface Tier2DynamicsSectionProps {
@@ -124,7 +124,7 @@ export function Tier2DynamicsSection({
   };
 
   const activeTrajectoryYear = selectedYear === 'all' ? 2026 : selectedYear;
-  const trajectoryColor = YEAR_COLORS[activeTrajectoryYear as 2024 | 2025 | 2026] ?? '#f06292';
+  const trajectoryColor = getYearColor(activeTrajectoryYear);
   const maxCumValue = Math.max(
     125,
     ...cumulativeData.map((d) => Math.max(d.y2024, d.y2025, d.y2026))

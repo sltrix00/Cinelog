@@ -11,6 +11,7 @@ import {
   localizeAuthError,
   parseGoogleProviderEnabled,
 } from './authHelpers';
+import { extractEdgeFunctionErrorMessage } from './edgeFunctionError';
 import type {
   MovieRecord,
   ParsedImportRow,
@@ -293,7 +294,11 @@ export async function insertManualWatchLog(input: CreateWatchLogInput): Promise<
   const client = requireClient();
 
   // Resolve movie_id through tmdb-proxy Edge Function (uses Service Role to write shared movies cache)
-  const { data: resolved, error: resolveError } = await client.functions.invoke<{
+  const {
+    data: resolved,
+    error: resolveError,
+    response,
+  } = await client.functions.invoke<{
     movies: MovieRecord[];
   }>('tmdb-proxy', {
     body: {
@@ -314,7 +319,14 @@ export async function insertManualWatchLog(input: CreateWatchLogInput): Promise<
   });
 
   if (resolveError || !resolved?.movies?.length) {
-    throw new Error(resolveError?.message ?? 'Не удалось сохранить метаданные фильма через Edge Function.');
+    const detail = resolveError
+      ? await extractEdgeFunctionErrorMessage(
+          resolveError,
+          'Не удалось сохранить метаданные фильма через Edge Function.',
+          response
+        )
+      : 'Не удалось сохранить метаданные фильма через Edge Function.';
+    throw new Error(detail);
   }
 
   const movie = resolved.movies[0];
@@ -350,6 +362,98 @@ export async function insertManualWatchLog(input: CreateWatchLogInput): Promise<
 
   if (viewError || !entryRow) {
     throw new Error(`Просмотр сохранён, но не удалось перечитать запись: ${viewError?.message ?? 'unknown'}`);
+  }
+
+  return mapRowToWatchEntry(entryRow);
+}
+
+export async function updateWatchLogById(
+  logId: string,
+  existingEntry: WatchEntry,
+  input: CreateWatchLogInput
+): Promise<WatchEntry> {
+  if (!isValidWatchLogId(logId)) {
+    throw new Error('Некорректный идентификатор записи.');
+  }
+  const client = requireClient();
+
+  const cleanTitle = input.title.trim();
+  const titleChanged = cleanTitle !== existingEntry.title.trim();
+  const releaseYearChanged = (input.releaseYear ?? null) !== (existingEntry.release_year ?? null);
+  const tmdbIdChanged = (input.tmdbId ?? null) !== (existingEntry.tmdb_id ?? null);
+  const needsMovieResolve = titleChanged || releaseYearChanged || tmdbIdChanged;
+
+  let targetMovieId = existingEntry.movie_id;
+  let runtimeOverride: number | null = existingEntry.runtime_override_minutes;
+
+  if (needsMovieResolve) {
+    const {
+      data: resolved,
+      error: resolveError,
+      response,
+    } = await client.functions.invoke<{
+      movies: MovieRecord[];
+    }>('tmdb-proxy', {
+      body: {
+        action: 'resolve_batch',
+        language: 'ru-RU',
+        items: [
+          {
+            title: cleanTitle,
+            year: input.releaseYear,
+            tmdbId: input.tmdbId ?? null,
+            fallbackRuntimeMinutes: input.runtimeMinutes,
+            fallbackDirectors: input.directors ?? [],
+            fallbackCountries: input.countries ?? [],
+            fallbackGenres: input.genres ?? [],
+          },
+        ],
+      },
+    });
+
+    if (resolveError || !resolved?.movies?.length) {
+      const detail = resolveError
+        ? await extractEdgeFunctionErrorMessage(
+            resolveError,
+            'Не удалось обновить метаданные фильма через Edge Function.',
+            response
+          )
+        : 'Не удалось обновить метаданные фильма через Edge Function.';
+      throw new Error(detail);
+    }
+
+    const movie = resolved.movies[0];
+    targetMovieId = movie.id;
+    runtimeOverride =
+      input.runtimeMinutes && input.runtimeMinutes !== movie.runtime_minutes ? input.runtimeMinutes : null;
+  } else if (input.runtimeMinutes !== existingEntry.runtime_minutes) {
+    runtimeOverride = input.runtimeMinutes ?? null;
+  }
+
+  const { error: updateError } = await client
+    .from('watch_logs')
+    .update({
+      movie_id: targetMovieId,
+      watched_date: input.watchedDate,
+      watched_time_min: timeStringToMinutes(input.watchedTime),
+      rating_x2: ratingToHalfStars(input.rating),
+      is_rewatch: input.isRewatch,
+      runtime_override_minutes: runtimeOverride,
+    })
+    .eq('id', logId.trim());
+
+  if (updateError) {
+    throw new Error(`Ошибка обновления просмотра: ${updateError.message}`);
+  }
+
+  const { data: entryRow, error: viewError } = await client
+    .from('watch_entries')
+    .select('*')
+    .eq('id', logId.trim())
+    .single<WatchEntryRow>();
+
+  if (viewError || !entryRow) {
+    throw new Error(`Запись обновлена, но не удалось перечитать данные: ${viewError?.message ?? 'unknown'}`);
   }
 
   return mapRowToWatchEntry(entryRow);
@@ -448,7 +552,7 @@ export async function batchUpsertImportedRows(
   for (let i = 0; i < descriptorItems.length; i += CHUNK_SIZE) {
     const chunkItems = descriptorItems.slice(i, i + CHUNK_SIZE);
     const chunkKeys = descriptorKeys.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await client.functions.invoke<{
+    const { data, error, response } = await client.functions.invoke<{
       movies: MovieRecord[];
       stats?: TmdbBatchStats;
     }>('tmdb-proxy', {
@@ -459,7 +563,16 @@ export async function batchUpsertImportedRows(
       },
     });
     if (error || !data?.movies) {
-      throw new Error(error?.message ?? 'Ошибка обогащения метаданных при импорте CSV.');
+      const chunkStart = i + 1;
+      const chunkEnd = Math.min(i + chunkItems.length, descriptorItems.length);
+      const detail = error
+        ? await extractEdgeFunctionErrorMessage(
+            error,
+            'Ошибка обогащения метаданных при импорте.',
+            response
+          )
+        : 'Ошибка обогащения метаданных при импорте.';
+      throw new Error(`Ошибка на этапе ${chunkStart}–${chunkEnd} из ${descriptorItems.length}: ${detail}`);
     }
     data.movies.forEach((movie, idx) => {
       resolvedMovieByKey.set(chunkKeys[idx], movie);
@@ -558,7 +671,7 @@ export async function reenrichUserMovies(
   const CHUNK_SIZE = 20;
   for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
     const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await client.functions.invoke<ReenrichSummary>('tmdb-proxy', {
+    const { data, error, response } = await client.functions.invoke<ReenrichSummary>('tmdb-proxy', {
       body: {
         action: 'reenrich_unmatched',
         movieIds: chunk,
@@ -567,7 +680,16 @@ export async function reenrichUserMovies(
     });
 
     if (error || !data) {
-      throw new Error(error?.message ?? 'Ошибка дообогащения метаданных через TMDB.');
+      const chunkStart = i + 1;
+      const chunkEnd = Math.min(i + chunk.length, uniqueIds.length);
+      const detail = error
+        ? await extractEdgeFunctionErrorMessage(
+            error,
+            'Ошибка дообогащения метаданных через TMDB.',
+            response
+          )
+        : 'Ошибка дообогащения метаданных через TMDB.';
+      throw new Error(`Ошибка на этапе ${chunkStart}–${chunkEnd} из ${uniqueIds.length}: ${detail}`);
     }
 
     summary.totalProcessed += data.totalProcessed ?? 0;

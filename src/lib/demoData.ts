@@ -7,11 +7,19 @@ export const SIM_DAY = 20;
 export const SIM_DAY_OF_YEAR = 324;
 export const SIM_DATE_ISO = '2026-11-20';
 
-export const YEAR_COLORS: Record<2024 | 2025 | 2026, string> = {
+export const YEAR_COLORS: Record<number, string> = {
   2024: '#d6b85a',
   2025: '#45d1c6',
   2026: '#f06292',
 };
+
+const FALLBACK_YEAR_PALETTE = ['#818cf8', '#38bdf8', '#fb923c', '#a78bfa', '#34d399', '#f472b6'] as const;
+
+export function getYearColor(year: number): string {
+  if (YEAR_COLORS[year]) return YEAR_COLORS[year];
+  const idx = Math.abs(Math.trunc(year)) % FALLBACK_YEAR_PALETTE.length;
+  return FALLBACK_YEAR_PALETTE[idx];
+}
 
 export interface DemoMovieTemplate {
   title: string;

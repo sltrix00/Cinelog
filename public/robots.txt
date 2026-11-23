@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sltrix00.github.io/Cinelog/sitemap.xml

@@ -11,7 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import { filmWord } from '../lib/analytics';
-import { YEAR_COLORS } from '../lib/demoData';
+import { getYearColor, YEAR_COLORS } from '../lib/demoData';
 import type {
   DayOfWeekSummary,
   MonthlyYearPoint,
@@ -44,10 +44,7 @@ export function Tier3RhythmSection({
   const [simulateCsvEmpty, setSimulateCsvEmpty] = useState(false);
 
   const showEmptyTimeState = !timeOfDay.hasTimeData || simulateCsvEmpty;
-  const activeColor =
-    selectedYear === 'all'
-      ? '#45d1c6'
-      : YEAR_COLORS[selectedYear as 2024 | 2025 | 2026] ?? '#f06292';
+  const activeColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
 
   const scopeLabel = selectedYear === 'all' ? 'за всё время' : `за ${selectedYear} год`;
 

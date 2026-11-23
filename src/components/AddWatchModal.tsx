@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, PlusCircle, Search, X } from 'lucide-react';
+import { Loader2, Pencil, PlusCircle, Search, X } from 'lucide-react';
+import { timeStringToBucket } from '../lib/analytics';
 import { bucketToDefaultTime, DEMO_MOVIE_CATALOG, SIM_DATE_ISO } from '../lib/demoData';
 import { enrichMovieViaProxy, isSupabaseConfigured, searchTmdbViaProxy } from '../lib/supabase';
-import type { TimeOfDayBucket, TmdbSearchResult } from '../types/cinelog';
+import type { TimeOfDayBucket, TmdbSearchResult, WatchEntry } from '../types/cinelog';
 
 export interface AddWatchPayload {
   tmdbId: number | null;
@@ -23,9 +24,19 @@ interface AddWatchModalProps {
   onClose: () => void;
   onSave: (payload: AddWatchPayload) => Promise<void> | void;
   isDemoMode: boolean;
+  initialEntry?: WatchEntry | null;
 }
 
-export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchModalProps) {
+type BucketOption = 'none' | '0' | '1' | '2' | '3';
+
+export function AddWatchModal({
+  open,
+  onClose,
+  onSave,
+  isDemoMode,
+  initialEntry = null,
+}: AddWatchModalProps) {
+  const isEditing = Boolean(initialEntry);
   const [title, setTitle] = useState('');
   const [tmdbId, setTmdbId] = useState<number | null>(null);
   const [rating, setRating] = useState<string>('4');
@@ -34,12 +45,13 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
   const [watchedDate, setWatchedDate] = useState<string>(
     isDemoMode ? SIM_DATE_ISO : new Date().toISOString().slice(0, 10)
   );
-  const [timeOfDayBucket, setTimeOfDayBucket] = useState<0 | 1 | 2 | 3>(2);
+  const [timeOfDayBucket, setTimeOfDayBucket] = useState<BucketOption>('2');
   const [exactTime, setExactTime] = useState<string>('');
   const [isRewatch, setIsRewatch] = useState(false);
-  const [director, setDirector] = useState('');
-  const [country, setCountry] = useState('');
-  const [genre, setGenre] = useState('');
+  const [directors, setDirectors] = useState<string[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [genres, setGenres] = useState<string[]>([]);
+  const [allowSearch, setAllowSearch] = useState(false);
 
   const [suggestions, setSuggestions] = useState<TmdbSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -48,12 +60,54 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
 
   useEffect(() => {
     if (!open) return;
-    setWatchedDate(isDemoMode ? SIM_DATE_ISO : new Date().toISOString().slice(0, 10));
     setErrorMsg(null);
-  }, [open, isDemoMode]);
+    setSuggestions([]);
+
+    if (initialEntry) {
+      setTitle(initialEntry.title);
+      setTmdbId(initialEntry.tmdb_id);
+      setRating(initialEntry.rating !== null ? String(initialEntry.rating) : '');
+      const effRuntime = initialEntry.runtime_override_minutes ?? initialEntry.runtime_minutes ?? 120;
+      setRuntime(String(effRuntime));
+      setReleaseYear(
+        initialEntry.release_year
+          ? String(initialEntry.release_year)
+          : String(isDemoMode ? 2026 : new Date().getFullYear())
+      );
+      setWatchedDate(initialEntry.watched_date);
+      if (initialEntry.watched_time) {
+        const bucket = timeStringToBucket(initialEntry.watched_time);
+        setTimeOfDayBucket(bucket !== null ? (String(bucket) as BucketOption) : '2');
+        setExactTime(initialEntry.watched_time.slice(0, 5));
+      } else {
+        setTimeOfDayBucket('none');
+        setExactTime('');
+      }
+      setIsRewatch(initialEntry.is_rewatch);
+      setDirectors(initialEntry.directors);
+      setCountries(initialEntry.countries);
+      setGenres(initialEntry.genres);
+      setAllowSearch(false);
+      return;
+    }
+
+    setTitle('');
+    setTmdbId(null);
+    setRating('4');
+    setRuntime('124');
+    setReleaseYear(String(isDemoMode ? 2026 : new Date().getFullYear()));
+    setWatchedDate(isDemoMode ? SIM_DATE_ISO : new Date().toISOString().slice(0, 10));
+    setTimeOfDayBucket('2');
+    setExactTime('');
+    setIsRewatch(false);
+    setDirectors([]);
+    setCountries([]);
+    setGenres([]);
+    setAllowSearch(true);
+  }, [open, isDemoMode, initialEntry]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !allowSearch) return;
     const q = title.trim();
     if (q.length < 2 || tmdbId !== null) {
       setSuggestions([]);
@@ -91,7 +145,7 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
     }, 280);
 
     return () => window.clearTimeout(timer);
-  }, [title, open, isDemoMode, tmdbId]);
+  }, [title, open, isDemoMode, tmdbId, allowSearch]);
 
   if (!open) return null;
 
@@ -100,15 +154,16 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
     setTmdbId(item.tmdbId > 0 ? item.tmdbId : null);
     if (item.releaseYear) setReleaseYear(String(item.releaseYear));
     setSuggestions([]);
+    setAllowSearch(false);
 
     const catalogHit = DEMO_MOVIE_CATALOG.find(
       (m) => m.tmdb_id === item.tmdbId || m.title.toLowerCase() === item.title.toLowerCase()
     );
     if (catalogHit) {
       if (catalogHit.runtime_minutes) setRuntime(String(catalogHit.runtime_minutes));
-      setDirector(catalogHit.directors[0] ?? '');
-      setCountry(catalogHit.countries[0] ?? '');
-      setGenre(catalogHit.genres[0] ?? '');
+      setDirectors(catalogHit.directors);
+      setCountries(catalogHit.countries);
+      setGenres(catalogHit.genres);
       return;
     }
 
@@ -118,9 +173,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
         const enriched = await enrichMovieViaProxy(item.tmdbId);
         if (enriched) {
           if (enriched.runtime_minutes) setRuntime(String(enriched.runtime_minutes));
-          setDirector(enriched.directors[0] ?? '');
-          setCountry(enriched.countries[0] ?? '');
-          setGenre(enriched.genres[0] ?? '');
+          setDirectors(enriched.directors);
+          setCountries(enriched.countries);
+          setGenres(enriched.genres);
         }
       } finally {
         setSearching(false);
@@ -141,7 +196,9 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
     const parsedYear = Number.parseInt(releaseYear, 10) || 2026;
     const watchedTime = exactTime
       ? `${exactTime}:00`
-      : bucketToDefaultTime(timeOfDayBucket as TimeOfDayBucket);
+      : timeOfDayBucket === 'none'
+        ? null
+        : bucketToDefaultTime(Number(timeOfDayBucket) as TimeOfDayBucket);
 
     try {
       await onSave({
@@ -153,17 +210,17 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
         rating: parsedRating,
         runtimeMinutes: parsedRuntime,
         isRewatch,
-        directors: director.trim() ? [director.trim()] : [],
-        countries: country.trim() ? [country.trim()] : [],
-        genres: genre.trim() ? [genre.trim()] : [],
+        directors,
+        countries,
+        genres,
       });
       setTitle('');
       setTmdbId(null);
       setExactTime('');
       setIsRewatch(false);
-      setDirector('');
-      setCountry('');
-      setGenre('');
+      setDirectors([]);
+      setCountries([]);
+      setGenres([]);
       onClose();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Не удалось сохранить просмотр.');
@@ -182,8 +239,14 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
       <div className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <div className="flex items-center gap-2">
-            <PlusCircle className="w-4 h-4 text-[#f06292]" />
-            <h3 className="text-sm font-semibold text-white">Добавить просмотр</h3>
+            {isEditing ? (
+              <Pencil className="w-4 h-4 text-[#45d1c6]" />
+            ) : (
+              <PlusCircle className="w-4 h-4 text-[#f06292]" />
+            )}
+            <h3 className="text-sm font-semibold text-white">
+              {isEditing ? 'Редактировать просмотр' : 'Добавить просмотр'}
+            </h3>
           </div>
           <button
             type="button"
@@ -211,9 +274,10 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
                 onChange={(e) => {
                   setTitle(e.target.value);
                   setTmdbId(null);
-                  setDirector('');
-                  setCountry('');
-                  setGenre('');
+                  setDirectors([]);
+                  setCountries([]);
+                  setGenres([]);
+                  setAllowSearch(true);
                 }}
                 placeholder="Например: Одиссея или Дюна"
                 className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#f06292]"
@@ -331,13 +395,17 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
               <select
                 id="fTimeOfDay"
                 value={timeOfDayBucket}
-                onChange={(e) => setTimeOfDayBucket(Number(e.target.value) as 0 | 1 | 2 | 3)}
+                onChange={(e) => {
+                  setTimeOfDayBucket(e.target.value as BucketOption);
+                  setExactTime('');
+                }}
                 className="w-full px-3 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white focus:outline-none focus:border-[#f06292]"
               >
-                <option value={0}>Утро</option>
-                <option value={1}>День</option>
-                <option value={2}>Вечер</option>
-                <option value={3}>Ночь</option>
+                <option value="0">Утро</option>
+                <option value="1">День</option>
+                <option value="2">Вечер</option>
+                <option value="3">Ночь</option>
+                <option value="none">Не указано (без времени)</option>
               </select>
             </div>
 
@@ -349,7 +417,14 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
                 id="fExactTime"
                 type="time"
                 value={exactTime}
-                onChange={(e) => setExactTime(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setExactTime(val);
+                  if (val) {
+                    const b = timeStringToBucket(`${val}:00`);
+                    if (b !== null) setTimeOfDayBucket(String(b) as BucketOption);
+                  }
+                }}
                 className="w-full px-3 py-2.5 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus:border-[#f06292]"
               />
             </div>
@@ -388,7 +463,7 @@ export function AddWatchModal({ open, onClose, onSave, isDemoMode }: AddWatchMod
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-60 text-[#0b0e17] transition-colors cursor-pointer"
             >
               {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Сохранить
+              {isEditing ? 'Сохранить изменения' : 'Сохранить'}
             </button>
           </div>
         </form>

@@ -1,6 +1,6 @@
 import { Calendar, Film, Gauge } from 'lucide-react';
 import { filmWord, rewatchWord } from '../lib/analytics';
-import { YEAR_COLORS } from '../lib/demoData';
+import { getYearColor } from '../lib/demoData';
 import type { Tier1KPIResult, YearFilter } from '../types/cinelog';
 
 interface Tier1KpiSectionProps {
@@ -10,8 +10,7 @@ interface Tier1KpiSectionProps {
 
 export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
   const yearLabel = selectedYear === 'all' ? 'За всё время' : `За ${selectedYear} год`;
-  const yearDotColor =
-    selectedYear === 'all' ? '#45d1c6' : YEAR_COLORS[selectedYear as 2024 | 2025 | 2026] ?? '#f06292';
+  const yearDotColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
 
   return (
     <section id="level-1" className="scroll-mt-24 space-y-4">

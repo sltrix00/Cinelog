@@ -128,6 +128,22 @@ export function getUniqueFilmKey(entry: WatchEntry): string {
   return `${entry.title.trim().toLowerCase()}__${entry.release_year ?? ''}`;
 }
 
+export function extractAvailableYears(
+  entries: WatchEntry[],
+  baseYears: number[] = [2024, 2025, 2026]
+): number[] {
+  const yearSet = new Set<number>(
+    baseYears.filter((y) => Number.isInteger(y) && y >= 1888 && y <= 2100)
+  );
+  for (const entry of entries) {
+    const { year } = parseIsoDateParts(entry.watched_date);
+    if (Number.isInteger(year) && year >= 1888 && year <= 2100) {
+      yearSet.add(year);
+    }
+  }
+  return Array.from(yearSet).sort((a, b) => a - b);
+}
+
 export function filterEntriesByYear(entries: WatchEntry[], selectedYear: YearFilter): WatchEntry[] {
   if (selectedYear === 'all') return entries;
   return entries.filter((e) => parseIsoDateParts(e.watched_date).year === selectedYear);
@@ -178,7 +194,7 @@ export function computeTier1KPIs(
   const activeMonthIdx = isCurrentRefYear ? refDate.monthIndex : 11;
   const monthDaysElapsed = isCurrentRefYear ? refDate.day : 31;
 
-  const periodYearLogs = filterEntriesByYear(entries, activeYearForPeriod as 2024 | 2025 | 2026);
+  const periodYearLogs = filterEntriesByYear(entries, activeYearForPeriod);
   const monthLogs = periodYearLogs.filter((e) => parseIsoDateParts(e.watched_date).monthIndex === activeMonthIdx);
   const monthTotal = monthLogs.length;
   const monthRewatches = monthLogs.filter((e) => e.is_rewatch).length;

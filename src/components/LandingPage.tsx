@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, Clapperboard } from 'lucide-react';
+import type { LegalTab } from './LegalModal';
 
 interface LandingPageProps {
   onOpenRegister: () => void;
   onOpenLogin: () => void;
   onOpenDemo: () => void;
+  onOpenLegal?: (tab: LegalTab) => void;
 }
 
 interface SloganItem {
@@ -59,7 +61,7 @@ const WEEKDAY_BARS = [
   { label: 'Вс', heightClass: 'h-[75%]', colorClass: 'bg-[#d6b85a]' },
 ];
 
-export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: LandingPageProps) {
+export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLegal }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * SLOGANS.length));
   const [isFadingOut, setIsFadingOut] = useState(false);
@@ -593,13 +595,58 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo }: Landing
       </section>
 
       {/* Minimal Footer */}
-      <footer className="max-w-6xl mx-auto px-5 sm:px-6 pt-6 pb-10 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-        <div className="flex items-center gap-2">
-          <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
-          <span>·</span>
-          <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+      <footer className="max-w-6xl mx-auto px-5 sm:px-6 pt-6 pb-10 border-t border-line flex flex-col gap-3 text-xs text-slate-500">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-bold tracking-wider text-slate-300">CINELOG</span>
+            <span>·</span>
+            <span>Персональная аналитика кино (React + Supabase + TMDB)</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
+            {onOpenLegal ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal('privacy')}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Политика конфиденциальности
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal('terms')}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Условия и TMDB
+                </button>
+              </>
+            ) : (
+              <>
+                <a href="#privacy" className="text-slate-400 hover:text-white transition-colors">
+                  Политика конфиденциальности
+                </a>
+                <a href="#terms" className="text-slate-400 hover:text-white transition-colors">
+                  Условия и TMDB
+                </a>
+              </>
+            )}
+          </div>
         </div>
-        <span className="font-mono text-[11px]">Твой личный кинодневник</span>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500/90">
+          <span>
+            This product uses the{' '}
+            <a
+              href="https://www.themoviedb.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#45d1c6] hover:underline"
+            >
+              TMDB API
+            </a>{' '}
+            but is not endorsed or certified by TMDB.
+          </span>
+          <span className="font-mono">Твой личный кинодневник</span>
+        </div>
       </footer>
     </div>
   );

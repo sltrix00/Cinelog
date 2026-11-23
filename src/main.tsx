@@ -4,6 +4,7 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 let isFramed = false;
 try {
@@ -34,5 +35,7 @@ function FrameBlockedNotice() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>{isFramed ? <FrameBlockedNotice /> : <App />}</StrictMode>
+  <StrictMode>
+    <ErrorBoundary>{isFramed ? <FrameBlockedNotice /> : <App />}</ErrorBoundary>
+  </StrictMode>
 );

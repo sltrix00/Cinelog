@@ -7,7 +7,7 @@ export type WatchSource =
 
 export type TimeOfDayBucket = 0 | 1 | 2 | 3 | null;
 
-export type YearFilter = 2024 | 2025 | 2026 | 'all';
+export type YearFilter = number | 'all';
 
 export type TasteCategory = 'directors' | 'countries' | 'genres';
 
