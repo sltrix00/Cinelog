@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { filmWord, MONTH_STARTS_NONLEAP } from '../lib/analytics';
+import { filmWord, MONTH_STARTS_NONLEAP, MONTHS_RU } from '../lib/analytics';
 import { getYearColor, YEAR_COLORS } from '../lib/demoData';
 import type { CumulativePoint365, IndexTrajectoryPoint, YearFilter } from '../types/cinelog';
 
@@ -125,6 +125,31 @@ export function Tier2DynamicsSection({
 
   const isAllYears = selectedYear === 'all';
   const trajectoryColor = isAllYears ? '#45d1c6' : getYearColor(selectedYear);
+
+  // Extract start year for all-time X-axis month/year formatting (e.g. "10 янв 2024" -> 2024)
+  const allTimeStartYear = (() => {
+    const firstTitle = indexTrajectory[0]?.tooltipTitle ?? '';
+    const m = firstTitle.match(/\b(19\d{2}|20\d{2})\b/);
+    return m ? Number.parseInt(m[1], 10) : 2024;
+  })();
+  const maxTrajectoryDoy = indexTrajectory[indexTrajectory.length - 1]?.doy ?? 365;
+  const allTimeMonthTicks: number[] = [];
+  const allTimeYearBoundaries: number[] = [];
+  if (isAllYears && indexTrajectory.length > 0) {
+    const totalYears = Math.ceil(maxTrajectoryDoy / 365);
+    for (let yIdx = 0; yIdx < totalYears; yIdx++) {
+      const yearStartDoy = yIdx * 365 + 1;
+      if (yIdx > 0 && yearStartDoy <= maxTrajectoryDoy) {
+        allTimeYearBoundaries.push(yearStartDoy);
+      }
+      for (const mStart of MONTH_STARTS_NONLEAP) {
+        const gDay = yIdx * 365 + mStart;
+        if (gDay <= maxTrajectoryDoy) {
+          allTimeMonthTicks.push(gDay);
+        }
+      }
+    }
+  }
   const maxCumValue = Math.max(
     125,
     ...cumulativeData.map((d) => Math.max(d.y2024, d.y2025, d.y2026))
@@ -268,12 +293,32 @@ export function Tier2DynamicsSection({
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                minTickGap={34}
-                stroke="#1e2438"
-                tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
-              />
+              {isAllYears ? (
+                <XAxis
+                  dataKey="doy"
+                  type="number"
+                  domain={[1, maxTrajectoryDoy]}
+                  ticks={allTimeMonthTicks}
+                  minTickGap={20}
+                  tickFormatter={(gDay: number) => {
+                    const yIdx = Math.floor((gDay - 1) / 365);
+                    const doyInYear = ((gDay - 1) % 365) + 1;
+                    const mIdx = (MONTH_STARTS_NONLEAP as readonly number[]).indexOf(doyInYear);
+                    if (mIdx === -1) return '';
+                    if (mIdx === 0) return `Янв ${allTimeStartYear + yIdx}`;
+                    return MONTHS_RU[mIdx];
+                  }}
+                  stroke="#1e2438"
+                  tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                />
+              ) : (
+                <XAxis
+                  dataKey="label"
+                  minTickGap={34}
+                  stroke="#1e2438"
+                  tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                />
+              )}
               <YAxis
                 domain={[0, (dataMax: number) => Math.max(1.15, +(dataMax + 0.1).toFixed(2))]}
                 tickFormatter={(v: number) => v.toFixed(2)}
@@ -281,6 +326,16 @@ export function Tier2DynamicsSection({
                 tick={{ fill: '#7c86a2', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<TrajectoryTooltip />} />
+              {isAllYears &&
+                allTimeYearBoundaries.map((boundaryDoy) => (
+                  <ReferenceLine
+                    key={boundaryDoy}
+                    x={boundaryDoy}
+                    stroke="rgba(124, 134, 162, 0.35)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                  />
+                ))}
               <ReferenceLine
                 y={1.0}
                 stroke="rgba(214, 184, 90, 0.75)"
