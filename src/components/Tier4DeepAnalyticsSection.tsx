@@ -138,30 +138,23 @@ export function Tier4DeepAnalyticsSection({
           </div>
           <div className="flex items-center gap-1.5 text-xs tabular-nums text-slate-400">
             <span>Меньше</span>
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#161c2e] border border-line" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#15363c]" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#1f5e63]" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#2f9995]" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#45d1c6]" aria-hidden="true" />
+            <span className="w-4 h-4 rounded-[4px] bg-[#161c2e] border border-line" aria-hidden="true" />
+            <span className="w-4 h-4 rounded-[4px] bg-[#15363c]" aria-hidden="true" />
+            <span className="w-4 h-4 rounded-[4px] bg-[#1f5e63]" aria-hidden="true" />
+            <span className="w-4 h-4 rounded-[4px] bg-[#2f9995]" aria-hidden="true" />
+            <span className="w-4 h-4 rounded-[4px] bg-[#45d1c6]" aria-hidden="true" />
             <span>Больше</span>
           </div>
         </div>
 
         <div className="overflow-x-auto pb-2">
-          <div className="min-w-[780px]">
-            <div className="grid grid-cols-12 text-xs tabular-nums text-slate-400 mb-1.5 pl-7">
+          <div className="min-w-[900px]">
+            <div className="grid grid-cols-12 text-xs tabular-nums text-slate-400 mb-2">
               {MONTHS_RU.map((m) => (
                 <span key={m}>{m}</span>
               ))}
             </div>
-            <div className="flex gap-2">
-              <div className="flex flex-col justify-between text-[11px] tabular-nums text-slate-400 py-0.5 w-5 shrink-0">
-                <span>Пн</span>
-                <span>Ср</span>
-                <span>Пт</span>
-                <span>Вс</span>
-              </div>
-              <div className="grid grid-flow-col grid-rows-7 gap-[3px] flex-1">
+            <div className="grid grid-flow-col grid-rows-7 auto-cols-fr gap-1">
                 {heatmap.cells.map((cell) => {
                   let bgClass = 'bg-[#161c2e] border border-line';
                   if (cell.isFuture) bgClass = 'bg-[#0d111d] opacity-35';
@@ -190,7 +183,7 @@ export function Tier4DeepAnalyticsSection({
                           ? `${cell.dateLabel} — будущая дата`
                           : `${cell.dateLabel}: ${cell.count} ${filmWord(cell.count)}`
                       }
-                      className={`w-3.5 h-3.5 rounded-[3px] transition-transform duration-100 hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default cursor-pointer ${bgClass}`}
+                      className={`w-full aspect-square rounded-[4px] transition-transform duration-100 hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default cursor-pointer ${bgClass}`}
                       onMouseEnter={(e) =>
                         setHoveredCell({ cell, x: e.clientX, y: e.clientY, pinned: false })
                       }
@@ -216,7 +209,6 @@ export function Tier4DeepAnalyticsSection({
                     />
                   );
                 })}
-              </div>
             </div>
           </div>
         </div>
