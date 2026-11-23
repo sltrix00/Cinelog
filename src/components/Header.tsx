@@ -142,7 +142,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-40 bg-canvas/85 backdrop-blur-md border-b border-line">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className="dashboard-shell">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 py-3">
           {/* Logo & Subtitle */}
           {onLogoClick ? (
