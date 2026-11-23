@@ -87,6 +87,11 @@ export function SectionDotNav() {
     }
   };
 
+  const scrollToSection = (id: SectionId) => {
+    setActiveId(id);
+    document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  };
+
   return (
     <>
       {/* Desktop / Tablet Fixed Left Rail */}
@@ -110,13 +115,13 @@ export function SectionDotNav() {
           {DASHBOARD_SECTIONS.map((item) => {
             const isActive = activeId === item.id;
             return (
-              <a
+              <button
                 key={item.id}
-                href={`#${item.id}`}
+                type="button"
                 aria-label={item.label}
                 aria-current={isActive ? 'location' : undefined}
-                onClick={() => setActiveId(item.id)}
-                className={`group/item flex items-center w-full px-2 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                onClick={() => scrollToSection(item.id)}
+                className={`group/item flex items-center w-full px-2 rounded-xl cursor-pointer text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
                   isOpen
                     ? `gap-3 h-11 ${
                         isActive
@@ -149,7 +154,7 @@ export function SectionDotNav() {
                 >
                   {item.label}
                 </span>
-              </a>
+              </button>
             );
           })}
         </div>
@@ -163,19 +168,19 @@ export function SectionDotNav() {
         {DASHBOARD_SECTIONS.map((item) => {
           const isActive = activeId === item.id;
           return (
-            <a
+            <button
               key={item.id}
-              href={`#${item.id}`}
+              type="button"
               aria-current={isActive ? 'location' : undefined}
-              onClick={() => setActiveId(item.id)}
-              className={`shrink-0 inline-flex items-center min-h-10 px-3.5 py-2 rounded-xl text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+              onClick={() => scrollToSection(item.id)}
+              className={`shrink-0 inline-flex items-center min-h-10 px-3.5 py-2 rounded-xl text-xs font-medium border cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
                 isActive
                   ? 'bg-cardElevated border-lineStrong text-white'
                   : 'bg-card border-line text-slate-300 hover:text-white'
               }`}
             >
               {item.label}
-            </a>
+            </button>
           );
         })}
       </nav>
