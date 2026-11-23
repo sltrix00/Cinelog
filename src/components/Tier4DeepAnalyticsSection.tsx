@@ -43,6 +43,16 @@ const TOOLTIP_STYLE = {
   fontFamily: 'var(--font-sans)',
 };
 
+const TOOLTIP_ITEM_STYLE = {
+  color: '#e2e8f0',
+};
+
+const TOOLTIP_LABEL_STYLE = {
+  color: '#f8fafc',
+  fontWeight: 600,
+  marginBottom: '4px',
+};
+
 export function Tier4DeepAnalyticsSection({
   heatmap,
   ratings,
@@ -198,6 +208,8 @@ export function Tier4DeepAnalyticsSection({
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
                     cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                     formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Фильмов']}
                   />
@@ -225,6 +237,8 @@ export function Tier4DeepAnalyticsSection({
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
                     formatter={(value) => [`${Number(value).toFixed(2)} ★`, 'Средняя оценка']}
                   />
                   <Area
@@ -270,6 +284,8 @@ export function Tier4DeepAnalyticsSection({
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                   cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                   formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Фильмов']}
                 />
@@ -325,6 +341,8 @@ export function Tier4DeepAnalyticsSection({
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                   cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                   formatter={(value) => [`${value} ч`, 'Длительность']}
                 />

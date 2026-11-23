@@ -35,6 +35,16 @@ const TOOLTIP_STYLE = {
   fontFamily: 'var(--font-sans)',
 };
 
+const TOOLTIP_ITEM_STYLE = {
+  color: '#e2e8f0',
+};
+
+const TOOLTIP_LABEL_STYLE = {
+  color: '#f8fafc',
+  fontWeight: 600,
+  marginBottom: '4px',
+};
+
 export function Tier3RhythmSection({
   monthlyData,
   dayOfWeek,
@@ -99,6 +109,8 @@ export function Tier3RhythmSection({
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
                 cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                 formatter={(value, name) => [`${value} ${filmWord(Number(value))}`, String(name)]}
               />
@@ -142,6 +154,8 @@ export function Tier3RhythmSection({
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                   cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                   formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Просмотров']}
                 />
@@ -165,7 +179,9 @@ export function Tier3RhythmSection({
               <h3 className="text-xs sm:text-sm font-bold uppercase tracking-tight text-slate-200">
                 TIME OF THE DAY
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Утро / День / Вечер / Ночь</p>
+              <p className="text-xs text-slate-400 mt-1">
+                05:00–11:59 · 12:00–16:59 · 17:00–22:59 · 23:00–04:59
+              </p>
             </div>
 
             {/* Interactive Toggle: Данные о времени Есть / Нет (CSV) */}
@@ -212,6 +228,8 @@ export function Tier3RhythmSection({
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
                     cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                     formatter={(_value, _name, item) => {
                       const pt = item?.payload as { count?: number; percentage?: number } | undefined;

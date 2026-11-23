@@ -378,10 +378,10 @@ export function computeDayOfWeekDistribution(
 }
 
 const TOD_META: Array<{ bucket: 0 | 1 | 2 | 3; label: string; color: string }> = [
-  { bucket: 0, label: 'Утро', color: '#d6b85a' },
-  { bucket: 1, label: 'День', color: '#45d1c6' },
-  { bucket: 2, label: 'Вечер', color: '#f06292' },
-  { bucket: 3, label: 'Ночь', color: '#6366f1' },
+  { bucket: 0, label: '05:00–11:59', color: '#d6b85a' },
+  { bucket: 1, label: '12:00–16:59', color: '#45d1c6' },
+  { bucket: 2, label: '17:00–22:59', color: '#f06292' },
+  { bucket: 3, label: '23:00–04:59', color: '#6366f1' },
 ];
 
 export function computeTimeOfDayDistribution(

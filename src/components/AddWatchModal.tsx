@@ -401,10 +401,10 @@ export function AddWatchModal({
                 }}
                 className="w-full px-3 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white focus:outline-none focus:border-[#f06292]"
               >
-                <option value="0">Утро</option>
-                <option value="1">День</option>
-                <option value="2">Вечер</option>
-                <option value="3">Ночь</option>
+                <option value="0">05:00–11:59</option>
+                <option value="1">12:00–16:59</option>
+                <option value="2">17:00–22:59</option>
+                <option value="3">23:00–04:59</option>
                 <option value="none">Не указано (без времени)</option>
               </select>
             </div>
