@@ -157,8 +157,11 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     const heatmap = computeActivityHeatmap(entries, 2026, DEFAULT_REFERENCE_DATE);
     expect(heatmap.activeDays).toBe(3);
     expect(heatmap.maxStreak).toBe(3);
+    expect(heatmap.maxCount).toBe(2);
+    expect(heatmap.cells[0].intensity).toBe(2);
     expect(heatmap.cells[2].count).toBe(2);
-    expect(heatmap.cells[2].intensity).toBe(2);
+    expect(heatmap.cells[2].intensity).toBe(4);
+    expect(heatmap.cells[3].intensity).toBe(0);
 
     const eras = computeReleaseEras(entries, 2026);
     expect(eras.classicCount).toBe(2);
@@ -170,6 +173,35 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(directors[0].pct).toBe(100);
     expect(directors[0].barPct).toBe(100);
     expect(directors[0].shareOfTotalPct).toBe(50);
+  });
+
+  it('scales heatmap intensity adaptively across 5 levels (0..4)', () => {
+    const entries = [
+      makeCsvOnlyEntry({ id: 'a1', watched_date: '2026-01-01' }),
+      makeCsvOnlyEntry({ id: 'b1', watched_date: '2026-01-02' }),
+      makeCsvOnlyEntry({ id: 'b2', watched_date: '2026-01-02' }),
+      makeCsvOnlyEntry({ id: 'c1', watched_date: '2026-01-03' }),
+      makeCsvOnlyEntry({ id: 'c2', watched_date: '2026-01-03' }),
+      makeCsvOnlyEntry({ id: 'c3', watched_date: '2026-01-03' }),
+      makeCsvOnlyEntry({ id: 'd1', watched_date: '2026-01-04' }),
+      makeCsvOnlyEntry({ id: 'd2', watched_date: '2026-01-04' }),
+      makeCsvOnlyEntry({ id: 'd3', watched_date: '2026-01-04' }),
+      makeCsvOnlyEntry({ id: 'd4', watched_date: '2026-01-04' }),
+      makeCsvOnlyEntry({ id: 'e1', watched_date: '2026-01-05' }),
+      makeCsvOnlyEntry({ id: 'e2', watched_date: '2026-01-05' }),
+      makeCsvOnlyEntry({ id: 'e3', watched_date: '2026-01-05' }),
+      makeCsvOnlyEntry({ id: 'e4', watched_date: '2026-01-05' }),
+      makeCsvOnlyEntry({ id: 'e5', watched_date: '2026-01-05' }),
+    ];
+
+    const heatmap = computeActivityHeatmap(entries, 2026, DEFAULT_REFERENCE_DATE);
+    expect(heatmap.maxCount).toBe(5);
+    expect(heatmap.cells[0].intensity).toBe(1); // 1/5
+    expect(heatmap.cells[1].intensity).toBe(2); // 2/5
+    expect(heatmap.cells[2].intensity).toBe(3); // 3/5
+    expect(heatmap.cells[3].intensity).toBe(4); // 4/5
+    expect(heatmap.cells[4].intensity).toBe(4); // 5/5
+    expect(heatmap.cells[5].intensity).toBe(0); // 0/5
   });
 
   it('handles DST-safe dayOfYear, timeStringToBucket, and Russian pluralization', () => {

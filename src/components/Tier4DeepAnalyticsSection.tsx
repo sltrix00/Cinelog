@@ -137,12 +137,13 @@ export function Tier4DeepAnalyticsSection({
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs tabular-nums text-slate-400">
-            <span>0</span>
+            <span>Меньше</span>
             <span className="w-3.5 h-3.5 rounded-[3px] bg-[#161c2e] border border-line" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#194549]" aria-hidden="true" />
-            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#2a8b87]" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#15363c]" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#1f5e63]" aria-hidden="true" />
+            <span className="w-3.5 h-3.5 rounded-[3px] bg-[#2f9995]" aria-hidden="true" />
             <span className="w-3.5 h-3.5 rounded-[3px] bg-[#45d1c6]" aria-hidden="true" />
-            <span>3+</span>
+            <span>Больше</span>
           </div>
         </div>
 
@@ -164,9 +165,10 @@ export function Tier4DeepAnalyticsSection({
                 {heatmap.cells.map((cell) => {
                   let bgClass = 'bg-[#161c2e] border border-line';
                   if (cell.isFuture) bgClass = 'bg-[#0d111d] opacity-35';
-                  else if (cell.intensity === 1) bgClass = 'bg-[#194549]';
-                  else if (cell.intensity === 2) bgClass = 'bg-[#2a8b87]';
-                  else if (cell.intensity === 3) bgClass = 'bg-[#45d1c6]';
+                  else if (cell.intensity === 1) bgClass = 'bg-[#15363c]';
+                  else if (cell.intensity === 2) bgClass = 'bg-[#1f5e63]';
+                  else if (cell.intensity === 3) bgClass = 'bg-[#2f9995]';
+                  else if (cell.intensity === 4) bgClass = 'bg-[#45d1c6]';
 
                   const showAtRect = (el: HTMLElement, pinned = false) => {
                     const rect = el.getBoundingClientRect();

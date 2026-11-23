@@ -632,6 +632,13 @@ export function computeActivityHeatmap(
 
   const labelYear = isAll ? refDate.year : selectedYear;
   const maxDoy = !isAll && selectedYear === refDate.year ? refDate.dayOfYear : 365;
+  let maxCount = 0;
+  for (let doy = 1; doy <= maxDoy; doy++) {
+    if (countsByDoy[doy] > maxCount) {
+      maxCount = countsByDoy[doy];
+    }
+  }
+
   const cells: HeatmapCell[] = [];
   let foldedActiveDays = 0;
   let maxStreak = 0;
@@ -649,8 +656,10 @@ export function computeActivityHeatmap(
       currStreak = 0;
     }
 
-    const intensity: 0 | 1 | 2 | 3 =
-      count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : 3;
+    const intensity: 0 | 1 | 2 | 3 | 4 =
+      count === 0 || maxCount === 0
+        ? 0
+        : (Math.min(4, Math.max(1, Math.ceil((count / maxCount) * 4))) as 1 | 2 | 3 | 4);
 
     const { dateStr } = dayOfYearToParts(labelYear, doy);
     cells.push({
@@ -671,6 +680,7 @@ export function computeActivityHeatmap(
       cells,
       activeDays: chrono.distinctDays,
       maxStreak: chrono.maxStreak,
+      maxCount,
       foldedActiveDays,
     };
   }
@@ -680,6 +690,7 @@ export function computeActivityHeatmap(
     cells,
     activeDays: foldedActiveDays,
     maxStreak,
+    maxCount,
     foldedActiveDays,
   };
 }

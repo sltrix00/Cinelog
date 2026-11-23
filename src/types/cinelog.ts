@@ -160,7 +160,7 @@ export interface HeatmapCell {
   dateStr: string;
   dateLabel: string;
   count: number;
-  intensity: 0 | 1 | 2 | 3;
+  intensity: 0 | 1 | 2 | 3 | 4;
   isFuture: boolean;
   titles: string[];
 }
@@ -170,6 +170,7 @@ export interface HeatmapSummary {
   cells: HeatmapCell[];
   activeDays: number;
   maxStreak: number;
+  maxCount: number;
   foldedActiveDays?: number;
 }
 
