@@ -123,8 +123,8 @@ export function Tier2DynamicsSection({
     setVisibleYears((prev) => ({ ...prev, [yr]: !prev[yr] }));
   };
 
-  const activeTrajectoryYear = selectedYear === 'all' ? 2026 : selectedYear;
-  const trajectoryColor = getYearColor(activeTrajectoryYear);
+  const isAllYears = selectedYear === 'all';
+  const trajectoryColor = isAllYears ? '#45d1c6' : getYearColor(selectedYear);
   const maxCumValue = Math.max(
     125,
     ...cumulativeData.map((d) => Math.max(d.y2024, d.y2025, d.y2026))
@@ -237,15 +237,19 @@ export function Tier2DynamicsSection({
         </div>
       </div>
 
-      {/* 2. Карточка: Индекс просмотра сквозь год */}
+      {/* 2. Карточка: Индекс просмотра сквозь год / за всё время */}
       <div className="rounded-2xl bg-card border border-line p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
           <div>
             <h3 className="text-base font-bold tracking-tight text-white">
-              Индекс просмотра сквозь {activeTrajectoryYear} год
+              {isAllYears
+                ? 'Индекс просмотра за всё время'
+                : `Индекс просмотра сквозь ${selectedYear} год`}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Изменение соотношения «фильмы / прошедший день года» с ориентиром 1.0 (темп 1 фильм в день)
+              {isAllYears
+                ? 'Изменение соотношения «накопленные фильмы / дней с начала дневника» с ориентиром 1.0'
+                : 'Изменение соотношения «фильмы / прошедший день года» с ориентиром 1.0 (темп 1 фильм в день)'}
             </p>
           </div>
           <div className="inline-flex items-center gap-2 text-[11px] tabular-nums text-[#d6b85a] bg-[#d6b85a]/10 border border-[#d6b85a]/25 px-3 py-1 rounded-lg self-start sm:self-auto">

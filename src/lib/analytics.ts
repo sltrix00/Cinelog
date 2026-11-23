@@ -297,7 +297,83 @@ export function computeViewingIndexTrajectory(
   selectedYear: YearFilter,
   refDate: ReferenceDateContext = DEFAULT_REFERENCE_DATE
 ): IndexTrajectoryPoint[] {
-  const targetYear = selectedYear === 'all' ? refDate.year : selectedYear;
+  if (selectedYear === 'all') {
+    const entryYears = entries
+      .map((e) => parseIsoDateParts(e.watched_date).year)
+      .filter((y) => Number.isInteger(y) && y >= 1888 && y <= refDate.year);
+
+    const minYear = entryYears.length > 0 ? Math.min(...entryYears) : refDate.year;
+    if (minYear === refDate.year) {
+      return computeViewingIndexTrajectory(entries, refDate.year, refDate);
+    }
+
+    // Build continuous daily cumulative counts across [minYear .. refDate.year]
+    const dailyFilmCounts: Array<{ year: number; doy: number; count: number }> = [];
+    const countsByYear = new Map<number, number[]>();
+    for (let y = minYear; y <= refDate.year; y++) {
+      countsByYear.set(y, new Array<number>(366).fill(0));
+    }
+
+    for (const entry of entries) {
+      const { year } = parseIsoDateParts(entry.watched_date);
+      const arr = countsByYear.get(year);
+      if (!arr) continue;
+      const doy = Math.min(365, Math.max(1, getDayOfYear(entry.watched_date)));
+      if (year === refDate.year && doy > refDate.dayOfYear) continue;
+      arr[doy] += 1;
+    }
+
+    for (let y = minYear; y <= refDate.year; y++) {
+      const arr = countsByYear.get(y)!;
+      const maxD = y === refDate.year ? refDate.dayOfYear : 365;
+      for (let d = 1; d <= maxD; d++) {
+        dailyFilmCounts.push({ year: y, doy: d, count: arr[d] });
+      }
+    }
+
+    const totalDays = dailyFilmCounts.length;
+    const cumFilms: number[] = [];
+    let running = 0;
+    for (const item of dailyFilmCounts) {
+      running += item.count;
+      cumFilms.push(running);
+    }
+
+    const step = totalDays > 400 ? 10 : 5;
+    const points: IndexTrajectoryPoint[] = [];
+
+    for (let globalDay = step; globalDay <= totalDays; globalDay += step) {
+      const meta = dailyFilmCounts[globalDay - 1];
+      const films = cumFilms[globalDay - 1];
+      const { monthIndex } = dayOfYearToParts(meta.year, meta.doy);
+      const dayRu = formatDayOfYearRu(meta.doy, meta.year);
+      points.push({
+        doy: globalDay,
+        label: `${MONTHS_RU[monthIndex]} ${String(meta.year).slice(2)}`,
+        tooltipTitle: `${dayRu} ${meta.year} · День ${globalDay}`,
+        index: +(films / globalDay).toFixed(2),
+        films,
+      });
+    }
+
+    if (totalDays > 0 && points[points.length - 1]?.doy !== totalDays) {
+      const meta = dailyFilmCounts[totalDays - 1];
+      const films = cumFilms[totalDays - 1];
+      const { monthIndex } = dayOfYearToParts(meta.year, meta.doy);
+      const dayRu = formatDayOfYearRu(meta.doy, meta.year);
+      points.push({
+        doy: totalDays,
+        label: `${MONTHS_RU[monthIndex]} ${String(meta.year).slice(2)}`,
+        tooltipTitle: `${dayRu} ${meta.year} · День ${totalDays}`,
+        index: +(films / totalDays).toFixed(2),
+        films,
+      });
+    }
+
+    return points;
+  }
+
+  const targetYear = selectedYear;
   const maxDoy = targetYear === refDate.year ? refDate.dayOfYear : 365;
   const cumArr = getCumulativeArray365(entries, targetYear);
 

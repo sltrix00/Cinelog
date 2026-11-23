@@ -219,4 +219,13 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(heatmapAll.maxStreak).toBe(2);
     expect(heatmapAll.cells.every((c) => !c.isFuture)).toBe(true);
   });
+
+  it('computes all-time Viewing Index trajectory from earliest year through reference date', () => {
+    const trajectoryAll = computeViewingIndexTrajectory(DEMO_ENTRIES, 'all', DEFAULT_REFERENCE_DATE);
+    const lastPt = trajectoryAll[trajectoryAll.length - 1];
+    // 2024 (365) + 2025 (365) + 2026 day 324 = 1054 days, 314 total demo entries
+    expect(lastPt.doy).toBe(1054);
+    expect(lastPt.films).toBe(314);
+    expect(lastPt.index).toBe(+(314 / 1054).toFixed(2));
+  });
 });
