@@ -5,6 +5,10 @@ import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { applyThemeToDocument, loadUserSettings } from './lib/settings';
+
+const initialSettings = loadUserSettings();
+applyThemeToDocument(initialSettings.theme, initialSettings.accent);
 
 let isFramed = false;
 try {

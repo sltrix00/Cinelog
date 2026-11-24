@@ -12,6 +12,12 @@ import {
   YAxis,
 } from 'recharts';
 import { filmWord, MONTHS_RU } from '../lib/analytics';
+import {
+  formatRatingBucketLabel,
+  formatRatingShort,
+  formatRatingValue,
+  type RatingFormat,
+} from '../lib/settings';
 import type {
   HeatmapCell,
   HeatmapSummary,
@@ -32,6 +38,7 @@ interface Tier4DeepAnalyticsSectionProps {
   tasteCountries: TasteAccentItem[];
   tasteGenres: TasteAccentItem[];
   selectedYear: YearFilter;
+  ratingFormat?: RatingFormat;
 }
 
 const TOOLTIP_STYLE = {
@@ -62,6 +69,7 @@ export function Tier4DeepAnalyticsSection({
   tasteCountries,
   tasteGenres,
   selectedYear,
+  ratingFormat = 'stars-5',
 }: Tier4DeepAnalyticsSectionProps) {
   const [ratingView, setRatingView] = useState<'dist' | 'trend'>('dist');
   const [tasteTab, setTasteTab] = useState<TasteCategory>('directors');
@@ -224,7 +232,11 @@ export function Tier4DeepAnalyticsSection({
               <p className="text-xs text-slate-400 mt-0.5">
                 Средняя {scopeWord}:{' '}
                 <span className="tabular-nums text-[#d6b85a] font-semibold">
-                  {ratings.ratedCount > 0 ? `${ratings.averageRating.toFixed(2)} ★` : '—'}
+                  {ratings.ratedCount > 0
+                    ? formatRatingValue(ratings.averageRating, ratingFormat, {
+                        decimals: ratingFormat === 'stars-5' ? 2 : 1,
+                      })
+                    : '—'}
                 </span>
               </p>
             </div>
@@ -269,6 +281,7 @@ export function Tier4DeepAnalyticsSection({
                   <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
                   <XAxis
                     dataKey="bucket"
+                    tickFormatter={(bucket: string) => formatRatingBucketLabel(bucket, ratingFormat)}
                     stroke="#1e2438"
                     tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
@@ -302,7 +315,7 @@ export function Tier4DeepAnalyticsSection({
                   />
                   <YAxis
                     domain={[ratingYDomainMin, 5.0]}
-                    tickFormatter={(v: number) => `${v.toFixed(1)}★`}
+                    tickFormatter={(v: number) => formatRatingShort(v, ratingFormat)}
                     stroke="#1e2438"
                     tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
@@ -310,7 +323,12 @@ export function Tier4DeepAnalyticsSection({
                     contentStyle={TOOLTIP_STYLE}
                     itemStyle={TOOLTIP_ITEM_STYLE}
                     labelStyle={TOOLTIP_LABEL_STYLE}
-                    formatter={(value) => [`${Number(value).toFixed(2)} ★`, 'Средняя оценка']}
+                    formatter={(value) => [
+                      formatRatingValue(Number(value), ratingFormat, {
+                        decimals: ratingFormat === 'stars-5' ? 2 : 1,
+                      }),
+                      'Средняя оценка',
+                    ]}
                   />
                   <Area
                     type="monotone"
@@ -474,7 +492,13 @@ export function Tier4DeepAnalyticsSection({
                         {item.count} {filmWord(item.count)}{' '}
                         <span className="text-slate-400">({item.shareOfTotalPct}%)</span>
                       </span>
-                      <span className="text-[#d6b85a] w-12 text-right">{item.avgRating} ★</span>
+                      <span className="text-[#d6b85a] min-w-[3.5rem] text-right">
+                        {Number.isFinite(Number.parseFloat(item.avgRating))
+                          ? formatRatingValue(Number.parseFloat(item.avgRating), ratingFormat, {
+                              decimals: 1,
+                            })
+                          : `${item.avgRating} ★`}
+                      </span>
                     </div>
                   </div>
                   <div

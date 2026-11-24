@@ -25,6 +25,7 @@ import {
   parseImportFile,
 } from '../lib/csvImport';
 import { bucketToDefaultTime, DEMO_MOVIE_CATALOG, SIM_DATE_ISO } from '../lib/demoData';
+import { formatRatingShort, formatRatingValue, type RatingFormat } from '../lib/settings';
 import { enrichMovieViaProxy, isSupabaseConfigured, searchTmdbViaProxy } from '../lib/supabase';
 import type {
   ParsedImportRow,
@@ -54,6 +55,8 @@ interface AddWatchModalProps {
   onSave: (payload: AddWatchPayload) => Promise<void> | void;
   isDemoMode: boolean;
   initialEntry?: WatchEntry | null;
+  initialTab?: 'manual' | 'import';
+  ratingFormat?: RatingFormat;
   existingEntries?: WatchEntry[];
   onConfirmImport?: (
     rows: ParsedImportRow[],
@@ -71,11 +74,13 @@ export function AddWatchModal({
   onSave,
   isDemoMode,
   initialEntry = null,
+  initialTab = 'manual',
+  ratingFormat = 'stars-5',
   existingEntries = [],
   onConfirmImport,
 }: AddWatchModalProps) {
   const isEditing = Boolean(initialEntry);
-  const [activeTab, setActiveTab] = useState<ModalTab>('manual');
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
 
   const [title, setTitle] = useState('');
   const [tmdbId, setTmdbId] = useState<number | null>(null);
@@ -129,7 +134,7 @@ export function AddWatchModal({
 
   useEffect(() => {
     if (!open) return;
-    setActiveTab('manual');
+    setActiveTab(initialEntry ? 'manual' : initialTab);
     setErrorMsg(null);
     setSuggestions([]);
     setActiveSuggestionIdx(-1);
@@ -631,7 +636,11 @@ export function AddWatchModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="fRating" className="block text-xs font-medium text-slate-300 mb-1.5">
-                      Оценка (0.5–5)
+                      {ratingFormat === 'scale-10'
+                        ? 'Оценка (1–10)'
+                        : ratingFormat === 'percent'
+                          ? 'Оценка (10–100%)'
+                          : 'Оценка (0.5–5)'}
                     </label>
                     <select
                       id="fRating"
@@ -639,16 +648,11 @@ export function AddWatchModal({
                       onChange={(e) => setRating(e.target.value)}
                       className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-sm font-mono text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
                     >
-                      <option value="5">5.0 ★</option>
-                      <option value="4.5">4.5 ★</option>
-                      <option value="4">4.0 ★</option>
-                      <option value="3.5">3.5 ★</option>
-                      <option value="3">3.0 ★</option>
-                      <option value="2.5">2.5 ★</option>
-                      <option value="2">2.0 ★</option>
-                      <option value="1.5">1.5 ★</option>
-                      <option value="1">1.0 ★</option>
-                      <option value="0.5">0.5 ★</option>
+                      {[5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map((val) => (
+                        <option key={val} value={String(val)}>
+                          {formatRatingValue(val, ratingFormat)}
+                        </option>
+                      ))}
                       <option value="">Без оценки</option>
                     </select>
                   </div>
@@ -918,7 +922,7 @@ export function AddWatchModal({
                                 {r.watchedDate}
                               </td>
                               <td className="py-2 px-3 font-mono text-[#d6b85a]">
-                                {r.rating !== null ? `${r.rating.toFixed(1)}★` : '—'}
+                                {r.rating !== null ? formatRatingShort(r.rating, ratingFormat) : '—'}
                               </td>
                               <td className="py-2 px-3 font-mono text-xs">
                                 {r.isDuplicate ? (

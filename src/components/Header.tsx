@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Check, ChevronDown, CircleUserRound, Clapperboard, LogIn, Plus } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  CircleUserRound,
+  Clapperboard,
+  LogIn,
+  LogOut,
+  Plus,
+  Settings,
+} from 'lucide-react';
 import { getYearColor } from '../lib/demoData';
 import {
   formatAccountButtonLabel,
@@ -14,6 +23,8 @@ interface HeaderProps {
   onSelectYear: (year: YearFilter) => void;
   onOpenAddModal: () => void;
   onOpenAuthModal: () => void;
+  onOpenSettingsModal: () => void;
+  onSignOut: () => Promise<void> | void;
   onLogoClick?: () => void;
   isDemoMode: boolean;
   userEmail: string | null;
@@ -28,16 +39,22 @@ export function Header({
   onSelectYear,
   onOpenAddModal,
   onOpenAuthModal,
+  onOpenSettingsModal,
+  onSignOut,
   onLogoClick,
   isDemoMode,
   userEmail,
   userNickname,
 }: HeaderProps) {
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(0);
   const yearMenuRef = useRef<HTMLDivElement>(null);
   const yearTriggerRef = useRef<HTMLButtonElement>(null);
   const yearListboxRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement>(null);
 
   const sortedYearsDesc = sortYearsDesc(availableYears);
   const options: YearFilter[] = ['all', ...sortedYearsDesc];
@@ -72,6 +89,38 @@ export function Header({
       document.removeEventListener('keydown', handleKey);
     };
   }, [yearMenuOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setProfileMenuOpen(false);
+        profileTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [profileMenuOpen]);
+
+  const handleProfileSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      setProfileMenuOpen(false);
+      await onSignOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const handleSelectOption = (val: YearFilter) => {
     onSelectYear(val);
@@ -271,33 +320,133 @@ export function Header({
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="inline-flex items-center gap-1.5 min-h-10 px-3 sm:px-3.5 py-2 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] active:scale-[0.98] text-[#0b0e17] font-semibold text-xs transition-all shadow-lg shadow-[#f06292]/20 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+              className="btn-theme-accent inline-flex items-center gap-1.5 min-h-10 px-3 sm:px-3.5 py-2 rounded-xl active:scale-[0.98] font-semibold text-xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
               <span className="sm:hidden">Добавить</span>
               <span className="hidden sm:inline">Добавить просмотр</span>
             </button>
 
-            {/* Account / Profile Button */}
-            <button
-              type="button"
-              onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 min-h-10 px-2.5 sm:px-3 py-2 rounded-xl bg-card hover:bg-cardElevated border border-line hover:border-lineStrong text-xs font-medium text-slate-200 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
-              title={accountTitle}
-              aria-label={accountTitle}
-            >
-              {userEmail ? (
-                <>
-                  <CircleUserRound className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
-                  <span className="max-w-[90px] sm:max-w-[130px] truncate">{accountLabel}</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-3.5 h-3.5 text-[#d6b85a] shrink-0" aria-hidden="true" />
-                  <span className="hidden xs:inline sm:inline">{accountLabel}</span>
-                </>
+            {/* Account / Profile Dropdown */}
+            <div ref={profileMenuRef} className="relative">
+              <button
+                ref={profileTriggerRef}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={profileMenuOpen}
+                onClick={() => {
+                  setYearMenuOpen(false);
+                  setProfileMenuOpen((prev) => !prev);
+                }}
+                className="inline-flex items-center gap-1.5 min-h-10 px-2.5 sm:px-3 py-2 rounded-xl bg-card hover:bg-cardElevated border border-line hover:border-lineStrong text-xs font-medium text-slate-200 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                title={accountTitle}
+                aria-label={accountTitle}
+              >
+                {userEmail ? (
+                  <>
+                    <CircleUserRound className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
+                    <span className="max-w-[90px] sm:max-w-[130px] truncate">{accountLabel}</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-3.5 h-3.5 text-[#d6b85a] shrink-0" aria-hidden="true" />
+                    <span className="hidden xs:inline sm:inline">{accountLabel}</span>
+                  </>
+                )}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
+                    profileMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {profileMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Меню профиля"
+                  className="absolute right-0 mt-1.5 w-52 py-1.5 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl z-50"
+                >
+                  {userEmail ? (
+                    <>
+                      <div className="px-3 py-2 border-b border-line mb-1">
+                        <div className="text-xs font-semibold text-white truncate">
+                          {userNickname?.trim() || 'Аккаунт Cinelog'}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">{userEmail}</div>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onOpenAuthModal();
+                        }}
+                        className="w-full min-h-10 px-3 py-2 text-left text-xs text-slate-200 hover:text-white hover:bg-white/5 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <CircleUserRound className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
+                        <span>Профиль</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onOpenSettingsModal();
+                        }}
+                        className="w-full min-h-10 px-3 py-2 text-left text-xs text-slate-200 hover:text-white hover:bg-white/5 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <Settings className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
+                        <span>Настройки</span>
+                      </button>
+
+                      <div className="border-t border-line my-1" />
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={signingOut}
+                        onClick={() => void handleProfileSignOut()}
+                        className="w-full min-h-10 px-3 py-2 text-left text-xs text-[#f06292] hover:bg-[#f06292]/10 disabled:opacity-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span>{signingOut ? 'Выход...' : 'Выйти'}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onOpenAuthModal();
+                        }}
+                        className="w-full min-h-10 px-3 py-2 text-left text-xs text-slate-200 hover:text-white hover:bg-white/5 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <LogIn className="w-4 h-4 text-[#d6b85a] shrink-0" aria-hidden="true" />
+                        <span>Войти / Регистрация</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onOpenSettingsModal();
+                        }}
+                        className="w-full min-h-10 px-3 py-2 text-left text-xs text-slate-200 hover:text-white hover:bg-white/5 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <Settings className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
+                        <span>Настройки</span>
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

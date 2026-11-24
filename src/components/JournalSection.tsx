@@ -28,12 +28,15 @@ import {
   verifyDeleteIdentity,
   type SelectionPreset,
 } from '../lib/journalSelection';
+import { exportWatchEntriesAsJson } from '../lib/exportData';
+import { formatRatingShort, formatRatingValue, type RatingFormat } from '../lib/settings';
 import type { ReenrichSummary, WatchEntry, YearFilter } from '../types/cinelog';
 import { useModalA11y } from './useModalA11y';
 
 interface JournalSectionProps {
   entries: WatchEntry[];
   selectedYear: YearFilter;
+  ratingFormat?: RatingFormat;
   userEmail?: string | null;
   userNickname?: string | null;
   isDemoMode?: boolean;
@@ -60,6 +63,7 @@ type BulkDeleteState =
 export function JournalSection({
   entries,
   selectedYear,
+  ratingFormat = 'stars-5',
   userEmail = null,
   userNickname = null,
   isDemoMode = false,
@@ -358,13 +362,7 @@ export function JournalSection({
   };
 
   const handleExportJson = () => {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `cinelog-export-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportWatchEntriesAsJson(filtered);
   };
 
   return (
@@ -665,7 +663,7 @@ export function JournalSection({
                       Минимальная оценка
                     </label>
                     <span className="tabular-nums text-xs text-[#d6b85a]">
-                      {minRating > 0 ? `${minRating.toFixed(1)}★` : 'Все'}
+                      {minRating > 0 ? formatRatingShort(minRating, ratingFormat) : 'Все'}
                     </span>
                   </div>
                   <input
@@ -814,8 +812,12 @@ export function JournalSection({
                       <td className="py-3 px-3 sm:px-4 tabular-nums whitespace-nowrap">
                         {entry.rating !== null ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#d6b85a]/10 text-[#d6b85a] border border-[#d6b85a]/25">
-                            <Star className="w-3 h-3 fill-[#d6b85a]" aria-hidden="true" />
-                            {entry.rating.toFixed(1)}
+                            {ratingFormat === 'stars-5' && (
+                              <Star className="w-3 h-3 fill-[#d6b85a]" aria-hidden="true" />
+                            )}
+                            {ratingFormat === 'stars-5'
+                              ? entry.rating.toFixed(1)
+                              : formatRatingValue(entry.rating, ratingFormat)}
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>

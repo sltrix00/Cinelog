@@ -7,6 +7,7 @@ import { JournalSection } from './components/JournalSection';
 import { LandingPage } from './components/LandingPage';
 import { LegalModal, type LegalTab } from './components/LegalModal';
 import { SectionDotNav } from './components/SectionDotNav';
+import { SettingsModal } from './components/SettingsModal';
 import { Tier1KpiSection } from './components/Tier1KpiSection';
 import { Tier2DynamicsSection } from './components/Tier2DynamicsSection';
 import { Tier3RhythmSection } from './components/Tier3RhythmSection';
@@ -31,7 +32,14 @@ import {
 import { parseAuthCallbackError } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
+import { exportWatchEntriesAsCsv, exportWatchEntriesAsJson } from './lib/exportData';
 import { formatDashboardSubtitle, resolveProfileNickname } from './lib/headerHelpers';
+import {
+  applyThemeToDocument,
+  loadUserSettings,
+  saveUserSettings,
+  type UserSettings,
+} from './lib/settings';
 import {
   batchUpsertImportedRows,
   deleteAllWatchLogs,
@@ -75,8 +83,11 @@ export function App() {
   const [loadingCloud, setLoadingCloud] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addModalInitialTab, setAddModalInitialTab] = useState<'manual' | 'import'>('manual');
   const [editingEntry, setEditingEntry] = useState<WatchEntry | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [userSettings, setUserSettings] = useState<UserSettings>(() => loadUserSettings());
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('login');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [authNotice, setAuthNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -567,6 +578,21 @@ export function App() {
     }
   };
 
+  const handleUpdateSettings = useCallback((next: UserSettings) => {
+    setUserSettings(next);
+    saveUserSettings(next);
+    applyThemeToDocument(next.theme, next.accent);
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOutAccount();
+      showToast('Вы вышли из аккаунта.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Не удалось выйти из аккаунта.', 'error');
+    }
+  }, [showToast]);
+
   const handleResetDemo = () => {
     setIsDemoMode(true);
     setEntries(DEMO_ENTRIES);
@@ -602,9 +628,9 @@ export function App() {
   const showLanding = authChecked && !userEmail && !showDemoDashboard;
 
   return (
-    <div className="min-h-screen bg-canvas text-slate-100">
+    <div className="min-h-screen text-slate-100">
       {!authChecked ? (
-        <div className="min-h-screen bg-canvas" />
+        <div className="min-h-screen" />
       ) : showLanding ? (
         <LandingPage
           onOpenRegister={() => openAuthModal('register')}
@@ -620,9 +646,12 @@ export function App() {
             onSelectYear={setSelectedYear}
             onOpenAddModal={() => {
               setEditingEntry(null);
+              setAddModalInitialTab('manual');
               setAddModalOpen(true);
             }}
             onOpenAuthModal={() => openAuthModal('login')}
+            onOpenSettingsModal={() => setSettingsModalOpen(true)}
+            onSignOut={handleSignOut}
             onLogoClick={isDemoMode ? () => setShowDemoDashboard(false) : undefined}
             isDemoMode={isDemoMode}
             userEmail={userEmail}
@@ -687,15 +716,18 @@ export function App() {
                 tasteCountries={tasteCountries}
                 tasteGenres={tasteGenres}
                 selectedYear={selectedYear}
+                ratingFormat={userSettings.ratingFormat}
               />
               <JournalSection
                 entries={entries}
                 selectedYear={selectedYear}
+                ratingFormat={userSettings.ratingFormat}
                 userEmail={userEmail}
                 userNickname={userNickname}
                 isDemoMode={isDemoMode}
                 onEditEntry={(entry) => {
                   setEditingEntry(entry);
+                  setAddModalInitialTab('manual');
                   setAddModalOpen(true);
                 }}
                 onDeleteEntry={(id) => void handleDeleteEntry(id)}
@@ -783,12 +815,47 @@ export function App() {
         onClose={() => {
           setAddModalOpen(false);
           setEditingEntry(null);
+          setAddModalInitialTab('manual');
         }}
         onSave={handleSaveWatch}
         isDemoMode={isDemoMode}
         initialEntry={editingEntry}
+        initialTab={addModalInitialTab}
+        ratingFormat={userSettings.ratingFormat}
         existingEntries={entries}
         onConfirmImport={handleConfirmImport}
+      />
+      <SettingsModal
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        settings={userSettings}
+        onUpdateSettings={handleUpdateSettings}
+        isDemoMode={isDemoMode}
+        demoWasModified={demoWasModified}
+        userEmail={userEmail}
+        userNickname={userNickname}
+        entriesCount={entries.length}
+        pendingEnrichCount={pendingEnrichMovieIds.length}
+        unmatchedCount={unmatchedMovieCount}
+        reenriching={reenriching}
+        reenrichProgress={reenrichProgress}
+        reenrichReport={reenrichReport}
+        onExportJson={() => {
+          exportWatchEntriesAsJson(entries);
+          showToast('Журнал экспортирован в JSON.');
+        }}
+        onExportCsv={() => {
+          exportWatchEntriesAsCsv(entries);
+          showToast('Журнал экспортирован в CSV.');
+        }}
+        onOpenImportModal={() => {
+          setEditingEntry(null);
+          setAddModalInitialTab('import');
+          setAddModalOpen(true);
+        }}
+        onReenrichMovies={() => void handleReenrichMovies()}
+        onDeleteAllEntries={handleDeleteAllEntries}
+        onResetDemo={handleResetDemo}
       />
       <LegalModal tab={legalTab} onChangeTab={openLegalModal} onClose={closeLegalModal} />
       <AuthModal
