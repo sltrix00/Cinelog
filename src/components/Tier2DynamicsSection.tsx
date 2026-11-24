@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import {
   Area,
   AreaChart,
@@ -11,7 +12,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { filmWord, MONTH_STARTS_NONLEAP, MONTHS_RU } from '../lib/analytics';
+import {
+  filmWord,
+  MONTH_STARTS_NONLEAP,
+  MONTHS_RU,
+  resolveMonthlyLegendYears,
+  toggleMonthlyComparisonYear,
+} from '../lib/analytics';
 import { getYearColor } from '../lib/demoData';
 import type { CumulativePoint365, IndexTrajectoryPoint, YearFilter } from '../types/cinelog';
 
@@ -20,9 +27,12 @@ interface Tier2DynamicsSectionProps {
   indexTrajectory: IndexTrajectoryPoint[];
   selectedYear: YearFilter;
   comparisonYears?: number[];
+  journalYears?: number[];
 }
 
 const DEFAULT_COMPARISON_YEARS = [2024, 2025, 2026];
+const MAX_ACTIVE_CUMULATIVE_YEARS = 4;
+const MAX_VISIBLE_LEGEND_YEARS = 5;
 
 interface CustomTooltipPayloadItem {
   dataKey?: string;
@@ -35,13 +45,20 @@ interface CustomTooltipPayloadItem {
 function CumulativeTooltip({
   active,
   payload,
+  activeYears,
 }: {
   active?: boolean;
   payload?: CustomTooltipPayloadItem[];
+  activeYears: number[];
 }) {
   if (!active || !payload || payload.length === 0 || !payload[0].payload) return null;
   const row = payload[0].payload;
-  const diff = row.yoyDelta;
+  const latestYear = activeYears.length >= 2 ? activeYears[activeYears.length - 1] : null;
+  const prevYear = activeYears.length >= 2 ? activeYears[activeYears.length - 2] : null;
+  const diff =
+    latestYear !== null && prevYear !== null
+      ? (row.byYear[latestYear] ?? 0) - (row.byYear[prevYear] ?? 0)
+      : null;
   const sign = diff !== null && diff >= 0 ? '+' : '';
 
   return (
@@ -66,10 +83,10 @@ function CumulativeTooltip({
           );
         })}
       </div>
-      {diff !== null && row.latestYear !== null && row.prevYear !== null && (
+      {diff !== null && latestYear !== null && prevYear !== null && (
         <div className="mt-2 pt-2 border-t border-line tabular-nums text-xs flex items-center justify-between text-slate-400">
           <span>
-            {row.latestYear} vs {row.prevYear}:
+            {latestYear} vs {prevYear}:
           </span>
           <span className={diff >= 0 ? 'text-[#45d1c6] font-semibold' : 'text-[#f06292] font-semibold'}>
             {sign}
@@ -118,11 +135,68 @@ export function Tier2DynamicsSection({
   indexTrajectory,
   selectedYear,
   comparisonYears = DEFAULT_COMPARISON_YEARS,
+  journalYears,
 }: Tier2DynamicsSectionProps) {
-  const [hiddenYears, setHiddenYears] = useState<Record<number, boolean>>({});
+  const defaultActiveYears = useMemo(
+    () => Array.from(new Set(comparisonYears)).sort((a, b) => a - b),
+    [comparisonYears]
+  );
+  const defaultActiveKey = defaultActiveYears.join(',');
 
-  const toggleYear = (yr: number) => {
-    setHiddenYears((prev) => ({ ...prev, [yr]: !prev[yr] }));
+  const [activeYears, setActiveYears] = useState<number[]>(defaultActiveYears);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveYears(defaultActiveYears);
+    setPickerOpen(false);
+  }, [defaultActiveKey]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [pickerOpen]);
+
+  const sortedActiveYears = useMemo(
+    () => Array.from(new Set(activeYears)).sort((a, b) => a - b),
+    [activeYears]
+  );
+
+  const poolYears = useMemo(
+    () =>
+      journalYears && journalYears.length > 0
+        ? Array.from(new Set(journalYears)).sort((a, b) => a - b)
+        : defaultActiveYears,
+    [journalYears, defaultActiveYears]
+  );
+
+  const { visibleYears, overflowYears } = useMemo(
+    () => resolveMonthlyLegendYears(poolYears, sortedActiveYears, MAX_VISIBLE_LEGEND_YEARS),
+    [poolYears, sortedActiveYears]
+  );
+
+  const handleToggleYear = (yr: number) => {
+    setActiveYears((prev) => toggleMonthlyComparisonYear(prev, yr, MAX_ACTIVE_CUMULATIVE_YEARS));
+  };
+
+  const handleAddOverflowYear = (yr: number) => {
+    setActiveYears((prev) => toggleMonthlyComparisonYear(prev, yr, MAX_ACTIVE_CUMULATIVE_YEARS));
+    setPickerOpen(false);
   };
 
   const isAllYears = selectedYear === 'all';
@@ -131,7 +205,7 @@ export function Tier2DynamicsSection({
   const allTimeStartYear = (() => {
     const firstTitle = indexTrajectory[0]?.tooltipTitle ?? '';
     const m = firstTitle.match(/\b(19\d{2}|20\d{2})\b/);
-    return m ? Number.parseInt(m[1], 10) : comparisonYears[0] ?? 2024;
+    return m ? Number.parseInt(m[1], 10) : defaultActiveYears[0] ?? 2024;
   })();
   const maxTrajectoryDoy = indexTrajectory[indexTrajectory.length - 1]?.doy ?? 365;
   const allTimeMonthTicks: number[] = [];
@@ -155,7 +229,7 @@ export function Tier2DynamicsSection({
   const maxCumValue = Math.max(
     40,
     ...cumulativeData.map((d) =>
-      Math.max(0, ...comparisonYears.map((yr) => d.byYear[yr] ?? 0))
+      Math.max(0, ...sortedActiveYears.map((yr) => d.byYear[yr] ?? 0))
     )
   );
   const yMax = Math.ceil((maxCumValue + 10) / 20) * 20;
@@ -178,18 +252,28 @@ export function Tier2DynamicsSection({
         </div>
 
         {/* Centered Custom Legend with proper touch targets */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-5">
-          {comparisonYears.map((yr) => {
-            const visible = !hiddenYears[yr];
+        <div className="flex flex-wrap items-center justify-center gap-2.5 mb-5">
+          {visibleYears.map((yr) => {
+            const isActive = sortedActiveYears.includes(yr);
+            const isOnlyActive = isActive && sortedActiveYears.length === 1;
             const color = getYearColor(yr);
             return (
               <button
                 key={yr}
                 type="button"
-                aria-pressed={visible}
-                onClick={() => toggleYear(yr)}
-                className={`inline-flex items-center gap-2 min-h-9 px-3 py-1.5 rounded-xl bg-canvas/60 border border-line hover:border-lineStrong text-xs tabular-nums text-slate-200 hover:text-white transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
-                  visible ? '' : 'opacity-40 line-through'
+                aria-pressed={isActive}
+                onClick={() => handleToggleYear(yr)}
+                title={
+                  isOnlyActive
+                    ? 'На графике должен остаться хотя бы один год'
+                    : isActive
+                      ? `Убрать ${yr} из графика`
+                      : `Добавить ${yr} в график`
+                }
+                className={`inline-flex items-center gap-2 min-h-9 px-3 py-1.5 rounded-xl border text-xs tabular-nums transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  isActive
+                    ? 'bg-canvas/70 border-lineStrong text-slate-100 hover:border-slate-500'
+                    : 'bg-canvas/30 border-line/70 text-slate-400 opacity-50 hover:opacity-90 hover:text-slate-200 hover:border-lineStrong'
                 }`}
               >
                 <span
@@ -201,12 +285,62 @@ export function Tier2DynamicsSection({
               </button>
             );
           })}
+
+          {overflowYears.length > 0 && (
+            <div ref={pickerRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setPickerOpen((prev) => !prev)}
+                aria-label="Выбрать более ранний год"
+                aria-expanded={pickerOpen}
+                aria-haspopup="listbox"
+                title="Добавить год из архива"
+                className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                  pickerOpen
+                    ? 'bg-cardElevated border-lineStrong text-white'
+                    : 'bg-canvas/60 border-line text-slate-300 hover:text-white hover:border-lineStrong'
+                }`}
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+              </button>
+
+              {pickerOpen && (
+                <div
+                  role="listbox"
+                  aria-label="Доступные годы"
+                  className="absolute right-0 top-full mt-2 z-30 min-w-[128px] max-h-56 overflow-y-auto rounded-xl bg-cardElevated border border-lineStrong shadow-xl p-1.5 space-y-0.5"
+                >
+                  {overflowYears.map((yr) => (
+                    <button
+                      key={yr}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => handleAddOverflowYear(yr)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs tabular-nums text-slate-200 hover:bg-canvas/80 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                    >
+                      <span
+                        className="w-5 h-2.5 rounded-[2px] border-2 bg-transparent shrink-0"
+                        style={{ borderColor: getYearColor(yr) }}
+                        aria-hidden="true"
+                      />
+                      <span>{yr}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 365-Day Cumulative Line Chart */}
         <div className="h-80 sm:h-96 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <LineChart data={cumulativeData} margin={{ top: 8, right: 12, left: -12, bottom: 4 }}>
+            <LineChart
+              key={sortedActiveYears.join('-')}
+              data={cumulativeData}
+              margin={{ top: 8, right: 12, left: -12, bottom: 4 }}
+            >
               <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
               <XAxis
                 dataKey="doy"
@@ -225,11 +359,10 @@ export function Tier2DynamicsSection({
                 stroke="var(--chart-axis)"
                 tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
-              <Tooltip content={<CumulativeTooltip />} />
-              {comparisonYears.map((yr, idx) => {
-                if (hiddenYears[yr]) return null;
+              <Tooltip content={<CumulativeTooltip activeYears={sortedActiveYears} />} />
+              {sortedActiveYears.map((yr, idx) => {
                 const color = getYearColor(yr);
-                const isLatest = idx === comparisonYears.length - 1;
+                const isLatest = idx === sortedActiveYears.length - 1;
                 return (
                   <Line
                     key={yr}

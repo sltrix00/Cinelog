@@ -336,8 +336,8 @@ export function App() {
     [entries, selectedYear, refDate]
   );
   const cumulativeData = useMemo(
-    () => computeCumulativeComparison365(entries, comparisonYears),
-    [entries, comparisonYears]
+    () => computeCumulativeComparison365(entries, journalYears),
+    [entries, journalYears]
   );
   const indexTrajectory = useMemo(
     () => computeViewingIndexTrajectory(entries, selectedYear, refDate),
@@ -746,6 +746,7 @@ export function App() {
                 indexTrajectory={indexTrajectory}
                 selectedYear={selectedYear}
                 comparisonYears={comparisonYears}
+                journalYears={journalYears}
               />
               <Tier3RhythmSection
                 monthlyData={monthlyData}
