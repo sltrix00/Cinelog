@@ -33,9 +33,9 @@ describe('settings helpers', () => {
     });
   });
 
-  it('falls back to midnight theme definition if unknown id is passed', () => {
+  it('falls back to obsidian theme definition if unknown id is passed', () => {
     expect(getThemeDefinition('paper').mode).toBe('light');
-    expect(getThemeDefinition('unknown' as never).id).toBe('midnight');
+    expect(getThemeDefinition('unknown' as never).id).toBe('obsidian');
   });
 
   it('formats ratings consistently across 5-star, 10-point, and percent scales', () => {

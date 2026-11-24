@@ -62,27 +62,12 @@ export interface UserSettings {
 export const SETTINGS_STORAGE_KEY = 'cinelog.user_settings.v1';
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
-  theme: 'midnight',
+  theme: 'obsidian',
   accent: 'theme',
   ratingFormat: 'stars-5',
 };
 
 export const THEMES: readonly ThemeDefinition[] = [
-  {
-    id: 'midnight',
-    name: 'Midnight Cinema',
-    description: 'Оригинальная палитра Cinelog',
-    mode: 'dark',
-    preview: {
-      canvas: '#0b0e17',
-      card: '#111524',
-      line: '#1e2438',
-      accent: '#f06292',
-      secondary: '#45d1c6',
-      gold: '#d6b85a',
-    },
-    accentFg: '#0b0e17',
-  },
   {
     id: 'obsidian',
     name: 'Obsidian OLED',
@@ -97,6 +82,21 @@ export const THEMES: readonly ThemeDefinition[] = [
       gold: '#eab308',
     },
     accentFg: '#ffffff',
+  },
+  {
+    id: 'midnight',
+    name: 'Midnight Cinema',
+    description: 'Оригинальная палитра Cinelog',
+    mode: 'dark',
+    preview: {
+      canvas: '#0b0e17',
+      card: '#111524',
+      line: '#1e2438',
+      accent: '#f06292',
+      secondary: '#45d1c6',
+      gold: '#d6b85a',
+    },
+    accentFg: '#0b0e17',
   },
   {
     id: 'velvet',

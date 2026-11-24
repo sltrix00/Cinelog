@@ -4,28 +4,28 @@
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-canvas: #0b0e17;
-  --color-card: #111524;
-  --color-cardElevated: #151a2d;
-  --color-line: #1e2438;
-  --color-lineStrong: #2c3450;
-  --color-yr2024: #d6b85a;
-  --color-yr2025: #45d1c6;
-  --color-yr2026: #f06292;
+  --color-canvas: #050507;
+  --color-card: #0e0f13;
+  --color-cardElevated: #16181f;
+  --color-line: #1f212a;
+  --color-lineStrong: #323645;
+  --color-yr2024: #eab308;
+  --color-yr2025: #38bdf8;
+  --color-yr2026: #f43f5e;
 }
 
 :root {
-  --theme-accent: #f06292;
-  --theme-accent-fg: #0b0e17;
+  --theme-accent: #f43f5e;
+  --theme-accent-fg: #ffffff;
   --theme-body-text: #f1f5f9;
-  --theme-glow-1: rgba(240, 98, 146, 0.06);
-  --theme-glow-2: rgba(69, 209, 198, 0.05);
+  --theme-glow-1: rgba(244, 63, 94, 0.07);
+  --theme-glow-2: rgba(56, 189, 248, 0.05);
 
-  /* Original Cinelog default palette (Midnight Cinema) */
-  --palette-primary: #f06292;
-  --palette-secondary: #45d1c6;
-  --palette-tertiary: #d6b85a;
-  --palette-quaternary: #818cf8;
+  /* Default palette (Obsidian OLED) */
+  --palette-primary: #f43f5e;
+  --palette-secondary: #38bdf8;
+  --palette-tertiary: #eab308;
+  --palette-quaternary: #a78bfa;
 
   /* Chart series & era ramps derived from active theme palette */
   --series-1: var(--palette-tertiary);
