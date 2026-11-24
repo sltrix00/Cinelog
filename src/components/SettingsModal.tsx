@@ -376,13 +376,69 @@ export function SettingsModal({
         <div className="p-5 overflow-y-auto space-y-6 flex-1">
           {/* TAB 1: APPEARANCE & THEMES */}
           {activeTab === 'appearance' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {/* Accent Color Override (First / Above Themes) */}
+              <div className="pb-5 border-b border-line space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Акцентный цвет кнопок</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Оставьте фирменный цвет выбранной темы или задайте свой акцент
+                    </p>
+                  </div>
+                  {!isDefaultAppearance && (
+                    <button
+                      type="button"
+                      onClick={handleResetAppearance}
+                      className="inline-flex items-center gap-1.5 min-h-8 px-2.5 py-1 rounded-lg text-xs text-slate-300 hover:text-white bg-cardElevated border border-line hover:border-lineStrong transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                      <span>Сбросить</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {ACCENT_PRESETS.map((preset) => {
+                    const active = settings.accent === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectAccent(preset.id)}
+                        aria-pressed={active}
+                        className={`inline-flex items-center gap-2 min-h-9 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                          active
+                            ? 'bg-cardElevated border-[#45d1c6] text-white'
+                            : 'bg-canvas/50 border-line text-slate-300 hover:border-lineStrong hover:text-white'
+                        }`}
+                      >
+                        {preset.color ? (
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/20"
+                            style={{ backgroundColor: preset.color }}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shrink-0 bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6]"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>{preset.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Theme Picker */}
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold text-white">Тема интерфейса</h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Выберите палитру — изменения применяются мгновенно и сохраняются в браузере
+                      Меняет фон, карточки, палитру всех графиков и тепловую карту
                     </p>
                   </div>
 
@@ -435,61 +491,6 @@ export function SettingsModal({
                       onSelect={() => handleSelectTheme(theme.id)}
                     />
                   ))}
-                </div>
-              </div>
-
-              {/* Accent Color Override */}
-              <div className="pt-4 border-t border-line space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">Акцентный цвет кнопок</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Оставьте фирменный цвет выбранной темы или задайте свой акцент
-                    </p>
-                  </div>
-                  {!isDefaultAppearance && (
-                    <button
-                      type="button"
-                      onClick={handleResetAppearance}
-                      className="inline-flex items-center gap-1.5 min-h-8 px-2.5 py-1 rounded-lg text-xs text-slate-300 hover:text-white bg-cardElevated border border-line hover:border-lineStrong transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" aria-hidden="true" />
-                      <span>Сбросить</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {ACCENT_PRESETS.map((preset) => {
-                    const active = settings.accent === preset.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleSelectAccent(preset.id)}
-                        aria-pressed={active}
-                        className={`inline-flex items-center gap-2 min-h-9 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
-                          active
-                            ? 'bg-cardElevated border-[#45d1c6] text-white'
-                            : 'bg-canvas/50 border-line text-slate-300 hover:border-lineStrong hover:text-white'
-                        }`}
-                      >
-                        {preset.color ? (
-                          <span
-                            className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/20"
-                            style={{ backgroundColor: preset.color }}
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <span
-                            className="w-3.5 h-3.5 rounded-full shrink-0 bg-gradient-to-br from-[#f06292] via-[#d6b85a] to-[#45d1c6]"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <span>{preset.label}</span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             </div>

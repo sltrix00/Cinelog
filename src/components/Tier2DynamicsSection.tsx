@@ -126,7 +126,7 @@ export function Tier2DynamicsSection({
   };
 
   const isAllYears = selectedYear === 'all';
-  const trajectoryColor = isAllYears ? '#45d1c6' : getYearColor(selectedYear);
+  const trajectoryColor = isAllYears ? 'var(--palette-secondary)' : getYearColor(selectedYear);
 
   const allTimeStartYear = (() => {
     const firstTitle = indexTrajectory[0]?.tooltipTitle ?? '';
@@ -327,7 +327,8 @@ export function Tier2DynamicsSection({
                 ))}
               <ReferenceLine
                 y={1.0}
-                stroke="rgba(214, 184, 90, 0.75)"
+                stroke="var(--palette-tertiary)"
+                strokeOpacity={0.8}
                 strokeDasharray="6 5"
                 strokeWidth={1.5}
               />

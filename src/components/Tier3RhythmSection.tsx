@@ -55,7 +55,7 @@ export function Tier3RhythmSection({
   comparisonYears = DEFAULT_COMPARISON_YEARS,
 }: Tier3RhythmSectionProps) {
   const showEmptyTimeState = !timeOfDay.hasTimeData;
-  const activeColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
+  const activeColor = selectedYear === 'all' ? 'var(--palette-secondary)' : getYearColor(selectedYear);
 
   const scopeLabel = selectedYear === 'all' ? 'за всё время' : `за ${selectedYear} год`;
 

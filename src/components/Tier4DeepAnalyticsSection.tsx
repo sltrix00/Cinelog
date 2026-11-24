@@ -339,14 +339,14 @@ export function Tier4DeepAnalyticsSection({
                     cursor={{ fill: 'var(--chart-cursor)' }}
                     formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Фильмов']}
                   />
-                  <Bar dataKey="count" fill="#d6b85a" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="count" fill="var(--palette-tertiary)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               ) : (
                 <AreaChart data={ratings.monthlyTrend} margin={{ top: 6, right: 8, left: -14, bottom: 2 }}>
                   <defs>
                     <linearGradient id="ratingTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#d6b85a" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#d6b85a" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--palette-tertiary)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--palette-tertiary)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
@@ -375,11 +375,11 @@ export function Tier4DeepAnalyticsSection({
                   <Area
                     type="monotone"
                     dataKey="avgRating"
-                    stroke="#d6b85a"
+                    stroke="var(--palette-tertiary)"
                     strokeWidth={2.3}
                     fill="url(#ratingTrendGrad)"
                     connectNulls
-                    dot={{ r: 3.5, fill: '#d6b85a', strokeWidth: 0 }}
+                    dot={{ r: 3.5, fill: 'var(--palette-tertiary)', strokeWidth: 0 }}
                   />
                 </AreaChart>
               )}
@@ -477,7 +477,7 @@ export function Tier4DeepAnalyticsSection({
                   cursor={{ fill: 'var(--chart-cursor)' }}
                   formatter={(value) => [`${value} ч`, 'Длительность']}
                 />
-                <Bar dataKey="hours" fill="#45d1c6" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="hours" fill="var(--palette-secondary)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

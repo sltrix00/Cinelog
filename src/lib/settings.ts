@@ -16,12 +16,16 @@ export type ThemeId =
 
 export type AccentPresetId =
   | 'theme'
+  | 'terracotta'
+  | 'burgundy'
   | 'rose'
-  | 'teal'
-  | 'gold'
-  | 'violet'
+  | 'ochre'
+  | 'olive'
   | 'emerald'
-  | 'coral';
+  | 'teal'
+  | 'steel'
+  | 'indigo'
+  | 'plum';
 
 export type RatingFormat = 'stars-5' | 'scale-10' | 'percent';
 
@@ -66,194 +70,204 @@ export const THEMES: readonly ThemeDefinition[] = [
   {
     id: 'midnight',
     name: 'Midnight Cinema',
-    description: 'Классический глубокий индиго',
+    description: 'Глубокий индиго, пыльная роза и латунь',
     mode: 'dark',
     preview: {
       canvas: '#0b0e17',
       card: '#111524',
       line: '#1e2438',
-      accent: '#f06292',
-      secondary: '#45d1c6',
-      gold: '#d6b85a',
+      accent: '#d96b83',
+      secondary: '#5aa9a8',
+      gold: '#c9a959',
     },
-    accentFg: '#0b0e17',
+    accentFg: '#120a0d',
   },
   {
     id: 'obsidian',
-    name: 'Obsidian OLED',
-    description: 'Чистый чёрный для OLED',
+    name: 'Obsidian Mono',
+    description: 'Строгий чёрный OLED, сталь и кармин',
     mode: 'dark',
     preview: {
-      canvas: '#050507',
-      card: '#0e0f13',
-      line: '#1f212a',
-      accent: '#f43f5e',
-      secondary: '#38bdf8',
-      gold: '#eab308',
+      canvas: '#060709',
+      card: '#0f1014',
+      line: '#20222b',
+      accent: '#c95a63',
+      secondary: '#6f96b8',
+      gold: '#c49a52',
     },
     accentFg: '#ffffff',
   },
   {
     id: 'velvet',
     name: 'Velvet Cinema',
-    description: 'Бархатный бордовый кинозал',
+    description: 'Бархатный бордовый зал, гранат и шампань',
     mode: 'dark',
     preview: {
-      canvas: '#12090e',
-      card: '#1c0f17',
-      line: '#321b28',
-      accent: '#fb7185',
-      secondary: '#f59e0b',
-      gold: '#e8c468',
+      canvas: '#120a0f',
+      card: '#1c1018',
+      line: '#331d2b',
+      accent: '#d16072',
+      secondary: '#c9885b',
+      gold: '#d4b16a',
     },
-    accentFg: '#12090e',
+    accentFg: '#ffffff',
   },
   {
     id: 'emerald',
     name: 'Emerald Noir',
-    description: 'Тёмный изумруд и нефрит',
+    description: 'Тёмная хвоя, нефрит и тёплая медь',
     mode: 'dark',
     preview: {
-      canvas: '#071110',
-      card: '#0d1c1a',
-      line: '#193330',
-      accent: '#34d399',
-      secondary: '#2dd4bf',
-      gold: '#d6b85a',
+      canvas: '#081110',
+      card: '#0e1c1a',
+      line: '#1c3330',
+      accent: '#c97b5d',
+      secondary: '#5fa382',
+      gold: '#c8b06b',
     },
-    accentFg: '#051510',
+    accentFg: '#140c09',
   },
   {
     id: 'synthwave',
-    name: 'Synthwave 84',
-    description: 'Ультрафиолетовый ретро-неон',
+    name: 'Dusk Plum',
+    description: 'Сумеречный сливовый, орхидея и янтарь',
     mode: 'dark',
     preview: {
-      canvas: '#10091c',
-      card: '#1a102d',
-      line: '#2e1d4e',
-      accent: '#e879f9',
-      secondary: '#22d3ee',
-      gold: '#facc15',
+      canvas: '#120d1a',
+      card: '#1b1426',
+      line: '#302342',
+      accent: '#b876a8',
+      secondary: '#6b9bb5',
+      gold: '#d19a66',
     },
-    accentFg: '#10091c',
+    accentFg: '#140c18',
   },
   {
     id: 'nord',
     name: 'Nordic Slate',
-    description: 'Спокойный скандинавский синий',
+    description: 'Скандинавский шифер, брусника и лёд',
     mode: 'dark',
     preview: {
       canvas: '#141923',
       card: '#1c2331',
       line: '#2b3548',
-      accent: '#88c0d0',
+      accent: '#bf616a',
       secondary: '#81a1c1',
-      gold: '#ebcb8b',
+      gold: '#d6b576',
     },
-    accentFg: '#141923',
+    accentFg: '#ffffff',
   },
   {
     id: 'amber',
     name: '35mm Film',
-    description: 'Тёплая ламповая плёнка',
+    description: 'Тёплая плёнка, терракота и олива',
     mode: 'dark',
     preview: {
-      canvas: '#14100b',
-      card: '#1f1912',
-      line: '#362c20',
-      accent: '#f59e0b',
-      secondary: '#fb923c',
-      gold: '#fcd34d',
+      canvas: '#14100c',
+      card: '#1f1913',
+      line: '#362c22',
+      accent: '#c86d44',
+      secondary: '#8fa67a',
+      gold: '#d6a354',
     },
-    accentFg: '#14100b',
+    accentFg: '#ffffff',
   },
   {
     id: 'ocean',
     name: 'Deep Ocean',
-    description: 'Глубокий морской контраст',
+    description: 'Глубокий океан, коралл и морской синий',
     mode: 'dark',
     preview: {
-      canvas: '#061320',
-      card: '#0b1e30',
-      line: '#173652',
-      accent: '#38bdf8',
-      secondary: '#2dd4bf',
-      gold: '#fbbf24',
+      canvas: '#07131f',
+      card: '#0d1e2f',
+      line: '#1a3650',
+      accent: '#d47a6a',
+      secondary: '#5e9ec2',
+      gold: '#cfb06a',
     },
-    accentFg: '#061320',
+    accentFg: '#160c0a',
   },
   {
     id: 'daylight',
     name: 'Daylight Studio',
-    description: 'Чистый светлый интерфейс',
+    description: 'Чистый редакционный светлый и бордо',
     mode: 'light',
     preview: {
-      canvas: '#f4f6fa',
+      canvas: '#f4f5f8',
       card: '#ffffff',
-      line: '#dce2ec',
-      accent: '#e11d48',
-      secondary: '#0d9488',
-      gold: '#b45309',
+      line: '#dce0e8',
+      accent: '#b84a5e',
+      secondary: '#2d6f8e',
+      gold: '#a87528',
     },
     accentFg: '#ffffff',
   },
   {
     id: 'paper',
     name: 'Warm Paper',
-    description: 'Кремовая журнальная бумага',
+    description: 'Журнальная бумага, терракота и эвкалипт',
     mode: 'light',
     preview: {
       canvas: '#f6f2ea',
       card: '#fffdf9',
       line: '#e4dacb',
-      accent: '#c2410c',
-      secondary: '#0f766e',
-      gold: '#a16207',
+      accent: '#b55336',
+      secondary: '#3a7368',
+      gold: '#a67c32',
     },
     accentFg: '#ffffff',
   },
   {
     id: 'matcha',
     name: 'Matcha Mist',
-    description: 'Мягкий светло-шалфейный',
+    description: 'Шалфейный лист, матча и тёплая глина',
     mode: 'light',
     preview: {
-      canvas: '#eef4f0',
-      card: '#f9fcfa',
-      line: '#d2e2d8',
-      accent: '#059669',
-      secondary: '#0d9488',
-      gold: '#b45309',
+      canvas: '#eef3ef',
+      card: '#f9fbf9',
+      line: '#d3e0d7',
+      accent: '#3b7a57',
+      secondary: '#4c747a',
+      gold: '#9e7e34',
     },
     accentFg: '#ffffff',
   },
   {
     id: 'lavender',
     name: 'Soft Lavender',
-    description: 'Нежный пастельный лавандовый',
+    description: 'Пыльная лаванда, слива и карамель',
     mode: 'light',
     preview: {
-      canvas: '#f3f1fa',
+      canvas: '#f3f1f8',
       card: '#fcfbff',
-      line: '#dfd9f2',
-      accent: '#7c3aed',
-      secondary: '#0891b2',
-      gold: '#b45309',
+      line: '#dfd9ee',
+      accent: '#7a539c',
+      secondary: '#3f788c',
+      gold: '#a87b3e',
     },
     accentFg: '#ffffff',
   },
 ] as const;
 
 export const ACCENT_PRESETS: readonly AccentPreset[] = [
-  { id: 'theme', label: 'Из темы', color: null, fg: '#0b0e17' },
-  { id: 'rose', label: 'Розовый', color: '#f06292', fg: '#0b0e17' },
-  { id: 'teal', label: 'Бирюза', color: '#45d1c6', fg: '#061515' },
-  { id: 'gold', label: 'Золото', color: '#d6b85a', fg: '#14100b' },
-  { id: 'violet', label: 'Фиолетовый', color: '#a78bfa', fg: '#0f0a1e' },
-  { id: 'emerald', label: 'Изумруд', color: '#34d399', fg: '#051510' },
-  { id: 'coral', label: 'Коралл', color: '#fb7185', fg: '#18070b' },
+  { id: 'theme', label: 'Из темы', color: null, fg: '#ffffff' },
+  { id: 'terracotta', label: 'Терракота', color: '#c86d44', fg: '#ffffff' },
+  { id: 'burgundy', label: 'Бордо', color: '#b84a5e', fg: '#ffffff' },
+  { id: 'rose', label: 'Пыльная роза', color: '#d96b83', fg: '#140a0d' },
+  { id: 'ochre', label: 'Латунь', color: '#c9a959', fg: '#14100b' },
+  { id: 'olive', label: 'Олива', color: '#6f8f5c', fg: '#ffffff' },
+  { id: 'emerald', label: 'Нефрит', color: '#4a8f73', fg: '#ffffff' },
+  { id: 'teal', label: 'Морской', color: '#4d9699', fg: '#ffffff' },
+  { id: 'steel', label: 'Стальной', color: '#5a87b0', fg: '#ffffff' },
+  { id: 'indigo', label: 'Индиго', color: '#6c75ad', fg: '#ffffff' },
+  { id: 'plum', label: 'Слива', color: '#96669c', fg: '#ffffff' },
 ] as const;
+
+const LEGACY_ACCENT_MAP: Record<string, AccentPresetId> = {
+  gold: 'ochre',
+  violet: 'plum',
+  coral: 'terracotta',
+};
 
 const THEME_ID_SET = new Set<string>(THEMES.map((t) => t.id));
 const ACCENT_ID_SET = new Set<string>(ACCENT_PRESETS.map((a) => a.id));
@@ -270,10 +284,16 @@ export function sanitizeUserSettings(raw: unknown): UserSettings {
     typeof record.theme === 'string' && THEME_ID_SET.has(record.theme)
       ? (record.theme as ThemeId)
       : DEFAULT_USER_SETTINGS.theme;
-  const accent =
-    typeof record.accent === 'string' && ACCENT_ID_SET.has(record.accent)
-      ? (record.accent as AccentPresetId)
-      : DEFAULT_USER_SETTINGS.accent;
+
+  let accent: AccentPresetId = DEFAULT_USER_SETTINGS.accent;
+  if (typeof record.accent === 'string') {
+    if (ACCENT_ID_SET.has(record.accent)) {
+      accent = record.accent as AccentPresetId;
+    } else if (record.accent in LEGACY_ACCENT_MAP) {
+      accent = LEGACY_ACCENT_MAP[record.accent];
+    }
+  }
+
   const ratingFormat =
     typeof record.ratingFormat === 'string' && RATING_FORMAT_SET.has(record.ratingFormat)
       ? (record.ratingFormat as RatingFormat)

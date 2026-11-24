@@ -48,7 +48,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
   }, [uniqueInfoOpen, rewatchInfoOpen]);
 
   const yearLabel = selectedYear === 'all' ? 'За всё время' : `За ${selectedYear} год`;
-  const yearDotColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
+  const yearDotColor = selectedYear === 'all' ? 'var(--palette-secondary)' : getYearColor(selectedYear);
 
   const repeatInJournal = Math.max(0, kpis.allTimeTotal - kpis.allTimeUnique);
   const uniqueVsNewDiff = kpis.allTimeUnique - kpis.allTimeNewCount;

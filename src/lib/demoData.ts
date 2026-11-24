@@ -8,12 +8,19 @@ export const SIM_DAY_OF_YEAR = 324;
 export const SIM_DATE_ISO = '2026-11-20';
 
 export const YEAR_COLORS: Record<number, string> = {
-  2024: '#d6b85a',
-  2025: '#45d1c6',
-  2026: '#f06292',
+  2024: 'var(--series-1)',
+  2025: 'var(--series-2)',
+  2026: 'var(--series-3)',
 };
 
-const FALLBACK_YEAR_PALETTE = ['#818cf8', '#38bdf8', '#fb923c', '#a78bfa', '#34d399', '#f472b6'] as const;
+const FALLBACK_YEAR_PALETTE = [
+  'var(--series-4)',
+  'var(--series-5)',
+  'var(--series-6)',
+  'var(--series-1)',
+  'var(--series-2)',
+  'var(--series-3)',
+] as const;
 
 export function getYearColor(year: number): string {
   if (YEAR_COLORS[year]) return YEAR_COLORS[year];

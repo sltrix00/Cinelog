@@ -157,7 +157,7 @@ export function Header({
     }
   };
 
-  const activeDotColor = selectedYear === 'all' ? '#45d1c6' : getYearColor(selectedYear);
+  const activeDotColor = selectedYear === 'all' ? 'var(--palette-secondary)' : getYearColor(selectedYear);
   const accountLabel = formatAccountButtonLabel(userEmail, userNickname);
   const accountTitle = userEmail
     ? userNickname?.trim()
@@ -263,7 +263,7 @@ export function Header({
                     <span className="inline-flex items-center gap-2">
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: '#45d1c6' }}
+                        style={{ backgroundColor: 'var(--palette-secondary)' }}
                         aria-hidden="true"
                       />
                       <span>Все время</span>

@@ -535,10 +535,10 @@ export function computeDayOfWeekDistribution(
 }
 
 const TOD_META: Array<{ bucket: 0 | 1 | 2 | 3; label: string; color: string }> = [
-  { bucket: 0, label: '05:00–11:59', color: '#d6b85a' },
-  { bucket: 1, label: '12:00–16:59', color: '#45d1c6' },
-  { bucket: 2, label: '17:00–22:59', color: '#f06292' },
-  { bucket: 3, label: '23:00–04:59', color: '#6366f1' },
+  { bucket: 0, label: '05:00–11:59', color: 'var(--series-1)' },
+  { bucket: 1, label: '12:00–16:59', color: 'var(--series-2)' },
+  { bucket: 2, label: '17:00–22:59', color: 'var(--series-3)' },
+  { bucket: 3, label: '23:00–04:59', color: 'var(--series-4)' },
 ];
 
 export function computeTimeOfDayDistribution(
@@ -745,7 +745,14 @@ export function computeReleaseEras(
 ): ReleaseErasSummary {
   const scoped = filterEntriesByYear(entries, selectedYear);
   const labels = ['до 1980', '1980-е', '1990-е', '2000-е', '2010-е', '2020–2026'];
-  const colors = ['#3b4566', '#4a557c', '#5c6996', '#45d1c6', '#818cf8', '#f06292'];
+  const colors = [
+    'var(--era-1)',
+    'var(--era-2)',
+    'var(--era-3)',
+    'var(--era-4)',
+    'var(--era-5)',
+    'var(--era-6)',
+  ];
   const counts = [0, 0, 0, 0, 0, 0];
   let classicCount = 0;
   let withYearCount = 0;
