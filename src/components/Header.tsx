@@ -243,7 +243,7 @@ export function Header({
                   aria-label="Период статистики"
                   aria-activedescendant={`year-option-${String(options[highlightedIdx] ?? 'all')}`}
                   onKeyDown={handleListboxKeyDown}
-                  className="absolute right-0 mt-1.5 min-w-[164px] py-1 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl z-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                  className="ui-dropdown origin-top-right absolute right-0 mt-1.5 min-w-[164px] py-1 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl z-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                 >
                   <button
                     id="year-option-all"
@@ -365,7 +365,7 @@ export function Header({
                 <div
                   role="menu"
                   aria-label="Меню профиля"
-                  className="absolute right-0 mt-1.5 w-52 py-1.5 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl z-50"
+                  className="ui-dropdown origin-top-right absolute right-0 mt-1.5 w-52 py-1.5 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl z-50"
                 >
                   {userEmail ? (
                     <>

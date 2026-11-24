@@ -531,7 +531,12 @@ export function JournalSection({
                 aria-label="Варианты выбора записей"
                 className="inline-flex items-center justify-center min-h-10 px-1.5 border-l border-line text-slate-400 hover:text-white hover:bg-cardElevated disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed rounded-r-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
               >
-                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                    selectionMenuOpen ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
               </button>
             </div>
 
@@ -539,7 +544,7 @@ export function JournalSection({
               <div
                 role="menu"
                 aria-label="Варианты выбора"
-                className="absolute left-0 top-full mt-1.5 w-52 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl py-1 z-30"
+                className="ui-dropdown origin-top-left absolute left-0 top-full mt-1.5 w-52 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl py-1 z-30"
               >
                 {selectionPresets.map((preset) => (
                   <button
@@ -619,7 +624,7 @@ export function JournalSection({
               <div
                 role="dialog"
                 aria-label="Фильтры и сортировка"
-                className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl p-4 z-30 space-y-4"
+                className="ui-dropdown origin-top-right absolute right-0 top-full mt-1.5 w-72 sm:w-80 rounded-xl bg-cardElevated border border-lineStrong shadow-2xl p-4 z-30 space-y-4"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-slate-200">
@@ -698,7 +703,7 @@ export function JournalSection({
 
         {/* Bulk Selection Actions Row */}
         {selectedIds.size > 0 && (
-          <div className="pt-3 border-t border-line flex flex-wrap items-center gap-2.5">
+          <div className="ui-fade-in pt-3 border-t border-line flex flex-wrap items-center gap-2.5">
             <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#45d1c6]/10 border border-[#45d1c6]/30 text-xs tabular-nums text-[#45d1c6]">
               Выбрано: {selectedIds.size}
             </span>
@@ -873,7 +878,7 @@ export function JournalSection({
       {/* Accessible Delete Confirmation Modal */}
       {pendingDeleteEntry && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setPendingDeleteEntry(null);
           }}
@@ -884,7 +889,7 @@ export function JournalSection({
             aria-modal="true"
             aria-labelledby="delete-modal-title"
             tabIndex={-1}
-            className="w-full max-w-sm rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+            className="ui-modal-panel w-full max-w-sm rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
               <div className="flex items-center gap-2">
@@ -948,7 +953,7 @@ export function JournalSection({
       {/* Two-step Bulk / Full Journal Delete Modal */}
       {bulkDeleteState && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget && !isBulkDeleting) {
               setBulkDeleteState(null);
@@ -961,7 +966,7 @@ export function JournalSection({
             aria-modal="true"
             aria-labelledby="bulk-delete-modal-title"
             tabIndex={-1}
-            className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+            className="ui-modal-panel w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
               <div className="flex items-center gap-2">

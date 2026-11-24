@@ -280,7 +280,7 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      className="ui-modal-backdrop fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !deletingAll) onClose();
       }}
@@ -291,7 +291,7 @@ export function SettingsModal({
         aria-modal="true"
         aria-labelledby="settings-modal-title"
         tabIndex={-1}
-        className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+        className="ui-modal-panel w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-line shrink-0">
@@ -709,7 +709,7 @@ export function SettingsModal({
                 )}
 
                 {deleteStep === 1 && (
-                  <div className="rounded-xl bg-card border border-[#f06292]/35 p-3.5 space-y-3">
+                  <div className="ui-fade-in rounded-xl bg-card border border-[#f06292]/35 p-3.5 space-y-3">
                     <div className="flex items-start gap-2 text-xs text-slate-200">
                       <AlertTriangle className="w-4 h-4 text-[#f06292] shrink-0 mt-0.5" aria-hidden="true" />
                       <span>

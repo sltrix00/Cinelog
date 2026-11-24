@@ -458,7 +458,7 @@ export function AddWatchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-5 sm:pt-8 bg-black/75 backdrop-blur-sm overflow-y-auto"
+      className="ui-modal-backdrop fixed inset-0 z-50 flex items-start justify-center p-4 pt-5 sm:pt-8 bg-black/75 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
@@ -469,7 +469,7 @@ export function AddWatchModal({
         aria-modal="true"
         aria-labelledby="add-watch-modal-title"
         tabIndex={-1}
-        className={`w-full ${
+        className={`ui-modal-panel w-full ${
           isImportMode && hasImportRows ? 'max-w-2xl' : 'max-w-lg'
         } rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-3.5rem)] transition-[max-width] duration-200 focus:outline-none`}
       >
@@ -598,7 +598,7 @@ export function AddWatchModal({
                       id="tmdb-suggestions-listbox"
                       role="listbox"
                       aria-label="Результаты поиска фильма"
-                      className="absolute left-0 right-0 mt-1.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-line"
+                      className="ui-dropdown origin-top absolute left-0 right-0 mt-1.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-line"
                     >
                       {suggestions.map((item, idx) => {
                         const isActive = idx === activeSuggestionIdx;

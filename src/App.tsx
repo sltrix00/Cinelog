@@ -834,7 +834,7 @@ export function App() {
         <div
           role={toast.type === 'error' ? 'alert' : 'status'}
           aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-cardElevated shadow-2xl text-xs max-w-sm ${
+          className={`ui-toast fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-cardElevated shadow-2xl text-xs max-w-sm ${
             toast.type === 'error'
               ? 'border border-[#f06292]/45 text-[#f8d7e3]'
               : 'border border-[#45d1c6]/45 text-slate-100'

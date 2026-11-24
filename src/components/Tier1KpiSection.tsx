@@ -94,10 +94,10 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
               <div
                 role="region"
                 aria-label="Пояснение подсчёта уникальных фильмов"
-                className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs leading-relaxed text-slate-300 transition-opacity duration-150 ${
+                className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs leading-relaxed text-slate-300 transition-all duration-150 ease-out origin-top-left ${
                   uniqueInfoOpen
-                    ? 'opacity-100 pointer-events-auto'
-                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                    ? 'opacity-100 translate-y-0 pointer-events-auto'
+                    : 'opacity-0 -translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto'
                 }`}
               >
                 <div className="font-semibold text-white mb-1.5 flex items-center gap-1.5">
@@ -174,10 +174,10 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
               <div
                 role="region"
                 aria-label="Последние пересмотры"
-                className={`transition-opacity duration-150 absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs ${
+                className={`transition-all duration-150 ease-out origin-bottom absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#0b0e17] border border-lineStrong shadow-2xl z-30 text-xs ${
                   rewatchInfoOpen
-                    ? 'opacity-100 pointer-events-auto'
-                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                    ? 'opacity-100 translate-y-0 pointer-events-auto'
+                    : 'opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto'
                 }`}
               >
                 <div className="font-semibold text-slate-200 mb-2 flex items-center justify-between">

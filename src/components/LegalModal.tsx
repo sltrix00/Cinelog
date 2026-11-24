@@ -19,7 +19,7 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -30,7 +30,7 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
         aria-modal="true"
         aria-labelledby="legal-modal-title"
         tabIndex={-1}
-        className="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+        className="ui-modal-panel w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">

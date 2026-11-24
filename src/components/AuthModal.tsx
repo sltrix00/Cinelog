@@ -331,7 +331,7 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
+      className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isPasswordRecovery && !busy) handleClose();
       }}
@@ -342,7 +342,7 @@ export function AuthModal({
         aria-modal="true"
         aria-labelledby="auth-modal-title"
         tabIndex={-1}
-        className="w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
+        className="ui-modal-panel w-full max-w-md rounded-2xl bg-card border border-lineStrong shadow-2xl overflow-hidden focus:outline-none"
       >
         {isProfileView && userEmail ? (
           <>
