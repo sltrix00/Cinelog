@@ -322,16 +322,28 @@ export function JournalSection({
     });
   };
 
+  const trimmedNickname = userNickname?.trim() || null;
+  const trimmedEmail = userEmail?.trim() || null;
+
   const isIdentityValid = verifyDeleteIdentity(identityInput, {
-    userNickname,
-    userEmail,
+    userNickname: trimmedNickname,
+    userEmail: trimmedEmail,
     isDemoMode,
   });
 
   const handleConfirmBulkDelete = async () => {
     if (!bulkDeleteState || bulkDeleteState.step !== 2 || isBulkDeleting) return;
-    if (!isIdentityValid) {
-      setIdentityError('Введённое значение не совпадает с вашим никнеймом или email.');
+    const valid = verifyDeleteIdentity(identityInput, {
+      userNickname: trimmedNickname,
+      userEmail: trimmedEmail,
+      isDemoMode,
+    });
+    if (!valid) {
+      setIdentityError(
+        isDemoMode
+          ? 'Введите «demo» (строчными буквами) для подтверждения.'
+          : 'Введённое значение не совпадает с вашим никнеймом или email (учитывается регистр).'
+      );
       return;
     }
 
@@ -1052,47 +1064,55 @@ export function JournalSection({
               >
                 <div className="p-5 space-y-3">
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    {userNickname && userEmail ? (
+                    {isDemoMode ? (
                       <>
-                        Для подтверждения удаления введите ваш никнейм (
-                        <span className="font-mono text-white">{userNickname}</span>) или email (
-                        <span className="font-mono text-white">{userEmail}</span>):
+                        В демо-режиме введите <span className="font-mono text-white">demo</span>{' '}
+                        (строчными буквами) для подтверждения удаления:
                       </>
-                    ) : userEmail ? (
+                    ) : trimmedNickname && trimmedEmail ? (
                       <>
-                        Для подтверждения удаления введите ваш email (
-                        <span className="font-mono text-white">{userEmail}</span>):
+                        Для подтверждения удаления введите точно ваш никнейм (
+                        <span className="font-mono text-white">{trimmedNickname}</span>) или email (
+                        <span className="font-mono text-white">{trimmedEmail}</span>) с учётом регистра:
                       </>
-                    ) : userNickname ? (
+                    ) : trimmedEmail ? (
                       <>
-                        Для подтверждения удаления введите ваш никнейм (
-                        <span className="font-mono text-white">{userNickname}</span>):
+                        Для подтверждения удаления введите точно ваш email (
+                        <span className="font-mono text-white">{trimmedEmail}</span>) с учётом регистра:
+                      </>
+                    ) : trimmedNickname ? (
+                      <>
+                        Для подтверждения удаления введите точно ваш никнейм (
+                        <span className="font-mono text-white">{trimmedNickname}</span>) с учётом регистра:
                       </>
                     ) : (
-                      <>
-                        В демо-режиме введите <span className="font-mono text-white">demo</span> для
-                        подтверждения удаления:
-                      </>
+                      'Не удалось определить email или никнейм аккаунта — удаление заблокировано.'
                     )}
                   </p>
 
                   <input
                     ref={identityInputRef}
                     type="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     value={identityInput}
-                    disabled={isBulkDeleting}
+                    disabled={isBulkDeleting || (!isDemoMode && !trimmedEmail && !trimmedNickname)}
                     onChange={(e) => {
                       setIdentityInput(e.target.value);
                       if (identityError) setIdentityError(null);
                     }}
                     placeholder={
-                      userNickname && userEmail
-                        ? 'Никнейм или email...'
-                        : userEmail
-                          ? 'Ваш email...'
-                          : userNickname
-                            ? 'Ваш никнейм...'
-                            : 'demo'
+                      isDemoMode
+                        ? 'demo'
+                        : trimmedNickname && trimmedEmail
+                          ? 'Никнейм или email...'
+                          : trimmedEmail
+                            ? 'Ваш email...'
+                            : trimmedNickname
+                              ? 'Ваш никнейм...'
+                              : ''
                     }
                     className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-line text-xs text-white placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f06292] focus:border-[#f06292]"
                   />

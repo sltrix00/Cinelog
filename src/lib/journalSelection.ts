@@ -68,20 +68,21 @@ export function verifyDeleteIdentity(
   rawInput: string,
   options: DeleteIdentityOptions
 ): boolean {
-  const input = rawInput.trim().toLowerCase();
+  const input = rawInput.trim();
   if (!input) return false;
 
-  const nickname = options.userNickname?.trim().toLowerCase();
-  const email = options.userEmail?.trim().toLowerCase();
+  if (options.isDemoMode) {
+    return input === 'demo';
+  }
+
+  const nickname = options.userNickname?.trim();
+  const email = options.userEmail?.trim();
 
   if (nickname && input === nickname) {
     return true;
   }
   if (email && input === email) {
     return true;
-  }
-  if (!nickname && !email && options.isDemoMode) {
-    return input === 'demo';
   }
   return false;
 }

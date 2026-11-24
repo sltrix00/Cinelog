@@ -76,24 +76,43 @@ describe('applySelectionPreset', () => {
 });
 
 describe('verifyDeleteIdentity', () => {
-  it('matches nickname or email case-insensitively and ignores surrounding spaces', () => {
-    const opts = { userNickname: 'Cinephile_42', userEmail: 'User@Example.com' };
-    expect(verifyDeleteIdentity('  cinephile_42 ', opts)).toBe(true);
+  it('requires exact case-sensitive match for nickname or email (ignoring surrounding spaces)', () => {
+    const opts = { userNickname: 'Cinephile_42', userEmail: 'user@example.com', isDemoMode: false };
+    expect(verifyDeleteIdentity('Cinephile_42', opts)).toBe(true);
+    expect(verifyDeleteIdentity('  Cinephile_42 ', opts)).toBe(true);
     expect(verifyDeleteIdentity('user@example.com', opts)).toBe(true);
-    expect(verifyDeleteIdentity('USER@EXAMPLE.COM', opts)).toBe(true);
+    expect(verifyDeleteIdentity('  user@example.com  ', opts)).toBe(true);
+
+    // Wrong case must be rejected
+    expect(verifyDeleteIdentity('cinephile_42', opts)).toBe(false);
+    expect(verifyDeleteIdentity('CINEPHILE_42', opts)).toBe(false);
+    expect(verifyDeleteIdentity('USER@EXAMPLE.COM', opts)).toBe(false);
+    expect(verifyDeleteIdentity('User@example.com', opts)).toBe(false);
+
+    // Wrong or empty values must be rejected
     expect(verifyDeleteIdentity('wrong', opts)).toBe(false);
     expect(verifyDeleteIdentity('', opts)).toBe(false);
+    expect(verifyDeleteIdentity('   ', opts)).toBe(false);
   });
 
-  it('accepts demo in demo mode when no nickname or email is set', () => {
+  it('requires exact lowercase demo in demo mode', () => {
     expect(verifyDeleteIdentity('demo', { isDemoMode: true })).toBe(true);
-    expect(verifyDeleteIdentity(' DEMO ', { isDemoMode: true })).toBe(true);
+    expect(verifyDeleteIdentity(' demo ', { isDemoMode: true })).toBe(true);
+    expect(verifyDeleteIdentity('DEMO', { isDemoMode: true })).toBe(false);
+    expect(verifyDeleteIdentity('Demo', { isDemoMode: true })).toBe(false);
     expect(verifyDeleteIdentity('other', { isDemoMode: true })).toBe(false);
+    expect(verifyDeleteIdentity('', { isDemoMode: true })).toBe(false);
   });
 
-  it('rejects demo when user has a real email or nickname', () => {
+  it('rejects demo when not in demo mode and fails closed when identity is missing', () => {
     expect(
       verifyDeleteIdentity('demo', { userEmail: 'user@example.com', isDemoMode: false })
+    ).toBe(false);
+    expect(
+      verifyDeleteIdentity('demo', { userEmail: null, userNickname: null, isDemoMode: false })
+    ).toBe(false);
+    expect(
+      verifyDeleteIdentity('anything', { userEmail: null, userNickname: null, isDemoMode: false })
     ).toBe(false);
   });
 });

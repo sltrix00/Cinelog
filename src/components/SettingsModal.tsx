@@ -210,14 +210,22 @@ export function SettingsModal({
   });
 
   useEffect(() => {
-    if (!open) {
+    if (!open || activeTab !== 'data') {
       setDeleteStep(0);
       setIdentityInput('');
       setIdentityError(null);
     }
-  }, [open]);
+  }, [open, activeTab]);
 
   if (!open) return null;
+
+  const trimmedNickname = userNickname?.trim() || null;
+  const trimmedEmail = userEmail?.trim() || null;
+  const isDeleteIdentityValid = verifyDeleteIdentity(identityInput, {
+    userEmail: trimmedEmail,
+    userNickname: trimmedNickname,
+    isDemoMode,
+  });
 
   const darkCount = THEMES.filter((t) => t.mode === 'dark').length;
   const lightCount = THEMES.filter((t) => t.mode === 'light').length;
@@ -245,22 +253,26 @@ export function SettingsModal({
   };
 
   const handleConfirmDeleteAll = async () => {
-    if (deletingAll) return;
+    if (deletingAll || deleteStep !== 2) return;
 
-    if (!isDemoMode && userEmail) {
-      const valid = verifyDeleteIdentity(identityInput, {
-        userEmail,
-        userNickname,
-        isDemoMode,
-      });
-      if (!valid) {
-        setIdentityError(
-          userNickname?.trim()
-            ? 'Введите ваш email или никнейм для подтверждения.'
-            : 'Введите ваш email для подтверждения.'
-        );
-        return;
-      }
+    const valid = verifyDeleteIdentity(identityInput, {
+      userEmail: trimmedEmail,
+      userNickname: trimmedNickname,
+      isDemoMode,
+    });
+    if (!valid) {
+      setIdentityError(
+        isDemoMode
+          ? 'Введите «demo» (строчными буквами) для подтверждения.'
+          : trimmedNickname && trimmedEmail
+            ? 'Введённое значение не совпадает с вашим никнеймом или email (учитывается регистр).'
+            : trimmedEmail
+              ? 'Введённое значение не совпадает с вашим email (учитывается регистр).'
+              : trimmedNickname
+                ? 'Введённое значение не совпадает с вашим никнеймом (учитывается регистр).'
+                : 'Не удалось определить данные аккаунта. Удаление заблокировано.'
+      );
+      return;
     }
 
     setDeletingAll(true);
@@ -712,57 +724,34 @@ export function SettingsModal({
                   <div className="ui-fade-in rounded-xl bg-card border border-[#f06292]/35 p-3.5 space-y-3">
                     <div className="flex items-start gap-2 text-xs text-slate-200">
                       <AlertTriangle className="w-4 h-4 text-[#f06292] shrink-0 mt-0.5" aria-hidden="true" />
-                      <span>
-                        Вы уверены, что хотите удалить все{' '}
-                        <strong className="tabular-nums text-white">{entriesCount}</strong> записей из
-                        журнала?
-                      </span>
-                    </div>
-
-                    {!isDemoMode && userEmail && (
-                      <div className="space-y-1.5">
-                        <label
-                          htmlFor="settingsDeleteIdentity"
-                          className="block text-[11px] text-slate-400"
-                        >
-                          Для подтверждения введите{' '}
-                          {userNickname?.trim() ? 'ваш email или никнейм' : 'ваш email'}:
-                        </label>
-                        <input
-                          id="settingsDeleteIdentity"
-                          type="text"
-                          value={identityInput}
-                          onChange={(e) => {
-                            setIdentityInput(e.target.value);
-                            setIdentityError(null);
-                          }}
-                          placeholder={userNickname?.trim() || userEmail}
-                          className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-lineStrong text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#f06292]"
-                        />
-                        {identityError && (
-                          <p className="text-[11px] text-[#f06292]">{identityError}</p>
-                        )}
+                      <div className="space-y-1">
+                        <p>
+                          Вы уверены, что хотите удалить все{' '}
+                          <strong className="tabular-nums text-white">{entriesCount}</strong> записей из
+                          журнала?
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Это действие нельзя отменить. На следующем шаге потребуется точное
+                          подтверждение {isDemoMode ? 'вводом «demo»' : 'вводом вашего никнейма или email'}.
+                        </p>
                       </div>
-                    )}
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        disabled={deletingAll}
-                        onClick={() => void handleConfirmDeleteAll()}
-                        className="inline-flex items-center gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] font-semibold text-xs transition-colors cursor-pointer"
+                        onClick={() => {
+                          setIdentityInput('');
+                          setIdentityError(null);
+                          setDeleteStep(2);
+                        }}
+                        className="inline-flex items-center gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] text-[#0b0e17] font-semibold text-xs transition-colors cursor-pointer"
                       >
-                        {deletingAll ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                        )}
-                        <span>{deletingAll ? 'Удаление...' : 'Подтвердить удаление'}</span>
+                        Продолжить
                       </button>
 
                       <button
                         type="button"
-                        disabled={deletingAll}
                         onClick={() => {
                           setDeleteStep(0);
                           setIdentityInput('');
@@ -774,6 +763,120 @@ export function SettingsModal({
                       </button>
                     </div>
                   </div>
+                )}
+
+                {deleteStep === 2 && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleConfirmDeleteAll();
+                    }}
+                    className="ui-fade-in rounded-xl bg-card border border-[#f06292]/35 p-3.5 space-y-3"
+                  >
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="settingsDeleteIdentity"
+                        className="block text-[11px] leading-relaxed text-slate-300"
+                      >
+                        {isDemoMode ? (
+                          <>
+                            Для подтверждения введите{' '}
+                            <span className="font-mono text-white">demo</span> (строчными буквами):
+                          </>
+                        ) : trimmedNickname && trimmedEmail ? (
+                          <>
+                            Для подтверждения введите точно ваш никнейм (
+                            <span className="font-mono text-white">{trimmedNickname}</span>) или email (
+                            <span className="font-mono text-white">{trimmedEmail}</span>) с учётом регистра:
+                          </>
+                        ) : trimmedEmail ? (
+                          <>
+                            Для подтверждения введите точно ваш email (
+                            <span className="font-mono text-white">{trimmedEmail}</span>) с учётом регистра:
+                          </>
+                        ) : trimmedNickname ? (
+                          <>
+                            Для подтверждения введите точно ваш никнейм (
+                            <span className="font-mono text-white">{trimmedNickname}</span>) с учётом регистра:
+                          </>
+                        ) : (
+                          'Не удалось определить email или никнейм аккаунта — удаление заблокировано.'
+                        )}
+                      </label>
+                      <input
+                        id="settingsDeleteIdentity"
+                        type="text"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        disabled={deletingAll || (!isDemoMode && !trimmedEmail && !trimmedNickname)}
+                        value={identityInput}
+                        onChange={(e) => {
+                          setIdentityInput(e.target.value);
+                          setIdentityError(null);
+                        }}
+                        placeholder={
+                          isDemoMode
+                            ? 'demo'
+                            : trimmedNickname && trimmedEmail
+                              ? 'Никнейм или email...'
+                              : trimmedEmail
+                                ? 'Ваш email...'
+                                : trimmedNickname
+                                  ? 'Ваш никнейм...'
+                                  : ''
+                        }
+                        className="w-full min-h-10 px-3 py-2 rounded-xl bg-canvas border border-lineStrong text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#f06292]"
+                      />
+                      {identityError && (
+                        <p className="text-[11px] text-[#f06292]" role="alert">
+                          {identityError}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={!isDeleteIdentityValid || deletingAll}
+                        className="inline-flex items-center gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-45 disabled:hover:bg-[#f06292] text-[#0b0e17] font-semibold text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        {deletingAll ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        )}
+                        <span>{deletingAll ? 'Удаление...' : 'Удалить навсегда'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={deletingAll}
+                        onClick={() => {
+                          setIdentityInput('');
+                          setIdentityError(null);
+                          setDeleteStep(1);
+                        }}
+                        className="inline-flex items-center min-h-9 px-3 py-1.5 rounded-xl bg-cardElevated hover:bg-white/10 border border-line text-xs text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        Назад
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={deletingAll}
+                        onClick={() => {
+                          setDeleteStep(0);
+                          setIdentityInput('');
+                          setIdentityError(null);
+                        }}
+                        className="inline-flex items-center min-h-9 px-3 py-1.5 rounded-xl bg-cardElevated hover:bg-white/10 border border-line text-xs text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </form>
                 )}
               </div>
             </div>
