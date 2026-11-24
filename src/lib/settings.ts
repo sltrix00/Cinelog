@@ -16,13 +16,14 @@ export type ThemeId =
 
 export type AccentPresetId =
   | 'theme'
+  | 'rose'
+  | 'teal'
+  | 'neon'
   | 'terracotta'
   | 'burgundy'
-  | 'rose'
   | 'ochre'
   | 'olive'
   | 'emerald'
-  | 'teal'
   | 'steel'
   | 'indigo'
   | 'plum';
@@ -70,30 +71,30 @@ export const THEMES: readonly ThemeDefinition[] = [
   {
     id: 'midnight',
     name: 'Midnight Cinema',
-    description: 'Глубокий индиго, пыльная роза и латунь',
+    description: 'Оригинальная палитра Cinelog',
     mode: 'dark',
     preview: {
       canvas: '#0b0e17',
       card: '#111524',
       line: '#1e2438',
-      accent: '#d96b83',
-      secondary: '#5aa9a8',
-      gold: '#c9a959',
+      accent: '#f06292',
+      secondary: '#45d1c6',
+      gold: '#d6b85a',
     },
-    accentFg: '#120a0d',
+    accentFg: '#0b0e17',
   },
   {
     id: 'obsidian',
-    name: 'Obsidian Mono',
-    description: 'Строгий чёрный OLED, сталь и кармин',
+    name: 'Obsidian OLED',
+    description: 'Чистый чёрный OLED с ярким глянцем',
     mode: 'dark',
     preview: {
-      canvas: '#060709',
-      card: '#0f1014',
-      line: '#20222b',
-      accent: '#c95a63',
-      secondary: '#6f96b8',
-      gold: '#c49a52',
+      canvas: '#050507',
+      card: '#0e0f13',
+      line: '#1f212a',
+      accent: '#f43f5e',
+      secondary: '#38bdf8',
+      gold: '#eab308',
     },
     accentFg: '#ffffff',
   },
@@ -129,18 +130,18 @@ export const THEMES: readonly ThemeDefinition[] = [
   },
   {
     id: 'synthwave',
-    name: 'Dusk Plum',
-    description: 'Сумеречный сливовый, орхидея и янтарь',
+    name: 'Synthwave 84',
+    description: 'Ультрафиолетовый ретро-неон',
     mode: 'dark',
     preview: {
-      canvas: '#120d1a',
-      card: '#1b1426',
-      line: '#302342',
-      accent: '#b876a8',
-      secondary: '#6b9bb5',
-      gold: '#d19a66',
+      canvas: '#10091c',
+      card: '#1a102d',
+      line: '#2e1d4e',
+      accent: '#e879f9',
+      secondary: '#22d3ee',
+      gold: '#facc15',
     },
-    accentFg: '#140c18',
+    accentFg: '#10091c',
   },
   {
     id: 'nord',
@@ -175,17 +176,17 @@ export const THEMES: readonly ThemeDefinition[] = [
   {
     id: 'ocean',
     name: 'Deep Ocean',
-    description: 'Глубокий океан, коралл и морской синий',
+    description: 'Глубокий океан и яркий аквамарин',
     mode: 'dark',
     preview: {
-      canvas: '#07131f',
-      card: '#0d1e2f',
-      line: '#1a3650',
-      accent: '#d47a6a',
-      secondary: '#5e9ec2',
-      gold: '#cfb06a',
+      canvas: '#061320',
+      card: '#0b1e30',
+      line: '#173652',
+      accent: '#38bdf8',
+      secondary: '#2dd4bf',
+      gold: '#fbbf24',
     },
-    accentFg: '#160c0a',
+    accentFg: '#061320',
   },
   {
     id: 'daylight',
@@ -251,13 +252,14 @@ export const THEMES: readonly ThemeDefinition[] = [
 
 export const ACCENT_PRESETS: readonly AccentPreset[] = [
   { id: 'theme', label: 'Из темы', color: null, fg: '#ffffff' },
+  { id: 'rose', label: 'Розовый', color: '#f06292', fg: '#0b0e17' },
+  { id: 'teal', label: 'Бирюза', color: '#45d1c6', fg: '#061515' },
+  { id: 'neon', label: 'Неон', color: '#e879f9', fg: '#10091c' },
   { id: 'terracotta', label: 'Терракота', color: '#c86d44', fg: '#ffffff' },
   { id: 'burgundy', label: 'Бордо', color: '#b84a5e', fg: '#ffffff' },
-  { id: 'rose', label: 'Пыльная роза', color: '#d96b83', fg: '#140a0d' },
   { id: 'ochre', label: 'Латунь', color: '#c9a959', fg: '#14100b' },
   { id: 'olive', label: 'Олива', color: '#6f8f5c', fg: '#ffffff' },
   { id: 'emerald', label: 'Нефрит', color: '#4a8f73', fg: '#ffffff' },
-  { id: 'teal', label: 'Морской', color: '#4d9699', fg: '#ffffff' },
   { id: 'steel', label: 'Стальной', color: '#5a87b0', fg: '#ffffff' },
   { id: 'indigo', label: 'Индиго', color: '#6c75ad', fg: '#ffffff' },
   { id: 'plum', label: 'Слива', color: '#96669c', fg: '#ffffff' },
