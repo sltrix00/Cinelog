@@ -107,3 +107,32 @@ export function parseAuthCallbackError(
 
   return 'Ошибка авторизации. Попробуйте ещё раз.';
 }
+
+export type AuthSyncAction =
+  | 'load_user'
+  | 'refresh_profile'
+  | 'password_recovery'
+  | 'sign_out'
+  | 'ignore';
+
+/**
+ * Decides how the app should react to an auth state event so that background
+ * token refreshes or repeated SIGNED_IN events emitted by Supabase on tab
+ * focus do not re-fetch watch logs or flash the loading skeleton.
+ */
+export function resolveAuthSyncAction(
+  activeUserId: string | null,
+  nextUserId: string | null,
+  event?: string
+): AuthSyncAction {
+  if (event === 'PASSWORD_RECOVERY') {
+    return 'password_recovery';
+  }
+  if (!nextUserId) {
+    return 'sign_out';
+  }
+  if (activeUserId === nextUserId) {
+    return event === 'USER_UPDATED' ? 'refresh_profile' : 'ignore';
+  }
+  return 'load_user';
+}

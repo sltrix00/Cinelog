@@ -29,7 +29,7 @@ import {
   getReferenceDateForToday,
   resolveComparisonYears,
 } from './lib/analytics';
-import { parseAuthCallbackError } from './lib/authHelpers';
+import { parseAuthCallbackError, resolveAuthSyncAction } from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
 import { exportWatchEntriesAsCsv, exportWatchEntriesAsJson } from './lib/exportData';
@@ -106,6 +106,7 @@ export function App() {
   const handledInitialCodeRef = useRef(false);
   const passwordRecoveryTriggeredRef = useRef(false);
   const activeUserIdRef = useRef<string | null>(null);
+  const hasLoadedCloudRef = useRef(false);
   const [reenriching, setReenriching] = useState(false);
   const [reenrichProgress, setReenrichProgress] = useState<{ done: number; total: number } | null>(null);
   const [reenrichReport, setReenrichReport] = useState<ReenrichSummary | null>(null);
@@ -144,18 +145,27 @@ export function App() {
     []
   );
 
-  const loadCloudEntries = useCallback(async () => {
-    setLoadingCloud(true);
-    try {
-      const cloudRows = await fetchWatchEntries();
-      setEntries(cloudRows);
-      setIsDemoMode(false);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Ошибка загрузки данных из Supabase.', 'error');
-    } finally {
-      setLoadingCloud(false);
-    }
-  }, [showToast]);
+  const loadCloudEntries = useCallback(
+    async (options?: { showSkeleton?: boolean }) => {
+      const shouldShowSkeleton = options?.showSkeleton ?? false;
+      if (shouldShowSkeleton) {
+        setLoadingCloud(true);
+      }
+      try {
+        const cloudRows = await fetchWatchEntries();
+        setEntries(cloudRows);
+        setIsDemoMode(false);
+        hasLoadedCloudRef.current = true;
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Ошибка загрузки данных из Supabase.', 'error');
+      } finally {
+        if (shouldShowSkeleton) {
+          setLoadingCloud(false);
+        }
+      }
+    },
+    [showToast]
+  );
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -180,38 +190,59 @@ export function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    const unsubscribe = onAuthChanged((user, event) => {
+    const syncAuthUser = (
+      user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null } | null,
+      event?: string
+    ) => {
       setUserEmail(user?.email ?? null);
-      if (event === 'PASSWORD_RECOVERY') {
+      const action = resolveAuthSyncAction(activeUserIdRef.current, user?.id ?? null, event);
+
+      if (action === 'password_recovery') {
         passwordRecoveryTriggeredRef.current = true;
         setIsPasswordRecovery(true);
         setAuthModalOpen(true);
         return;
       }
-      if (user) {
-        void loadCloudEntries();
-        void loadUserProfile(user);
-      } else {
-        activeUserIdRef.current = null;
-        setUserNickname(null);
-        setIsPasswordRecovery(false);
-        setIsDemoMode(true);
-        setShowDemoDashboard(false);
-        setEntries(DEMO_ENTRIES);
-        setDemoWasModified(false);
-        setReenrichReport(null);
-        setReenrichProgress(null);
-        setReenriching(false);
+
+      if (action === 'ignore') {
+        return;
       }
+
+      if (action === 'refresh_profile' && user) {
+        void loadUserProfile(user);
+        return;
+      }
+
+      if (action === 'load_user' && user) {
+        activeUserIdRef.current = user.id;
+        void loadCloudEntries({ showSkeleton: !hasLoadedCloudRef.current });
+        void loadUserProfile(user);
+        return;
+      }
+
+      activeUserIdRef.current = null;
+      hasLoadedCloudRef.current = false;
+      setLoadingCloud(false);
+      setUserNickname(null);
+      setIsPasswordRecovery(false);
+      setIsDemoMode(true);
+      setShowDemoDashboard(false);
+      setEntries(DEMO_ENTRIES);
+      setDemoWasModified(false);
+      setReenrichReport(null);
+      setReenrichProgress(null);
+      setReenriching(false);
+    };
+
+    const unsubscribe = onAuthChanged((user, event) => {
+      syncAuthUser(user, event);
     });
 
     void getVerifiedUser()
       .then((user) => {
         if (!active) return;
         if (user) {
-          setUserEmail(user.email ?? null);
-          void loadCloudEntries();
-          void loadUserProfile(user);
+          syncAuthUser(user);
           if (
             hadAuthCode &&
             !handledInitialCodeRef.current &&

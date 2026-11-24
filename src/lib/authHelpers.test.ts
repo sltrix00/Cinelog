@@ -5,6 +5,7 @@ import {
   localizeAuthError,
   parseAuthCallbackError,
   parseGoogleProviderEnabled,
+  resolveAuthSyncAction,
 } from './authHelpers';
 
 describe('getAuthRedirectUrl', () => {
@@ -185,5 +186,31 @@ describe('localizeAuthError PKCE and expired link handling', () => {
     expect(localizeAuthError('PKCE code verifier not found in storage.')).toContain(
       'Не удалось завершить автоматический вход по ссылке'
     );
+  });
+});
+
+describe('resolveAuthSyncAction', () => {
+  it('loads data on initial sign-in or when switching accounts', () => {
+    expect(resolveAuthSyncAction(null, 'user-1', 'INITIAL_SESSION')).toBe('load_user');
+    expect(resolveAuthSyncAction(null, 'user-1', 'SIGNED_IN')).toBe('load_user');
+    expect(resolveAuthSyncAction('user-1', 'user-2', 'SIGNED_IN')).toBe('load_user');
+  });
+
+  it('ignores repeated SIGNED_IN / TOKEN_REFRESHED events for the same active user (e.g. tab focus)', () => {
+    expect(resolveAuthSyncAction('user-1', 'user-1', 'SIGNED_IN')).toBe('ignore');
+    expect(resolveAuthSyncAction('user-1', 'user-1', 'TOKEN_REFRESHED')).toBe('ignore');
+    expect(resolveAuthSyncAction('user-1', 'user-1', 'INITIAL_SESSION')).toBe('ignore');
+    expect(resolveAuthSyncAction('user-1', 'user-1')).toBe('ignore');
+  });
+
+  it('refreshes only profile on USER_UPDATED for the same user', () => {
+    expect(resolveAuthSyncAction('user-1', 'user-1', 'USER_UPDATED')).toBe('refresh_profile');
+  });
+
+  it('handles password recovery and sign-out events', () => {
+    expect(resolveAuthSyncAction('user-1', 'user-1', 'PASSWORD_RECOVERY')).toBe('password_recovery');
+    expect(resolveAuthSyncAction(null, 'user-1', 'PASSWORD_RECOVERY')).toBe('password_recovery');
+    expect(resolveAuthSyncAction('user-1', null, 'SIGNED_OUT')).toBe('sign_out');
+    expect(resolveAuthSyncAction(null, null, 'INITIAL_SESSION')).toBe('sign_out');
   });
 });
