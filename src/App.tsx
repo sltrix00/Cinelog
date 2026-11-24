@@ -627,6 +627,14 @@ export function App() {
 
   const showLanding = authChecked && !userEmail && !showDemoDashboard;
 
+  useEffect(() => {
+    if (showLanding) {
+      applyThemeToDocument('obsidian', 'theme');
+    } else if (authChecked) {
+      applyThemeToDocument(userSettings.theme, userSettings.accent);
+    }
+  }, [showLanding, authChecked, userSettings.theme, userSettings.accent]);
+
   return (
     <div className="min-h-screen text-slate-100">
       {!authChecked ? (

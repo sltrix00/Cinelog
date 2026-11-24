@@ -369,8 +369,6 @@ export function JournalSection({
     <section id="journal" className="scroll-mt-24 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-widest text-slate-400">Журнал</span>
-          <span className="text-slate-600" aria-hidden="true">/</span>
           <h2 className="text-sm font-bold tracking-tight text-slate-200 tabular-nums">
             История просмотров ({filtered.length} {filmWord(filtered.length)})
           </h2>

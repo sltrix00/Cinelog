@@ -62,8 +62,6 @@ export function Tier3RhythmSection({
   return (
     <section id="level-3" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-xs tabular-nums uppercase tracking-widest text-slate-400">Уровень 03</span>
-        <span className="text-slate-600" aria-hidden="true">/</span>
         <h2 className="text-sm font-bold tracking-tight text-slate-200">Привычки и ритм просмотров</h2>
       </div>
 

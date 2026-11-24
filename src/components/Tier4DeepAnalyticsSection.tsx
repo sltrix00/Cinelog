@@ -124,8 +124,6 @@ export function Tier4DeepAnalyticsSection({
   return (
     <section id="level-4" className="scroll-mt-24 space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-xs tabular-nums uppercase tracking-widest text-slate-400">Уровень 04</span>
-        <span className="text-slate-600" aria-hidden="true">/</span>
         <h2 className="text-sm font-bold tracking-tight text-slate-200">Глубокая аналитика</h2>
       </div>
 
