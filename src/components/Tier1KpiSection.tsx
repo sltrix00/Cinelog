@@ -260,7 +260,7 @@ export function Tier1KpiSection({ kpis, selectedYear }: Tier1KpiSectionProps) {
       </div>
 
       {/* 5. Выделенная карточка: Индекс просмотра */}
-      <div className="rounded-2xl bg-gradient-to-r from-card via-[#14192c] to-card border border-lineStrong p-5 sm:p-6 relative overflow-hidden">
+      <div className="rounded-2xl bg-gradient-to-r from-card via-cardElevated to-card border border-lineStrong p-5 sm:p-6 relative overflow-hidden">
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#f06292] via-[#45d1c6] to-[#d6b85a]" aria-hidden="true" />
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center pl-2">
           <div className="md:col-span-4 space-y-1">

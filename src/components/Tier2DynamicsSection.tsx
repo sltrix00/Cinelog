@@ -209,7 +209,7 @@ export function Tier2DynamicsSection({
         <div className="h-80 sm:h-96 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={cumulativeData} margin={{ top: 8, right: 12, left: -12, bottom: 4 }}>
-              <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+              <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
               <XAxis
                 dataKey="doy"
                 type="number"
@@ -219,13 +219,13 @@ export function Tier2DynamicsSection({
                   const pt = cumulativeData[doy - 1];
                   return pt?.monthTick ?? '';
                 }}
-                stroke="#1e2438"
-                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 domain={[0, yMax]}
-                stroke="#1e2438"
-                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<CumulativeTooltip />} />
               {comparisonYears.map((yr, idx) => {
@@ -281,7 +281,7 @@ export function Tier2DynamicsSection({
                   <stop offset="95%" stopColor={trajectoryColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+              <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
               {isAllYears ? (
                 <XAxis
                   dataKey="doy"
@@ -297,22 +297,22 @@ export function Tier2DynamicsSection({
                     if (mIdx === 0) return `Янв ${allTimeStartYear + yIdx}`;
                     return MONTHS_RU[mIdx];
                   }}
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
               ) : (
                 <XAxis
                   dataKey="label"
                   minTickGap={34}
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
               )}
               <YAxis
                 domain={[0, (dataMax: number) => Math.max(1.15, +(dataMax + 0.1).toFixed(2))]}
                 tickFormatter={(v: number) => v.toFixed(2)}
-                stroke="#1e2438"
-                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip content={<TrajectoryTooltip />} />
               {isAllYears &&

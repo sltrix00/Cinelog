@@ -42,20 +42,20 @@ interface Tier4DeepAnalyticsSectionProps {
 }
 
 const TOOLTIP_STYLE = {
-  backgroundColor: '#0b0e17',
-  border: '1px solid #2c3450',
+  backgroundColor: 'var(--chart-tooltip-bg)',
+  border: '1px solid var(--chart-tooltip-border)',
   borderRadius: '10px',
-  color: '#f8fafc',
+  color: 'var(--chart-tooltip-text)',
   fontSize: '12px',
   fontFamily: 'var(--font-sans)',
 };
 
 const TOOLTIP_ITEM_STYLE = {
-  color: '#e2e8f0',
+  color: 'var(--chart-tooltip-item)',
 };
 
 const TOOLTIP_LABEL_STYLE = {
-  color: '#f8fafc',
+  color: 'var(--chart-tooltip-text)',
   fontWeight: 600,
   marginBottom: '4px',
 };
@@ -146,11 +146,34 @@ export function Tier4DeepAnalyticsSection({
           </div>
           <div className="flex items-center gap-1.5 text-xs tabular-nums text-slate-400">
             <span>Меньше</span>
-            <span className="w-4 h-4 rounded-[4px] bg-[#161c2e] border border-line" aria-hidden="true" />
-            <span className="w-4 h-4 rounded-[4px] bg-[#15363c]" aria-hidden="true" />
-            <span className="w-4 h-4 rounded-[4px] bg-[#1f5e63]" aria-hidden="true" />
-            <span className="w-4 h-4 rounded-[4px] bg-[#2f9995]" aria-hidden="true" />
-            <span className="w-4 h-4 rounded-[4px] bg-[#45d1c6]" aria-hidden="true" />
+            <span
+              className="w-4 h-4 rounded-[4px] border"
+              style={{
+                backgroundColor: 'var(--heatmap-0)',
+                borderColor: 'var(--heatmap-0-border)',
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="w-4 h-4 rounded-[4px]"
+              style={{ backgroundColor: 'var(--heatmap-1)' }}
+              aria-hidden="true"
+            />
+            <span
+              className="w-4 h-4 rounded-[4px]"
+              style={{ backgroundColor: 'var(--heatmap-2)' }}
+              aria-hidden="true"
+            />
+            <span
+              className="w-4 h-4 rounded-[4px]"
+              style={{ backgroundColor: 'var(--heatmap-3)' }}
+              aria-hidden="true"
+            />
+            <span
+              className="w-4 h-4 rounded-[4px]"
+              style={{ backgroundColor: 'var(--heatmap-4)' }}
+              aria-hidden="true"
+            />
             <span>Больше</span>
           </div>
         </div>
@@ -164,12 +187,30 @@ export function Tier4DeepAnalyticsSection({
             </div>
             <div className="grid grid-flow-col grid-rows-7 auto-cols-fr gap-1">
                 {heatmap.cells.map((cell) => {
-                  let bgClass = 'bg-[#161c2e] border border-line';
-                  if (cell.isFuture) bgClass = 'bg-[#0d111d] opacity-35';
-                  else if (cell.intensity === 1) bgClass = 'bg-[#15363c]';
-                  else if (cell.intensity === 2) bgClass = 'bg-[#1f5e63]';
-                  else if (cell.intensity === 3) bgClass = 'bg-[#2f9995]';
-                  else if (cell.intensity === 4) bgClass = 'bg-[#45d1c6]';
+                  let cellStyle: { backgroundColor: string; borderColor?: string } = {
+                    backgroundColor: 'var(--heatmap-0)',
+                    borderColor: 'var(--heatmap-0-border)',
+                  };
+                  let borderClass = 'border';
+
+                  if (cell.isFuture) {
+                    cellStyle = {
+                      backgroundColor: 'var(--heatmap-future)',
+                      borderColor: 'var(--heatmap-future-border)',
+                    };
+                  } else if (cell.intensity === 1) {
+                    cellStyle = { backgroundColor: 'var(--heatmap-1)' };
+                    borderClass = '';
+                  } else if (cell.intensity === 2) {
+                    cellStyle = { backgroundColor: 'var(--heatmap-2)' };
+                    borderClass = '';
+                  } else if (cell.intensity === 3) {
+                    cellStyle = { backgroundColor: 'var(--heatmap-3)' };
+                    borderClass = '';
+                  } else if (cell.intensity === 4) {
+                    cellStyle = { backgroundColor: 'var(--heatmap-4)' };
+                    borderClass = '';
+                  }
 
                   const showAtRect = (el: HTMLElement, pinned = false) => {
                     const rect = el.getBoundingClientRect();
@@ -186,12 +227,13 @@ export function Tier4DeepAnalyticsSection({
                       key={cell.doy}
                       type="button"
                       disabled={cell.isFuture}
+                      style={cellStyle}
                       aria-label={
                         cell.isFuture
                           ? `${cell.dateLabel} — будущая дата`
                           : `${cell.dateLabel}: ${cell.count} ${filmWord(cell.count)}`
                       }
-                      className={`w-full aspect-square rounded-[4px] transition-transform duration-100 hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-default cursor-pointer ${bgClass}`}
+                      className={`w-full aspect-square rounded-[4px] transition-transform duration-100 hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] disabled:cursor-default cursor-pointer ${borderClass}`}
                       onMouseEnter={(e) =>
                         setHoveredCell({ cell, x: e.clientX, y: e.clientY, pinned: false })
                       }
@@ -278,23 +320,23 @@ export function Tier4DeepAnalyticsSection({
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               {ratingView === 'dist' ? (
                 <BarChart data={ratings.distribution} margin={{ top: 6, right: 8, left: -18, bottom: 2 }}>
-                  <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis
                     dataKey="bucket"
                     tickFormatter={(bucket: string) => formatRatingBucketLabel(bucket, ratingFormat)}
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
                     allowDecimals={false}
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
                     itemStyle={TOOLTIP_ITEM_STYLE}
                     labelStyle={TOOLTIP_LABEL_STYLE}
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    cursor={{ fill: 'var(--chart-cursor)' }}
                     formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Фильмов']}
                   />
                   <Bar dataKey="count" fill="#d6b85a" radius={[6, 6, 0, 0]} />
@@ -307,17 +349,17 @@ export function Tier4DeepAnalyticsSection({
                       <stop offset="95%" stopColor="#d6b85a" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis
                     dataKey="month"
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
                     domain={[ratingYDomainMin, 5.0]}
                     tickFormatter={(v: number) => formatRatingShort(v, ratingFormat)}
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -360,22 +402,22 @@ export function Tier4DeepAnalyticsSection({
           <div className="h-60 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={releaseEras.points} margin={{ top: 6, right: 8, left: -18, bottom: 2 }}>
-                <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <YAxis
                   allowDecimals={false}
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={TOOLTIP_ITEM_STYLE}
                   labelStyle={TOOLTIP_LABEL_STYLE}
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                  cursor={{ fill: 'var(--chart-cursor)' }}
                   formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Фильмов']}
                 />
                 <Bar dataKey="count" radius={[7, 7, 0, 0]}>
@@ -417,22 +459,22 @@ export function Tier4DeepAnalyticsSection({
           <div className="h-60 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={runtime.points} margin={{ top: 6, right: 8, left: -14, bottom: 2 }}>
-                <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="month"
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <YAxis
                   tickFormatter={(v: number) => `${v}ч`}
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={TOOLTIP_ITEM_STYLE}
                   labelStyle={TOOLTIP_LABEL_STYLE}
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                  cursor={{ fill: 'var(--chart-cursor)' }}
                   formatter={(value) => [`${value} ч`, 'Длительность']}
                 />
                 <Bar dataKey="hours" fill="#45d1c6" radius={[6, 6, 0, 0]} />

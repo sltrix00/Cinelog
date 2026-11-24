@@ -29,20 +29,20 @@ interface Tier3RhythmSectionProps {
 const DEFAULT_COMPARISON_YEARS = [2024, 2025, 2026];
 
 const TOOLTIP_STYLE = {
-  backgroundColor: '#0b0e17',
-  border: '1px solid #2c3450',
+  backgroundColor: 'var(--chart-tooltip-bg)',
+  border: '1px solid var(--chart-tooltip-border)',
   borderRadius: '10px',
-  color: '#f8fafc',
+  color: 'var(--chart-tooltip-text)',
   fontSize: '12px',
   fontFamily: 'var(--font-sans)',
 };
 
 const TOOLTIP_ITEM_STYLE = {
-  color: '#e2e8f0',
+  color: 'var(--chart-tooltip-item)',
 };
 
 const TOOLTIP_LABEL_STYLE = {
-  color: '#f8fafc',
+  color: 'var(--chart-tooltip-text)',
   fontWeight: 600,
   marginBottom: '4px',
 };
@@ -95,22 +95,22 @@ export function Tier3RhythmSection({
         <div className="h-72 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={monthlyData} margin={{ top: 6, right: 8, left: -16, bottom: 2 }}>
-              <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+              <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
               <XAxis
                 dataKey="month"
-                stroke="#1e2438"
-                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <YAxis
                 allowDecimals={false}
-                stroke="#1e2438"
-                tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 itemStyle={TOOLTIP_ITEM_STYLE}
                 labelStyle={TOOLTIP_LABEL_STYLE}
-                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                cursor={{ fill: 'var(--chart-cursor)' }}
                 formatter={(value, name) => [`${value} ${filmWord(Number(value))}`, String(name)]}
               />
               {comparisonYears.map((yr) => (
@@ -144,29 +144,29 @@ export function Tier3RhythmSection({
           <div className="h-60 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={dayOfWeek.points} margin={{ top: 6, right: 8, left: -18, bottom: 2 }}>
-                <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <YAxis
                   allowDecimals={false}
-                  stroke="#1e2438"
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                  stroke="var(--chart-axis)"
+                  tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={TOOLTIP_ITEM_STYLE}
                   labelStyle={TOOLTIP_LABEL_STYLE}
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                  cursor={{ fill: 'var(--chart-cursor)' }}
                   formatter={(value) => [`${value} ${filmWord(Number(value))}`, 'Просмотров']}
                 />
                 <Bar dataKey="count" radius={[7, 7, 0, 0]}>
                   {dayOfWeek.points.map((entry) => (
                     <Cell
                       key={entry.label}
-                      fill={entry.isPeak ? activeColor : '#26304d'}
+                      fill={entry.isPeak ? activeColor : 'var(--chart-bar-muted)'}
                     />
                   ))}
                 </Bar>
@@ -196,22 +196,22 @@ export function Tier3RhythmSection({
             <div className="h-60 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={timeOfDay.points} margin={{ top: 6, right: 8, left: -18, bottom: 2 }}>
-                  <CartesianGrid stroke="rgba(30, 36, 56, 0.75)" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis
                     dataKey="label"
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <YAxis
                     allowDecimals={false}
-                    stroke="#1e2438"
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+                    stroke="var(--chart-axis)"
+                    tick={{ fill: 'var(--chart-tick)', fontSize: 11, fontFamily: 'var(--font-sans)' }}
                   />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
                     itemStyle={TOOLTIP_ITEM_STYLE}
                     labelStyle={TOOLTIP_LABEL_STYLE}
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    cursor={{ fill: 'var(--chart-cursor)' }}
                     formatter={(_value, _name, item) => {
                       const pt = item?.payload as { count?: number; percentage?: number } | undefined;
                       return [`${pt?.count ?? 0} (${pt?.percentage ?? 0}%)`, 'Просмотров'];

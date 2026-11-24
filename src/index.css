@@ -20,6 +20,50 @@
   --theme-body-text: #f1f5f9;
   --theme-glow-1: rgba(240, 98, 146, 0.06);
   --theme-glow-2: rgba(69, 209, 198, 0.05);
+
+  /* Chart tokens (dark default) */
+  --chart-grid: rgba(30, 36, 56, 0.75);
+  --chart-axis: var(--color-line);
+  --chart-tick: #94a3b8;
+  --chart-cursor: rgba(255, 255, 255, 0.04);
+  --chart-bar-muted: #26304d;
+  --chart-tooltip-bg: var(--color-canvas);
+  --chart-tooltip-border: var(--color-lineStrong);
+  --chart-tooltip-text: #f8fafc;
+  --chart-tooltip-item: #e2e8f0;
+
+  /* Heatmap tokens (dark default) */
+  --heatmap-0: color-mix(in srgb, var(--color-cardElevated) 88%, var(--color-canvas));
+  --heatmap-0-border: var(--color-line);
+  --heatmap-1: #15363c;
+  --heatmap-2: #1f5e63;
+  --heatmap-3: #2f9995;
+  --heatmap-4: #45d1c6;
+  --heatmap-future: rgba(13, 17, 29, 0.4);
+  --heatmap-future-border: transparent;
+}
+
+:root[data-theme-mode="light"] {
+  /* Crisp, high-contrast chart tokens for light themes */
+  --chart-grid: rgba(15, 23, 42, 0.11);
+  --chart-axis: var(--color-lineStrong);
+  --chart-tick: #334155;
+  --chart-cursor: rgba(15, 23, 42, 0.05);
+  --chart-bar-muted: #cbd5e1;
+  --chart-tooltip-bg: var(--color-card);
+  --chart-tooltip-border: var(--color-lineStrong);
+  --chart-tooltip-text: #0f172a;
+  --chart-tooltip-item: #334155;
+
+  /* GitHub-style airy heatmap palette for light themes */
+  --heatmap-0: color-mix(in srgb, var(--color-line) 55%, var(--color-card));
+  --heatmap-0-border: color-mix(in srgb, var(--color-lineStrong) 45%, transparent);
+  --heatmap-1: #99e6dc;
+  --heatmap-2: #4fd1c5;
+  --heatmap-3: #14b8a6;
+  --heatmap-4: #0f766e;
+  --heatmap-future: color-mix(in srgb, var(--color-canvas) 65%, transparent);
+  --heatmap-future-border: color-mix(in srgb, var(--color-line) 70%, transparent);
 }
 
 :root[data-theme="midnight"] {
