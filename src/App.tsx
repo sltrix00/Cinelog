@@ -26,6 +26,7 @@ import {
   computeViewingIndexTrajectory,
   DEFAULT_REFERENCE_DATE,
   extractAvailableYears,
+  extractJournalYears,
   getReferenceDateForToday,
   resolveComparisonYears,
 } from './lib/analytics';
@@ -312,6 +313,13 @@ export function App() {
     () => extractAvailableYears(entries, [2024, 2025, 2026, new Date().getFullYear()]),
     [entries]
   );
+  const journalYears = useMemo(() => {
+    const years = extractJournalYears(entries, availableYears);
+    if (selectedYear !== 'all' && !years.includes(selectedYear)) {
+      return [...years, selectedYear].sort((a, b) => a - b);
+    }
+    return years;
+  }, [entries, availableYears, selectedYear]);
   const comparisonYears = useMemo(
     () => resolveComparisonYears(entries, selectedYear, availableYears),
     [entries, selectedYear, availableYears]
@@ -336,8 +344,8 @@ export function App() {
     [entries, selectedYear, refDate]
   );
   const monthlyData = useMemo(
-    () => computeMonthlyByYear(entries, comparisonYears),
-    [entries, comparisonYears]
+    () => computeMonthlyByYear(entries, journalYears),
+    [entries, journalYears]
   );
   const dayOfWeek = useMemo(
     () => computeDayOfWeekDistribution(entries, selectedYear),
@@ -745,6 +753,7 @@ export function App() {
                 timeOfDay={timeOfDay}
                 selectedYear={selectedYear}
                 comparisonYears={comparisonYears}
+                journalYears={journalYears}
               />
               <Tier4DeepAnalyticsSection
                 heatmap={heatmap}

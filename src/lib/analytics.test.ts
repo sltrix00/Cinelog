@@ -13,12 +13,15 @@ import {
   computeViewingIndexTrajectory,
   DEFAULT_REFERENCE_DATE,
   extractAvailableYears,
+  extractJournalYears,
   filmWord,
   filterEntriesByYear,
   getDayOfYear,
   resolveComparisonYears,
+  resolveMonthlyLegendYears,
   rewatchWord,
   timeStringToBucket,
+  toggleMonthlyComparisonYear,
 } from './analytics';
 import { DEMO_ENTRIES } from './demoData';
 import type { WatchEntry } from '../types/cinelog';
@@ -285,5 +288,57 @@ describe('Viewing Index, Cumulative 365 & Edge Cases', () => {
     expect(lastPt.doy).toBe(1054);
     expect(lastPt.films).toBe(314);
     expect(lastPt.index).toBe(+(314 / 1054).toFixed(2));
+  });
+
+  it('extracts sorted unique journal years and handles interactive monthly year toggling (max 4, ascending)', () => {
+    const entries = [
+      makeCsvOnlyEntry({ id: '1', watched_date: '2026-02-01' }),
+      makeCsvOnlyEntry({ id: '2', watched_date: '2020-05-12' }),
+      makeCsvOnlyEntry({ id: '3', watched_date: '2023-08-19' }),
+      makeCsvOnlyEntry({ id: '4', watched_date: '2023-11-03' }),
+    ];
+
+    expect(extractJournalYears(entries)).toEqual([2020, 2023, 2026]);
+    expect(extractJournalYears([], [2025, 2024])).toEqual([2024, 2025]);
+
+    // Add 4th year -> inserted on the left in ascending order
+    expect(toggleMonthlyComparisonYear([2024, 2025, 2026], 2022)).toEqual([2022, 2024, 2025, 2026]);
+
+    // Already 4 active -> adding older year evicts second-to-last descending (previous oldest: 2022)
+    expect(toggleMonthlyComparisonYear([2022, 2024, 2025, 2026], 2019)).toEqual([2019, 2024, 2025, 2026]);
+    expect(toggleMonthlyComparisonYear([2019, 2024, 2025, 2026], 2023)).toEqual([2023, 2024, 2025, 2026]);
+
+    // Removing a year works down to 1 active year, never 0
+    expect(toggleMonthlyComparisonYear([2024, 2025, 2026], 2025)).toEqual([2024, 2026]);
+    expect(toggleMonthlyComparisonYear([2026], 2026)).toEqual([2026]);
+  });
+
+  it('resolves up to 5 visible legend years and overflow archive years for monthly chart', () => {
+    // <= 5 years -> all visible, no overflow
+    expect(resolveMonthlyLegendYears([2024, 2025, 2026], [2024, 2025, 2026])).toEqual({
+      visibleYears: [2024, 2025, 2026],
+      overflowYears: [],
+    });
+    expect(resolveMonthlyLegendYears([2023, 2024, 2025, 2026], [2024, 2025, 2026])).toEqual({
+      visibleYears: [2023, 2024, 2025, 2026],
+      overflowYears: [],
+    });
+    expect(resolveMonthlyLegendYears([2022, 2023, 2024, 2025, 2026], [2024, 2025, 2026])).toEqual({
+      visibleYears: [2022, 2023, 2024, 2025, 2026],
+      overflowYears: [],
+    });
+
+    // > 5 years -> last 5 visible ascending, older years in overflow descending
+    const sevenYears = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
+    expect(resolveMonthlyLegendYears(sevenYears, [2024, 2025, 2026])).toEqual({
+      visibleYears: [2022, 2023, 2024, 2025, 2026],
+      overflowYears: [2021, 2020],
+    });
+
+    // Picking an older year from "+" brings it to the left of the 5 visible chips
+    expect(resolveMonthlyLegendYears(sevenYears, [2020, 2024, 2025, 2026])).toEqual({
+      visibleYears: [2020, 2023, 2024, 2025, 2026],
+      overflowYears: [2022, 2021],
+    });
   });
 });

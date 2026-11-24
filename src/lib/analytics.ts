@@ -270,10 +270,9 @@ export function getCumulativeArray365(entries: WatchEntry[], year: number): numb
   return cum;
 }
 
-export function resolveComparisonYears(
+export function extractJournalYears(
   entries: WatchEntry[],
-  selectedYear: YearFilter,
-  availableYears?: number[]
+  fallbackYears: number[] = [2024, 2025, 2026]
 ): number[] {
   const yearsWithData = new Set<number>();
   for (const e of entries) {
@@ -283,12 +282,67 @@ export function resolveComparisonYears(
     }
   }
 
-  const pool =
-    yearsWithData.size > 0
-      ? Array.from(yearsWithData).sort((a, b) => a - b)
-      : (availableYears && availableYears.length > 0 ? [...availableYears] : [2024, 2025, 2026]).sort(
-          (a, b) => a - b
-        );
+  if (yearsWithData.size > 0) {
+    return Array.from(yearsWithData).sort((a, b) => a - b);
+  }
+
+  return Array.from(
+    new Set(fallbackYears.filter((y) => Number.isInteger(y) && y >= 1888 && y <= 2100))
+  ).sort((a, b) => a - b);
+}
+
+export function toggleMonthlyComparisonYear(
+  activeYears: number[],
+  targetYear: number,
+  maxActive = 4
+): number[] {
+  const sorted = Array.from(new Set(activeYears)).sort((a, b) => a - b);
+
+  if (sorted.includes(targetYear)) {
+    if (sorted.length <= 1) return sorted;
+    return sorted.filter((yr) => yr !== targetYear);
+  }
+
+  if (sorted.length < maxActive) {
+    return [...sorted, targetYear].sort((a, b) => a - b);
+  }
+
+  // Already at maxActive: evict the oldest currently active year (which is the
+  // second-to-last in descending order when adding an older year) and keep targetYear.
+  const kept = sorted.slice(sorted.length - (maxActive - 1));
+  return [...kept, targetYear].sort((a, b) => a - b);
+}
+
+export function resolveMonthlyLegendYears(
+  journalYears: number[],
+  activeYears: number[],
+  maxVisible = 5
+): { visibleYears: number[]; overflowYears: number[] } {
+  const pool = Array.from(new Set([...journalYears, ...activeYears])).sort((a, b) => a - b);
+
+  if (pool.length <= maxVisible) {
+    return { visibleYears: pool, overflowYears: [] };
+  }
+
+  const visibleSet = new Set<number>(activeYears.slice(-maxVisible));
+  for (let i = pool.length - 1; i >= 0 && visibleSet.size < maxVisible; i--) {
+    visibleSet.add(pool[i]);
+  }
+
+  const visibleYears = Array.from(visibleSet).sort((a, b) => a - b);
+  const overflowYears = pool.filter((yr) => !visibleSet.has(yr)).sort((a, b) => b - a);
+  return { visibleYears, overflowYears };
+}
+
+export function resolveComparisonYears(
+  entries: WatchEntry[],
+  selectedYear: YearFilter,
+  availableYears?: number[]
+): number[] {
+  const pool = extractJournalYears(
+    entries,
+    availableYears && availableYears.length > 0 ? availableYears : [2024, 2025, 2026]
+  );
 
   if (selectedYear !== 'all' && !pool.includes(selectedYear)) {
     pool.push(selectedYear);

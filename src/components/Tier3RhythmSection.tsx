@@ -1,4 +1,5 @@
-import { FileSpreadsheet } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileSpreadsheet, Plus } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -9,7 +10,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { filmWord } from '../lib/analytics';
+import {
+  filmWord,
+  resolveMonthlyLegendYears,
+  toggleMonthlyComparisonYear,
+} from '../lib/analytics';
 import { getYearColor } from '../lib/demoData';
 import type {
   DayOfWeekSummary,
@@ -24,9 +29,12 @@ interface Tier3RhythmSectionProps {
   timeOfDay: TimeOfDaySummary;
   selectedYear: YearFilter;
   comparisonYears?: number[];
+  journalYears?: number[];
 }
 
 const DEFAULT_COMPARISON_YEARS = [2024, 2025, 2026];
+const MAX_ACTIVE_MONTHLY_YEARS = 4;
+const MAX_VISIBLE_LEGEND_YEARS = 5;
 
 const TOOLTIP_STYLE = {
   backgroundColor: 'var(--chart-tooltip-bg)',
@@ -53,11 +61,74 @@ export function Tier3RhythmSection({
   timeOfDay,
   selectedYear,
   comparisonYears = DEFAULT_COMPARISON_YEARS,
+  journalYears,
 }: Tier3RhythmSectionProps) {
   const showEmptyTimeState = !timeOfDay.hasTimeData;
   const activeColor = selectedYear === 'all' ? 'var(--palette-secondary)' : getYearColor(selectedYear);
 
   const scopeLabel = selectedYear === 'all' ? 'за всё время' : `за ${selectedYear} год`;
+
+  const defaultActiveYears = useMemo(
+    () => Array.from(new Set(comparisonYears)).sort((a, b) => a - b),
+    [comparisonYears]
+  );
+  const defaultActiveKey = defaultActiveYears.join(',');
+
+  const [activeYears, setActiveYears] = useState<number[]>(defaultActiveYears);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveYears(defaultActiveYears);
+    setPickerOpen(false);
+  }, [defaultActiveKey]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [pickerOpen]);
+
+  const sortedActiveYears = useMemo(
+    () => Array.from(new Set(activeYears)).sort((a, b) => a - b),
+    [activeYears]
+  );
+
+  const poolYears = useMemo(
+    () =>
+      journalYears && journalYears.length > 0
+        ? Array.from(new Set(journalYears)).sort((a, b) => a - b)
+        : defaultActiveYears,
+    [journalYears, defaultActiveYears]
+  );
+
+  const { visibleYears, overflowYears } = useMemo(
+    () => resolveMonthlyLegendYears(poolYears, sortedActiveYears, MAX_VISIBLE_LEGEND_YEARS),
+    [poolYears, sortedActiveYears]
+  );
+
+  const handleToggleYear = (year: number) => {
+    setActiveYears((prev) => toggleMonthlyComparisonYear(prev, year, MAX_ACTIVE_MONTHLY_YEARS));
+  };
+
+  const handleAddOverflowYear = (year: number) => {
+    setActiveYears((prev) => toggleMonthlyComparisonYear(prev, year, MAX_ACTIVE_MONTHLY_YEARS));
+    setPickerOpen(false);
+  };
 
   return (
     <section id="level-3" className="scroll-mt-24 space-y-4">
@@ -73,26 +144,103 @@ export function Tier3RhythmSection({
               Просмотры по месяцам — сравнение по годам
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Сгруппированное сравнение помесячной активности за {comparisonYears.join(', ')} гг.
+              Сгруппированное сравнение помесячной активности за {sortedActiveYears.join(', ')}{' '}
+              {sortedActiveYears.length === 1 ? 'г.' : 'гг.'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-xs tabular-nums text-slate-300">
-            {comparisonYears.map((yr) => (
-              <span key={yr} className="inline-flex items-center gap-1.5">
-                <span
-                  className="w-2.5 h-2.5 rounded-sm"
-                  style={{ backgroundColor: getYearColor(yr) }}
-                  aria-hidden="true"
-                />
-                {yr}
-              </span>
-            ))}
+
+          <div className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums">
+            {visibleYears.map((yr) => {
+              const isActive = sortedActiveYears.includes(yr);
+              const isOnlyActive = isActive && sortedActiveYears.length === 1;
+              const color = getYearColor(yr);
+              return (
+                <button
+                  key={yr}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => handleToggleYear(yr)}
+                  title={
+                    isOnlyActive
+                      ? 'На графике должен остаться хотя бы один год'
+                      : isActive
+                        ? `Убрать ${yr} из графика`
+                        : `Добавить ${yr} в график`
+                  }
+                  className={`inline-flex items-center gap-1.5 min-h-8 px-2.5 py-1 rounded-lg border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                    isActive
+                      ? 'bg-canvas/70 border-lineStrong text-slate-100 hover:border-slate-500'
+                      : 'bg-transparent border-line/70 text-slate-400 opacity-55 hover:opacity-90 hover:text-slate-200 hover:border-lineStrong'
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 transition-opacity"
+                    style={{
+                      backgroundColor: isActive ? color : 'transparent',
+                      border: `2px solid ${color}`,
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span>{yr}</span>
+                </button>
+              );
+            })}
+
+            {overflowYears.length > 0 && (
+              <div ref={pickerRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((prev) => !prev)}
+                  aria-label="Выбрать более ранний год"
+                  aria-expanded={pickerOpen}
+                  aria-haspopup="listbox"
+                  title="Добавить год из архива"
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] ${
+                    pickerOpen
+                      ? 'bg-cardElevated border-lineStrong text-white'
+                      : 'bg-canvas/60 border-line text-slate-300 hover:text-white hover:border-lineStrong'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+
+                {pickerOpen && (
+                  <div
+                    role="listbox"
+                    aria-label="Доступные годы"
+                    className="absolute right-0 top-full mt-2 z-30 min-w-[124px] max-h-56 overflow-y-auto rounded-xl bg-cardElevated border border-lineStrong shadow-xl p-1.5 space-y-0.5"
+                  >
+                    {overflowYears.map((yr) => (
+                      <button
+                        key={yr}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        onClick={() => handleAddOverflowYear(yr)}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs tabular-nums text-slate-200 hover:bg-canvas/80 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: getYearColor(yr) }}
+                          aria-hidden="true"
+                        />
+                        <span>{yr}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="h-72 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <BarChart data={monthlyData} margin={{ top: 6, right: 8, left: -16, bottom: 2 }}>
+            <BarChart
+              key={sortedActiveYears.join('-')}
+              data={monthlyData}
+              margin={{ top: 6, right: 8, left: -16, bottom: 2 }}
+            >
               <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
               <XAxis
                 dataKey="month"
@@ -111,13 +259,14 @@ export function Tier3RhythmSection({
                 cursor={{ fill: 'var(--chart-cursor)' }}
                 formatter={(value, name) => [`${value} ${filmWord(Number(value))}`, String(name)]}
               />
-              {comparisonYears.map((yr) => (
+              {sortedActiveYears.map((yr) => (
                 <Bar
                   key={yr}
                   dataKey={`byYear.${yr}`}
                   name={String(yr)}
                   fill={getYearColor(yr)}
                   radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
                 />
               ))}
             </BarChart>
