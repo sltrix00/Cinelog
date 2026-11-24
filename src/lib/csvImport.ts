@@ -197,6 +197,7 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
   const rawHeaders = matrix[0];
   const headers = rawHeaders.map((h) => h.toLowerCase().trim());
   const detectedSource = detectCsvSource(headers);
+  const hasTitleTypeColumn = headers.includes('title type');
   const parsed: ParsedImportRow[] = [];
 
   for (let r = 1; r < matrix.length; r++) {
@@ -207,6 +208,11 @@ export function parseCsvContent(content: string): ParsedImportRow[] {
     });
 
     if (detectedSource === 'csv_imdb') {
+      if (hasTitleTypeColumn) {
+        const titleType = (row['title type'] ?? '').trim().toLowerCase();
+        if (titleType !== 'movie') continue;
+      }
+
       const title = stripFormulaPrefix(row['title'] || row['original title'] || '');
       if (!title) continue;
       const imdbId = /^tt\d{5,10}$/.test(row['const'] ?? '') ? row['const'] : null;

@@ -50,6 +50,28 @@ describe('Smart CSV & Diary Import Pipeline', () => {
     expect(rows[0].watchedTime).toBeNull();
   });
 
+  it('imports only Movie entries from IMDb CSV and skips TV Series, TV Episodes, Shorts, Videos, TV Movies, and Music Videos', () => {
+    const csv = [
+      'Const,Your Rating,Date Rated,Title,Original Title,URL,Title Type,IMDb Rating,Runtime (mins),Year,Genres,Num Votes,Release Date,Directors',
+      'tt0780536,7,2026-11-22,"In Bruges","In Bruges",https://www.imdb.com/title/tt0780536,Movie,7.9,107,2008,"Crime, Drama, Comedy, Thriller",501429,"2008-02-29","Martin McDonagh"',
+      'tt6267510,8,2026-11-21,"Silicon Valley: The Keenan Vortex","Silicon Valley: The Keenan Vortex",https://www.imdb.com/title/tt6267510,TV Episode,7.9,28,2017,"Comedy",1647,"2017-06-11","Jamie Babbit"',
+      'tt1865718,10,2026-10-10,"Gravity Falls","Gravity Falls",https://www.imdb.com/title/tt1865718,TV Series,8.9,23,2012,"Animation, Comedy",187999,"2012-06-15",',
+      'tt32172972,6,2026-07-12,"The Two Mischievous","Les Deux Espiègles",https://www.imdb.com/title/tt32172972,Short,5.4,1,1878,"Animation, Short",193,"1878","Émile Reynaud"',
+      'tt1610301,5,2026-05-31,"Barbie in a Mermaid Tale","Barbie in a Mermaid Tale",https://www.imdb.com/title/tt1610301,Video,6.6,75,2010,"Animation, Family, Fantasy",5751,"2010-03-09","Adam Wood"',
+      'tt1857596,7,2026-03-04,"iParty with Victorious","iParty with Victorious",https://www.imdb.com/title/tt1857596,TV Movie,7.4,70,2011,"Comedy, Family",2135,"2011-06-11","Steve Hoefer,Bruce Leddy"',
+      'tt3293194,10,2026-02-18,"Cinnamon Chasers: Luv Deluxe","Cinnamon Chasers: Luv Deluxe",https://www.imdb.com/title/tt3293194,Music Video,8.8,,2009,"Drama, Music",55,"2009-09-12","Saman Kesh"',
+      'tt0325980,7,2026-11-10,"Pirates of the Caribbean: The Curse of the Black Pearl","Pirates of the Caribbean: The Curse of the Black Pearl",https://www.imdb.com/title/tt0325980,movie,8.1,143,2003,"Fantasy, Action, Adventure",1354693,"2003-07-09","Gore Verbinski"',
+    ].join('\n');
+
+    const rows = parseCsvContent(csv);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.title)).toEqual([
+      'In Bruges',
+      'Pirates of the Caribbean: The Curse of the Black Pearl',
+    ]);
+    expect(rows.map((r) => r.imdbId)).toEqual(['tt0780536', 'tt0325980']);
+  });
+
   it('parses Russian .txt film diary with timestamps, range ratings, and rewatch flags', () => {
     const txt = [
       'Просмотренные фильмы 2024',
