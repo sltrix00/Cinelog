@@ -89,7 +89,8 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed">
+        <div className="p-5 sm:p-6 overflow-y-auto text-xs text-slate-300 leading-relaxed">
+          <div key={tab} className="ui-tab-panel space-y-4">
           {tab === 'privacy' ? (
             <>
               <section className="space-y-1.5">
@@ -179,6 +180,7 @@ export function LegalModal({ tab, onChangeTab, onClose }: LegalModalProps) {
               </section>
             </>
           )}
+          </div>
         </div>
 
         {/* Footer */}

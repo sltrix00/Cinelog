@@ -549,7 +549,7 @@ export function AddWatchModal({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
             {!isImportMode ? (
-              <>
+              <div key="manual" className="ui-tab-panel space-y-3.5">
                 {/* Movie Title + Keyboard-Accessible TMDB Autocomplete */}
                 <div className="relative">
                   <label htmlFor="fTitle" className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -777,10 +777,10 @@ export function AddWatchModal({
                     className="w-4 h-4 rounded accent-[#d6b85a] cursor-pointer focus:outline-none"
                   />
                 </label>
-              </>
+              </div>
             ) : (
               /* Dedicated File Import Tab */
-              <div className="space-y-3">
+              <div key="import" className="ui-tab-panel space-y-3">
                 <div
                   role="button"
                   tabIndex={0}

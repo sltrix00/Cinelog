@@ -376,7 +376,7 @@ export function SettingsModal({
         <div className="p-5 overflow-y-auto space-y-6 flex-1">
           {/* TAB 1: APPEARANCE & THEMES */}
           {activeTab === 'appearance' && (
-            <div className="space-y-5">
+            <div className="ui-tab-panel space-y-5">
               {/* Accent Color Override (First / Above Themes) */}
               <div className="pb-5 border-b border-line space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -498,7 +498,7 @@ export function SettingsModal({
 
           {/* TAB 2: RATING FORMAT */}
           {activeTab === 'display' && (
-            <div className="space-y-4">
+            <div className="ui-tab-panel space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-white">Шкала отображения оценок</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -552,7 +552,7 @@ export function SettingsModal({
 
           {/* TAB 3: DATA, TMDB & DANGER ZONE */}
           {activeTab === 'data' && (
-            <div className="space-y-5">
+            <div className="ui-tab-panel space-y-5">
               {/* Export & Import */}
               <div className="rounded-2xl bg-canvas/40 border border-line p-4 space-y-3">
                 <div>
