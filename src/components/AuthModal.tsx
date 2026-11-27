@@ -6,11 +6,16 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Lock,
   LogOut,
   Mail,
   X,
 } from 'lucide-react';
-import { isRepeatedSignupResponse, localizeAuthError } from '../lib/authHelpers';
+import {
+  evaluatePasswordPolicy,
+  isRepeatedSignupResponse,
+  localizeAuthError,
+} from '../lib/authHelpers';
 import {
   getProfileInitials,
   maskEmailAsPassword,
@@ -66,6 +71,65 @@ function GoogleIcon() {
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
       />
     </svg>
+  );
+}
+
+function PasswordRequirementsChecklist({
+  password,
+  username,
+  email,
+}: {
+  password: string;
+  username?: string | null;
+  email?: string | null;
+}) {
+  const policy = evaluatePasswordPolicy(password, { username, email });
+  const hasInput = password.length > 0;
+
+  const items = [
+    {
+      key: 'strength',
+      ok: hasInput && policy.isValid,
+      label: `Надёжность пароля: ${policy.strengthLabel}`,
+    },
+    {
+      key: 'personal',
+      ok: hasInput && policy.noPersonalInfo,
+      label: 'Не содержит никнейм или email',
+    },
+    {
+      key: 'length',
+      ok: hasInput && policy.hasMinLength,
+      label: 'Минимум 8 символов',
+    },
+    {
+      key: 'symbol',
+      ok: hasInput && policy.hasNumberOrSymbol,
+      label: 'Содержит цифру или символ',
+    },
+  ];
+
+  return (
+    <ul aria-live="polite" className="mt-2.5 space-y-1.5 text-xs">
+      {items.map((item) => {
+        const toneClass = !hasInput
+          ? 'text-slate-400'
+          : item.ok
+            ? 'text-[#45d1c6]'
+            : 'text-[#f06292]';
+
+        return (
+          <li key={item.key} className={`flex items-center gap-2 transition-colors ${toneClass}`}>
+            {item.ok ? (
+              <Check className="w-3.5 h-3.5 shrink-0 stroke-[2.25]" aria-hidden="true" />
+            ) : (
+              <X className="w-3.5 h-3.5 shrink-0 stroke-[2.25]" aria-hidden="true" />
+            )}
+            <span>{item.label}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -147,9 +211,6 @@ export function AuthModal({
     setMessage(null);
   };
 
-  const hasRequiredPasswordComplexity = (pwd: string) =>
-    pwd.length >= 8 && pwd.length <= 128 && /(?=.*\p{L})(?=.*\d)/u.test(pwd);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
@@ -169,10 +230,34 @@ export function AuthModal({
         onAuthSuccess();
         handleClose();
       } else if (mode === 'register') {
-        if (!hasRequiredPasswordComplexity(password)) {
-          throw new Error('Пароль должен быть от 8 до 128 символов и содержать буквы и цифры.');
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername) {
+          throw new Error('Введите никнейм.');
         }
-        const { data, error } = await signUpWithEmail(email.trim(), password, username);
+        const registerNicknameValidation = validateNicknameInput(trimmedUsername);
+        if (!registerNicknameValidation.valid || !registerNicknameValidation.normalized) {
+          throw new Error(registerNicknameValidation.error ?? 'Некорректный никнейм.');
+        }
+
+        const passwordPolicy = evaluatePasswordPolicy(password, {
+          username: registerNicknameValidation.normalized,
+          email: email.trim(),
+        });
+        if (!passwordPolicy.isValid) {
+          if (!passwordPolicy.hasMinLength) {
+            throw new Error('Пароль должен содержать от 8 до 128 символов.');
+          }
+          if (!passwordPolicy.noPersonalInfo) {
+            throw new Error('Пароль не должен содержать никнейм или email.');
+          }
+          throw new Error('Пароль должен содержать хотя бы одну цифру или символ.');
+        }
+
+        const { data, error } = await signUpWithEmail(
+          email.trim(),
+          password,
+          registerNicknameValidation.normalized
+        );
         if (error) throw error;
         if (data.session) {
           onAuthSuccess();
@@ -209,11 +294,27 @@ export function AuthModal({
 
   const handlePasswordRecoverySubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!hasRequiredPasswordComplexity(newPassword)) {
-      setMessage({
-        type: 'error',
-        text: 'Пароль должен быть от 8 до 128 символов и содержать буквы и цифры.',
-      });
+    const recoveryPolicy = evaluatePasswordPolicy(newPassword, {
+      username: userNickname,
+      email: userEmail,
+    });
+    if (!recoveryPolicy.isValid) {
+      if (!recoveryPolicy.hasMinLength) {
+        setMessage({
+          type: 'error',
+          text: 'Пароль должен содержать от 8 до 128 символов.',
+        });
+      } else if (!recoveryPolicy.noPersonalInfo) {
+        setMessage({
+          type: 'error',
+          text: 'Пароль не должен содержать никнейм или email.',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: 'Пароль должен содержать хотя бы одну цифру или символ.',
+        });
+      }
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -546,17 +647,27 @@ export function AuthModal({
                     <label htmlFor="authNewPassword" className="block text-xs text-slate-300 mb-1">
                       Новый пароль
                     </label>
-                    <input
-                      id="authNewPassword"
-                      type="password"
-                      required
-                      minLength={8}
-                      maxLength={128}
-                      autoComplete="new-password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Минимум 8 символов (буквы и цифры)"
-                      className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
+                    <div className="relative">
+                      <input
+                        id="authNewPassword"
+                        type="password"
+                        required
+                        minLength={8}
+                        maxLength={128}
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full min-h-10 pl-3.5 pr-10 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
+                      />
+                      <Lock
+                        className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                        aria-hidden="true"
+                      />
+                    </div>
+                    <PasswordRequirementsChecklist
+                      password={newPassword}
+                      username={userNickname}
+                      email={userEmail}
                     />
                   </div>
 
@@ -567,18 +678,23 @@ export function AuthModal({
                     >
                       Повторите пароль
                     </label>
-                    <input
-                      id="authConfirmPassword"
-                      type="password"
-                      required
-                      minLength={8}
-                      maxLength={128}
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Введите пароль ещё раз"
-                      className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
-                    />
+                    <div className="relative">
+                      <input
+                        id="authConfirmPassword"
+                        type="password"
+                        required
+                        minLength={8}
+                        maxLength={128}
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full min-h-10 pl-3.5 pr-10 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
+                      />
+                      <Lock
+                        className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                        aria-hidden="true"
+                      />
+                    </div>
                   </div>
 
                   {message && (
@@ -646,11 +762,14 @@ export function AuthModal({
                     {mode === 'register' && (
                       <div>
                         <label htmlFor="authUsername" className="block text-xs text-slate-300 mb-1">
-                          Никнейм (необязательно)
+                          Никнейм
                         </label>
                         <input
                           id="authUsername"
                           type="text"
+                          required
+                          minLength={3}
+                          maxLength={32}
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           placeholder="cinephile_2026"
@@ -681,22 +800,30 @@ export function AuthModal({
                         <label htmlFor="authPassword" className="block text-xs text-slate-300 mb-1">
                           Пароль
                         </label>
-                        <input
-                          id="authPassword"
-                          type="password"
-                          required
-                          minLength={mode === 'register' ? 8 : 6}
-                          maxLength={128}
-                          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder={
-                            mode === 'register'
-                              ? 'Минимум 8 символов (буквы и цифры)'
-                              : 'Введите пароль'
-                          }
-                          className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
-                        />
+                        <div className="relative">
+                          <input
+                            id="authPassword"
+                            type="password"
+                            required
+                            minLength={mode === 'register' ? 8 : 6}
+                            maxLength={128}
+                            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full min-h-10 pl-3.5 pr-10 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
+                          />
+                          <Lock
+                            className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        {mode === 'register' && (
+                          <PasswordRequirementsChecklist
+                            password={password}
+                            username={username}
+                            email={email}
+                          />
+                        )}
                       </div>
                     )}
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  evaluatePasswordPolicy,
   getAuthRedirectUrl,
   isRepeatedSignupResponse,
   localizeAuthError,
@@ -97,9 +98,66 @@ describe('localizeAuthError', () => {
     );
   });
 
+  it('localizes raw Supabase character-set password error without leaking alphabet lists', () => {
+    const localized = localizeAuthError(
+      'Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789.'
+    );
+    expect(localized).toContain('Пароль слишком простой');
+    expect(localized).not.toContain('abcdefghijklmnopqrstuvwxyz');
+    expect(localizeAuthError('Password should be at least 8 characters')).toBe(
+      'Пароль должен содержать минимум 8 символов.'
+    );
+  });
+
   it('returns unknown messages trimmed or fallback text for empty input', () => {
     expect(localizeAuthError('  Custom gateway timeout  ')).toBe('Custom gateway timeout');
     expect(localizeAuthError('   ')).toBe('Ошибка авторизации. Попробуйте ещё раз.');
+  });
+});
+
+describe('evaluatePasswordPolicy', () => {
+  it('flags short passwords as weak while tracking number/symbol and personal info checks', () => {
+    const res = evaluatePasswordPolicy('abc12!', {
+      username: 'cinephile',
+      email: 'alex@example.com',
+    });
+    expect(res.hasMinLength).toBe(false);
+    expect(res.hasNumberOrSymbol).toBe(true);
+    expect(res.noPersonalInfo).toBe(true);
+    expect(res.isValid).toBe(false);
+    expect(res.strength).toBe('weak');
+  });
+
+  it('rejects passwords containing username or email local-part', () => {
+    expect(
+      evaluatePasswordPolicy('MyCinephile1!', {
+        username: 'cinephile',
+        email: 'other@example.com',
+      }).noPersonalInfo
+    ).toBe(false);
+
+    expect(
+      evaluatePasswordPolicy('helloalex99', {
+        username: 'viewer',
+        email: 'Alex@example.com',
+      }).noPersonalInfo
+    ).toBe(false);
+  });
+
+  it('accepts 8+ char passwords with either a digit or a symbol and classifies strength', () => {
+    const mediumWithSymbol = evaluatePasswordPolicy('secretword!', {
+      username: 'viewer',
+      email: 'alex@example.com',
+    });
+    expect(mediumWithSymbol.isValid).toBe(true);
+    expect(mediumWithSymbol.strength).toBe('medium');
+
+    const strong = evaluatePasswordPolicy('CinemaNight2026!', {
+      username: 'viewer',
+      email: 'alex@example.com',
+    });
+    expect(strong.isValid).toBe(true);
+    expect(strong.strength).toBe('strong');
   });
 });
 

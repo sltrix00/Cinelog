@@ -28,7 +28,7 @@ additional_redirect_urls = [
 jwt_expiry = 900
 enable_signup = true
 minimum_password_length = 8
-password_requirements = "lower_upper_letters_digits"
+password_requirements = ""
 
 # To test Google Sign-In with local Supabase CLI, set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET
 # in your local environment and uncomment the block below:

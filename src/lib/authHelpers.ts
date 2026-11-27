@@ -36,6 +36,75 @@ export function parseGoogleProviderEnabled(payload: unknown): boolean | null {
   return typeof google === 'boolean' ? google : null;
 }
 
+export type PasswordStrength = 'weak' | 'medium' | 'strong';
+
+export interface PasswordPolicyResult {
+  hasMinLength: boolean;
+  hasNumberOrSymbol: boolean;
+  noPersonalInfo: boolean;
+  isValid: boolean;
+  strength: PasswordStrength;
+  strengthLabel: string;
+}
+
+export function evaluatePasswordPolicy(
+  password: string,
+  context?: { username?: string | null; email?: string | null }
+): PasswordPolicyResult {
+  const hasMinLength = password.length >= 8 && password.length <= 128;
+  const hasNumberOrSymbol = /[\d\p{P}\p{S}]/u.test(password);
+
+  const personalTokens: string[] = [];
+  const trimmedUsername = context?.username?.trim().toLowerCase() ?? '';
+  if (trimmedUsername.length >= 3) {
+    personalTokens.push(trimmedUsername);
+  }
+
+  const trimmedEmail = context?.email?.trim().toLowerCase() ?? '';
+  if (trimmedEmail.length >= 3) {
+    personalTokens.push(trimmedEmail);
+    const atIdx = trimmedEmail.indexOf('@');
+    if (atIdx >= 3) {
+      const localPart = trimmedEmail.slice(0, atIdx);
+      if (!personalTokens.includes(localPart)) {
+        personalTokens.push(localPart);
+      }
+    }
+  }
+
+  const lowerPassword = password.toLowerCase();
+  const noPersonalInfo =
+    password.length === 0 || !personalTokens.some((token) => lowerPassword.includes(token));
+
+  const isValid = hasMinLength && hasNumberOrSymbol && noPersonalInfo;
+
+  if (!isValid) {
+    return {
+      hasMinLength,
+      hasNumberOrSymbol,
+      noPersonalInfo,
+      isValid: false,
+      strength: 'weak',
+      strengthLabel: 'Слабый',
+    };
+  }
+
+  let bonus = 0;
+  if (password.length >= 12) bonus += 1;
+  if (/\p{Ll}/u.test(password) && /\p{Lu}/u.test(password)) bonus += 1;
+  if (/\d/.test(password) && /[\p{P}\p{S}]/u.test(password)) bonus += 1;
+
+  const isStrong = bonus >= 2 || password.length >= 14;
+  return {
+    hasMinLength,
+    hasNumberOrSymbol,
+    noPersonalInfo,
+    isValid: true,
+    strength: isStrong ? 'strong' : 'medium',
+    strengthLabel: isStrong ? 'Надёжный' : 'Средний',
+  };
+}
+
 export function localizeAuthError(rawMessage: string): string {
   const trimmed = rawMessage.trim();
   const normalized = trimmed.toLowerCase();
@@ -52,8 +121,17 @@ export function localizeAuthError(rawMessage: string): string {
   if (normalized.includes('user already registered')) {
     return 'Не удалось завершить регистрацию. Проверьте введённый email или попробуйте войти в аккаунт.';
   }
+  if (
+    normalized.includes('password should contain at least one character of each') ||
+    normalized.includes('weak_password') ||
+    normalized.includes('password is too weak')
+  ) {
+    return 'Пароль слишком простой. Укажите минимум 8 символов и добавьте цифру или символ.';
+  }
   if (normalized.includes('password should be at least')) {
-    return 'Пароль должен содержать минимум 6 символов.';
+    const minMatch = normalized.match(/at least (\d+)/);
+    const minChars = minMatch ? minMatch[1] : '8';
+    return `Пароль должен содержать минимум ${minChars} символов.`;
   }
   if (normalized.includes('rate limit')) {
     return 'Слишком много попыток. Подождите немного и попробуйте снова.';
