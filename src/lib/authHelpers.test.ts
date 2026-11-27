@@ -10,6 +10,7 @@ import {
   peekPendingSignupNickname,
   resolveAuthSyncAction,
   savePendingSignupNickname,
+  validateSignupEmail,
 } from './authHelpers';
 
 describe('getAuthRedirectUrl', () => {
@@ -318,5 +319,105 @@ describe('pending signup nickname helpers', () => {
     savePendingSignupNickname('user@example.com', 'cinephile_2026', store, 5000);
     clearPendingSignupNickname(store);
     expect(peekPendingSignupNickname('user@example.com', store, 6000)).toBeNull();
+  });
+});
+
+describe('validateSignupEmail', () => {
+  it('trims valid emails and returns normalized value with null error', () => {
+    expect(validateSignupEmail('user@example.com')).toEqual({
+      valid: true,
+      normalized: 'user@example.com',
+      error: null,
+    });
+    expect(validateSignupEmail('a@b.co')).toEqual({
+      valid: true,
+      normalized: 'a@b.co',
+      error: null,
+    });
+    expect(validateSignupEmail('  a@b.co  ')).toEqual({
+      valid: true,
+      normalized: 'a@b.co',
+      error: null,
+    });
+    expect(validateSignupEmail('user+tag@sub.domain.org')).toEqual({
+      valid: true,
+      normalized: 'user+tag@sub.domain.org',
+      error: null,
+    });
+    expect(validateSignupEmail('user@xn--d1acpjx3f.xn--p1ai')).toEqual({
+      valid: true,
+      normalized: 'user@xn--d1acpjx3f.xn--p1ai',
+      error: null,
+    });
+    expect(validateSignupEmail('  Cinephile.2026+tag@sub.example.co.uk  ')).toEqual({
+      valid: true,
+      normalized: 'Cinephile.2026+tag@sub.example.co.uk',
+      error: null,
+    });
+  });
+
+  it('rejects empty or whitespace-only input', () => {
+    expect(validateSignupEmail('')).toEqual({
+      valid: false,
+      normalized: '',
+      error: 'Введите email.',
+    });
+    expect(validateSignupEmail('   \t\n ')).toEqual({
+      valid: false,
+      normalized: '',
+      error: 'Введите email.',
+    });
+  });
+
+  it('rejects missing @, missing local/domain part, missing TLD dot, or short TLD', () => {
+    for (const bad of [
+      'plainaddress',
+      'test@',
+      '@example.com',
+      'user@domain',
+      'user@localhost',
+      'user@.example.com',
+      'user@example.',
+      'user@example..com',
+      'user@example.c',
+      'user@@example.com',
+    ]) {
+      const result = validateSignupEmail(bad);
+      expect(result.valid, `expected "${bad}" to be invalid`).toBe(false);
+      expect(result.error).toBe('Введите корректный email.');
+    }
+  });
+
+  it('rejects malformed local-part dots, invalid domain labels, and numeric TLDs', () => {
+    for (const bad of [
+      '.user@domain.com',
+      'user.@domain.com',
+      'user..name@domain.com',
+      'user@-domain.com',
+      'user@domain-.com',
+      'user@dom_ain.com',
+      'user@dom!n.com',
+      'user@123.45',
+    ]) {
+      const result = validateSignupEmail(bad);
+      expect(result.valid, `expected "${bad}" to be invalid`).toBe(false);
+      expect(result.error).toBe('Введите корректный email.');
+    }
+  });
+
+  it('rejects internal whitespace and addresses exceeding 254 characters', () => {
+    expect(validateSignupEmail('user name@example.com')).toEqual({
+      valid: false,
+      normalized: 'user name@example.com',
+      error: 'Введите корректный email.',
+    });
+    expect(validateSignupEmail('user@exa mple.com').valid).toBe(false);
+
+    const tooLong = `${'a'.repeat(60)}@${'b'.repeat(190)}.com`;
+    expect(tooLong.length).toBeGreaterThan(254);
+    expect(validateSignupEmail(tooLong).valid).toBe(false);
+
+    const tooLongLocal = `${'a'.repeat(65)}@example.com`;
+    expect(validateSignupEmail(tooLongLocal).valid).toBe(false);
   });
 });

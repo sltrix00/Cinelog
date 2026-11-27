@@ -3,6 +3,84 @@
  * OAuth callback error parsing, and Russian error localization.
  */
 
+export interface SignupEmailValidation {
+  valid: boolean;
+  normalized: string;
+  error: string | null;
+}
+
+const EMAIL_LOCAL_PART_REGEX = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
+const EMAIL_DOMAIN_LABEL_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+const EMAIL_TLD_REGEX = /^(?:[A-Za-z]{2,63}|xn--[A-Za-z0-9-]{2,59})$/;
+
+export function validateSignupEmail(rawEmail: string): SignupEmailValidation {
+  const normalized = rawEmail.trim();
+  if (!normalized) {
+    return {
+      valid: false,
+      normalized: '',
+      error: 'Введите email.',
+    };
+  }
+
+  if (normalized.length > 254 || /\s/.test(normalized)) {
+    return {
+      valid: false,
+      normalized,
+      error: 'Введите корректный email.',
+    };
+  }
+
+  const atIndex = normalized.indexOf('@');
+  if (atIndex <= 0 || atIndex !== normalized.lastIndexOf('@')) {
+    return {
+      valid: false,
+      normalized,
+      error: 'Введите корректный email.',
+    };
+  }
+
+  const localPart = normalized.slice(0, atIndex);
+  const domainPart = normalized.slice(atIndex + 1);
+  if (
+    localPart.length > 64 ||
+    localPart.startsWith('.') ||
+    localPart.endsWith('.') ||
+    localPart.includes('..') ||
+    !EMAIL_LOCAL_PART_REGEX.test(localPart) ||
+    domainPart.length < 3 ||
+    domainPart.startsWith('.') ||
+    domainPart.endsWith('.') ||
+    domainPart.includes('..')
+  ) {
+    return {
+      valid: false,
+      normalized,
+      error: 'Введите корректный email.',
+    };
+  }
+
+  const domainLabels = domainPart.split('.');
+  const tld = domainLabels[domainLabels.length - 1] ?? '';
+  if (
+    domainLabels.length < 2 ||
+    domainLabels.some((label) => !EMAIL_DOMAIN_LABEL_REGEX.test(label)) ||
+    !EMAIL_TLD_REGEX.test(tld)
+  ) {
+    return {
+      valid: false,
+      normalized,
+      error: 'Введите корректный email.',
+    };
+  }
+
+  return {
+    valid: true,
+    normalized,
+    error: null,
+  };
+}
+
 export function isRepeatedSignupResponse(
   user: { identities?: unknown[] | null } | null | undefined
 ): boolean {

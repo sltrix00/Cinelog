@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, Clapperboard } from 'lucide-react';
+import {
+  createSloganRotator,
+  resolveLandingPaceYears,
+  shouldSloganFadeOut,
+} from '../lib/landingHelpers';
 import type { LegalTab } from './LegalModal';
 
 interface LandingPageProps {
@@ -64,40 +69,54 @@ const WEEKDAY_BARS = [
 export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLegal }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * SLOGANS.length));
+  const sloganIndexRef = useRef(sloganIndex);
+  sloganIndexRef.current = sloganIndex;
   const [isFadingOut, setIsFadingOut] = useState(false);
-  const [isSloganPaused, setIsSloganPaused] = useState(false);
+  const [isSloganHovered, setIsSloganHovered] = useState(false);
+  const [isSloganFocused, setIsSloganFocused] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
+  const isSloganPaused = isSloganHovered || isSloganFocused;
+  const shouldFadeOut = shouldSloganFadeOut(isFadingOut, isSloganPaused, prefersReducedMotion);
+  const paceYears = useMemo(() => resolveLandingPaceYears(), []);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setPrefersReducedMotion(mq.matches);
+    const onChange = () => {
+      setPrefersReducedMotion(mq.matches);
+      if (mq.matches) {
+        setIsFadingOut(false);
+      }
+    };
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
   // Rotate slogan every 12 seconds unless paused on hover/focus or prefers-reduced-motion is enabled
   useEffect(() => {
-    if (prefersReducedMotion || isSloganPaused) return;
+    if (prefersReducedMotion || isSloganPaused) {
+      setIsFadingOut(false);
+      return;
+    }
 
-    let swapTimeoutId: number | undefined;
-    const intervalId = window.setInterval(() => {
-      setIsFadingOut(true);
-      swapTimeoutId = window.setTimeout(() => {
-        setSloganIndex((prev) => (prev + 1) % SLOGANS.length);
-        setIsFadingOut(false);
-      }, 650);
-    }, 12000);
+    const rotator = createSloganRotator({
+      sloganCount: SLOGANS.length,
+      initialIndex: sloganIndexRef.current,
+      onStateChange: (nextState) => {
+        sloganIndexRef.current = nextState.index;
+        setSloganIndex(nextState.index);
+        setIsFadingOut(nextState.isFadingOut);
+      },
+    });
+    rotator.start();
 
     return () => {
-      window.clearInterval(intervalId);
-      if (swapTimeoutId !== undefined) {
-        window.clearTimeout(swapTimeoutId);
-      }
+      rotator.stop();
+      setIsFadingOut(false);
     };
   }, [prefersReducedMotion, isSloganPaused]);
 
@@ -176,16 +195,30 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
             {/* Left: Rotating Slogan (pauses on hover/focus or reduced motion) */}
             <div
               className="lg:col-span-6 text-left"
-              onMouseEnter={() => setIsSloganPaused(true)}
-              onMouseLeave={() => setIsSloganPaused(false)}
-              onFocus={() => setIsSloganPaused(true)}
-              onBlur={() => setIsSloganPaused(false)}
+              onMouseEnter={() => {
+                setIsSloganHovered(true);
+                setIsFadingOut(false);
+              }}
+              onMouseLeave={() => setIsSloganHovered(false)}
+              onFocus={() => {
+                setIsSloganFocused(true);
+                setIsFadingOut(false);
+              }}
+              onBlur={(e) => {
+                if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
+                  setIsSloganFocused(false);
+                }
+              }}
             >
               <div
-                className={`min-h-[130px] sm:min-h-[180px] lg:min-h-[220px] flex flex-col justify-center transition-[opacity,transform] ${
-                  isFadingOut
-                    ? 'opacity-0 -translate-y-1 duration-[650ms] ease-in-out'
-                    : 'opacity-100 translate-y-0 duration-[750ms] ease-[cubic-bezier(0.22,1,0.36,1)]'
+                className={`min-h-[130px] sm:min-h-[180px] lg:min-h-[220px] flex flex-col justify-center ${
+                  prefersReducedMotion
+                    ? 'transition-none opacity-100 translate-y-0'
+                    : `transition-[opacity,transform] ${
+                        shouldFadeOut
+                          ? 'opacity-0 -translate-y-1 duration-[650ms] ease-in-out'
+                          : 'opacity-100 translate-y-0 duration-[750ms] ease-[cubic-bezier(0.22,1,0.36,1)]'
+                      }`
                 }`}
               >
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-[3.5rem] font-extrabold tracking-tight text-white leading-[1.1]">
@@ -206,69 +239,93 @@ export function LandingPage({ onOpenRegister, onOpenLogin, onOpenDemo, onOpenLeg
                   aria-hidden="true"
                 />
 
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-4">
+                  <div className="min-w-0">
                     <div className="text-xs text-slate-400">Накопительный темп · 365 дней</div>
                     <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono tabular-nums text-white mt-0.5">
-                      148 фильмов <span className="text-xs sm:text-sm font-normal text-[#45d1c6]">(+23 к 2025)</span>
+                      148 фильмов{' '}
+                      <span
+                        className="text-xs sm:text-sm font-normal whitespace-nowrap"
+                        style={{ color: 'var(--series-2)' }}
+                      >
+                        {paceYears.comparisonText}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 text-xs font-mono shrink-0 pt-1">
-                    <span className="text-[#d6b85a]">● 24</span>
-                    <span className="text-[#45d1c6]">● 25</span>
-                    <span className="text-[#f06292]">● 26</span>
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono pt-0.5 sm:pt-1">
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap"
+                      style={{ color: 'var(--series-1)' }}
+                    >
+                      <span aria-hidden="true">●</span>
+                      <span>{paceYears.years[0]}</span>
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap"
+                      style={{ color: 'var(--series-2)' }}
+                    >
+                      <span aria-hidden="true">●</span>
+                      <span>{paceYears.years[1]}</span>
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap"
+                      style={{ color: 'var(--series-3)' }}
+                    >
+                      <span aria-hidden="true">●</span>
+                      <span>{paceYears.years[2]}</span>
+                    </span>
                   </div>
                 </div>
 
                 <svg viewBox="0 0 420 145" className="w-full h-24 sm:h-36 lg:h-48" fill="none" aria-hidden="true">
                   <defs>
                     <linearGradient id="landingPinkArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f06292" stopOpacity="0.24" />
-                      <stop offset="100%" stopColor="#f06292" stopOpacity="0" />
+                      <stop offset="0%" stopColor="var(--series-3)" stopOpacity="0.24" />
+                      <stop offset="100%" stopColor="var(--series-3)" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   <line x1="0" y1="30" x2="420" y2="30" stroke="#1e2438" strokeDasharray="3 3" />
                   <line x1="0" y1="74" x2="420" y2="74" stroke="#1e2438" strokeDasharray="3 3" />
                   <line x1="0" y1="122" x2="420" y2="122" stroke="#1e2438" />
 
-                  {/* 2024 gold */}
+                  {/* Oldest comparison year (Y-2) */}
                   <path
                     d="M 4 122 L 28 119 L 46 112 L 72 110 L 96 102 L 122 101 L 148 93 L 176 92 L 204 88 L 235 83 L 268 82 L 298 74 L 332 69 L 368 67 L 412 61"
-                    stroke="#d6b85a"
+                    stroke="var(--series-1)"
                     strokeWidth="2"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-1"
                   />
 
-                  {/* 2025 teal */}
+                  {/* Previous year (Y-1) */}
                   <path
                     d="M 4 122 L 24 116 L 48 114 L 76 102 L 102 98 L 130 87 L 160 85 L 188 77 L 216 68 L 248 64 L 278 55 L 310 52 L 344 45 L 380 43 L 412 38"
-                    stroke="#45d1c6"
+                    stroke="var(--series-2)"
                     strokeWidth="2.2"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-2"
                   />
 
-                  {/* 2026 pink area + line */}
+                  {/* Current year (Y) area + line */}
                   <path
                     d="M 4 122 L 22 111 L 44 108 L 64 94 L 92 90 L 116 78 L 142 77 L 168 61 L 198 57 L 224 46 L 254 44 L 282 30 L 312 27 L 342 20 L 378 17 L 412 10 L 412 122 L 4 122 Z"
                     fill="url(#landingPinkArea)"
                   />
                   <path
                     d="M 4 122 L 22 111 L 44 108 L 64 94 L 92 90 L 116 78 L 142 77 L 168 61 L 198 57 L 224 46 L 254 44 L 282 30 L 312 27 L 342 20 L 378 17 L 412 10"
-                    stroke="#f06292"
+                    stroke="var(--series-3)"
                     strokeWidth="2.8"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     className="landing-draw-3"
                   />
 
-                  <circle cx="412" cy="61" r="3" fill="#d6b85a" />
-                  <circle cx="412" cy="38" r="3.2" fill="#45d1c6" />
-                  <circle cx="412" cy="10" r="4.5" fill="#f06292" />
-                  <circle cx="412" cy="10" r="9" fill="#f06292" fillOpacity="0.25" />
+                  <circle cx="412" cy="61" r="3" fill="var(--series-1)" />
+                  <circle cx="412" cy="38" r="3.2" fill="var(--series-2)" />
+                  <circle cx="412" cy="10" r="4.5" fill="var(--series-3)" />
+                  <circle cx="412" cy="10" r="9" fill="var(--series-3)" fillOpacity="0.25" />
                 </svg>
 
                 <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mt-4 pt-3.5 border-t border-line text-center">

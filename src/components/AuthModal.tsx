@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
+  ArrowLeft,
   AtSign,
   Check,
   CircleUserRound,
@@ -17,6 +18,7 @@ import {
   isRepeatedSignupResponse,
   localizeAuthError,
   savePendingSignupNickname,
+  validateSignupEmail,
 } from '../lib/authHelpers';
 import {
   getProfileInitials,
@@ -151,6 +153,7 @@ export function AuthModal({
   onCancelPasswordRecovery,
 }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [registerStep, setRegisterStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -164,6 +167,8 @@ export function AuthModal({
   const [savingNickname, setSavingNickname] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
 
   const busy = loading || googleLoading || savingNickname || loggingOut;
 
@@ -185,6 +190,7 @@ export function AuthModal({
   useEffect(() => {
     if (!open) return;
     setShowEmail(false);
+    setRegisterStep(1);
     if (initialNotice) {
       setMode('login');
       setMessage(initialNotice);
@@ -202,6 +208,9 @@ export function AuthModal({
   if (!open) return null;
 
   const isProfileView = !isPasswordRecovery && Boolean(userEmail);
+  const isRegisterStep1 = mode === 'register' && registerStep === 1;
+  const isRegisterStep2 = mode === 'register' && registerStep === 2;
+  const signupEmailCheck = validateSignupEmail(email);
 
   const nicknameValidation = validateNicknameInput(nicknameDraft);
   const currentNickname = userNickname?.trim() || null;
@@ -210,7 +219,16 @@ export function AuthModal({
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
+    setRegisterStep(1);
     setMessage(null);
+  };
+
+  const handleBackToEmailStep = () => {
+    setRegisterStep(1);
+    setMessage(null);
+    requestAnimationFrame(() => {
+      emailInputRef.current?.focus();
+    });
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -219,6 +237,23 @@ export function AuthModal({
       setMessage({
         type: 'error',
         text: 'Укажите VITE_SUPABASE_URL и VITE_SUPABASE_PUBLISHABLE_KEY в .env для облачной авторизации.',
+      });
+      return;
+    }
+
+    if (isRegisterStep1) {
+      if (!signupEmailCheck.valid) {
+        setMessage({
+          type: 'error',
+          text: signupEmailCheck.error ?? 'Введите корректный email.',
+        });
+        return;
+      }
+      setEmail(signupEmailCheck.normalized);
+      setMessage(null);
+      setRegisterStep(2);
+      requestAnimationFrame(() => {
+        usernameInputRef.current?.focus();
       });
       return;
     }
@@ -736,7 +771,7 @@ export function AuthModal({
                     </div>
                   )}
 
-                  {(mode === 'login' || mode === 'register') && (
+                  {(mode === 'login' || isRegisterStep1) && (
                     <>
                       <button
                         type="button"
@@ -764,13 +799,35 @@ export function AuthModal({
                     </>
                   )}
 
-                  <form onSubmit={handleSubmit} className="space-y-3.5">
-                    {mode === 'register' && (
+                  <form onSubmit={handleSubmit} noValidate={isRegisterStep1} className="space-y-3.5">
+                    {isRegisterStep2 && (
+                      <div className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl bg-canvas/80 border border-line">
+                        <div className="min-w-0 flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-[#45d1c6] shrink-0" aria-hidden="true" />
+                          <span className="text-sm text-slate-100 truncate font-mono">
+                            {email.trim()}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={handleBackToEmailStep}
+                          aria-label="Изменить email"
+                          className="shrink-0 inline-flex items-center gap-1 min-h-8 px-2.5 py-1 rounded-lg text-xs font-medium text-[#45d1c6] hover:text-[#6ee3da] hover:bg-cardElevated disabled:opacity-40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Изменить</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {isRegisterStep2 && (
                       <div>
                         <label htmlFor="authUsername" className="block text-xs text-slate-300 mb-1">
                           Никнейм (необязательно)
                         </label>
                         <input
+                          ref={usernameInputRef}
                           id="authUsername"
                           type="text"
                           maxLength={32}
@@ -783,23 +840,31 @@ export function AuthModal({
                       </div>
                     )}
 
-                    <div>
-                      <label htmlFor="authEmail" className="block text-xs text-slate-300 mb-1">
-                        Email
-                      </label>
-                      <input
-                        id="authEmail"
-                        type="email"
-                        required
-                        autoComplete="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
-                      />
-                    </div>
+                    {(mode !== 'register' || isRegisterStep1) && (
+                      <div>
+                        <label htmlFor="authEmail" className="block text-xs text-slate-300 mb-1">
+                          Email
+                        </label>
+                        <input
+                          ref={emailInputRef}
+                          id="authEmail"
+                          type="email"
+                          required
+                          autoComplete="email"
+                          value={email}
+                          onChange={(e) => {
+                            setEmail(e.target.value);
+                            if (isRegisterStep1 && message?.type === 'error') {
+                              setMessage(null);
+                            }
+                          }}
+                          placeholder="you@example.com"
+                          className="w-full min-h-10 px-3.5 py-2.5 rounded-xl bg-canvas border border-line text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6] focus:border-[#45d1c6]"
+                        />
+                      </div>
+                    )}
 
-                    {(mode === 'login' || mode === 'register') && (
+                    {(mode === 'login' || isRegisterStep2) && (
                       <div>
                         <label htmlFor="authPassword" className="block text-xs text-slate-300 mb-1">
                           Пароль
@@ -821,7 +886,7 @@ export function AuthModal({
                             aria-hidden="true"
                           />
                         </div>
-                        {mode === 'register' && (
+                        {isRegisterStep2 && (
                           <PasswordRequirementsChecklist
                             password={password}
                             username={username}
@@ -846,15 +911,17 @@ export function AuthModal({
 
                     <button
                       type="submit"
-                      disabled={busy || !isSupabaseConfigured}
+                      disabled={busy || !isSupabaseConfigured || (isRegisterStep1 && !signupEmailCheck.valid)}
                       className="w-full inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-[#f06292] hover:bg-[#f47ba4] disabled:opacity-50 text-[#0b0e17] text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#45d1c6]"
                     >
                       {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                       {mode === 'login'
                         ? 'Войти'
-                        : mode === 'register'
-                          ? 'Создать аккаунт'
-                          : 'Отправить ссылку для сброса'}
+                        : isRegisterStep1
+                          ? 'Продолжить'
+                          : mode === 'register'
+                            ? 'Создать аккаунт'
+                            : 'Отправить ссылку для сброса'}
                     </button>
 
                     {mode === 'login' && (
