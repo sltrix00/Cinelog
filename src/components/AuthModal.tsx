@@ -12,9 +12,11 @@ import {
   X,
 } from 'lucide-react';
 import {
+  clearPendingSignupNickname,
   evaluatePasswordPolicy,
   isRepeatedSignupResponse,
   localizeAuthError,
+  savePendingSignupNickname,
 } from '../lib/authHelpers';
 import {
   getProfileInitials,
@@ -230,18 +232,16 @@ export function AuthModal({
         onAuthSuccess();
         handleClose();
       } else if (mode === 'register') {
+        const trimmedEmail = email.trim();
         const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          throw new Error('Введите никнейм.');
-        }
         const registerNicknameValidation = validateNicknameInput(trimmedUsername);
-        if (!registerNicknameValidation.valid || !registerNicknameValidation.normalized) {
+        if (!registerNicknameValidation.valid) {
           throw new Error(registerNicknameValidation.error ?? 'Некорректный никнейм.');
         }
 
         const passwordPolicy = evaluatePasswordPolicy(password, {
           username: registerNicknameValidation.normalized,
-          email: email.trim(),
+          email: trimmedEmail,
         });
         if (!passwordPolicy.isValid) {
           if (!passwordPolicy.hasMinLength) {
@@ -254,15 +254,21 @@ export function AuthModal({
         }
 
         const { data, error } = await signUpWithEmail(
-          email.trim(),
+          trimmedEmail,
           password,
-          registerNicknameValidation.normalized
+          registerNicknameValidation.normalized ?? undefined
         );
         if (error) throw error;
+        if (registerNicknameValidation.normalized) {
+          savePendingSignupNickname(trimmedEmail, registerNicknameValidation.normalized);
+        } else {
+          clearPendingSignupNickname();
+        }
         if (data.session) {
           onAuthSuccess();
           handleClose();
         } else if (isRepeatedSignupResponse(data.user)) {
+          clearPendingSignupNickname();
           setMessage({
             type: 'error',
             text: 'Если аккаунт с этим email уже существует (например, через Google), войдите в аккаунт или воспользуйтесь восстановлением пароля.',
@@ -762,13 +768,11 @@ export function AuthModal({
                     {mode === 'register' && (
                       <div>
                         <label htmlFor="authUsername" className="block text-xs text-slate-300 mb-1">
-                          Никнейм
+                          Никнейм (необязательно)
                         </label>
                         <input
                           id="authUsername"
                           type="text"
-                          required
-                          minLength={3}
                           maxLength={32}
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}

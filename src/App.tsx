@@ -30,11 +30,17 @@ import {
   getReferenceDateForToday,
   resolveComparisonYears,
 } from './lib/analytics';
-import { parseAuthCallbackError, resolveAuthSyncAction } from './lib/authHelpers';
+import {
+  clearPendingSignupNickname,
+  parseAuthCallbackError,
+  peekPendingSignupNickname,
+  resolveAuthSyncAction,
+} from './lib/authHelpers';
 import { parsedRowsToLocalWatchEntries } from './lib/csvImport';
 import { DEMO_ENTRIES, SIM_DAY_OF_YEAR, SIM_YEAR } from './lib/demoData';
 import { exportWatchEntriesAsCsv, exportWatchEntriesAsJson } from './lib/exportData';
 import { formatDashboardSubtitle, resolveProfileNickname } from './lib/headerHelpers';
+import { updateUserNickname } from './lib/profileService';
 import {
   applyThemeToDocument,
   loadUserSettings,
@@ -132,18 +138,49 @@ export function App() {
   }, []);
 
   const loadUserProfile = useCallback(
-    async (user: { id: string; user_metadata?: Record<string, unknown> | null }) => {
+    async (user: {
+      id: string;
+      email?: string | null;
+      user_metadata?: Record<string, unknown> | null;
+    }) => {
       activeUserIdRef.current = user.id;
       try {
         const profile = await fetchUserProfile(user.id);
         if (activeUserIdRef.current !== user.id) return;
-        setUserNickname(resolveProfileNickname(profile, user.user_metadata));
+
+        const existingNickname = resolveProfileNickname(profile, user.user_metadata);
+        if (existingNickname) {
+          clearPendingSignupNickname();
+          setUserNickname(existingNickname);
+          return;
+        }
+
+        const pendingNickname = peekPendingSignupNickname(user.email);
+        if (pendingNickname) {
+          try {
+            const saved = await updateUserNickname(pendingNickname);
+            clearPendingSignupNickname();
+            if (activeUserIdRef.current !== user.id) return;
+            setUserNickname(saved);
+            return;
+          } catch (err) {
+            clearPendingSignupNickname();
+            if (activeUserIdRef.current !== user.id) return;
+            setUserNickname(null);
+            if (err instanceof Error && err.message) {
+              showToast(err.message, 'error');
+            }
+            return;
+          }
+        }
+
+        setUserNickname(null);
       } catch {
         if (activeUserIdRef.current !== user.id) return;
         setUserNickname(resolveProfileNickname(null, user.user_metadata));
       }
     },
-    []
+    [showToast]
   );
 
   const loadCloudEntries = useCallback(

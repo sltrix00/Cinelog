@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearPendingSignupNickname,
   evaluatePasswordPolicy,
   getAuthRedirectUrl,
   isRepeatedSignupResponse,
   localizeAuthError,
   parseAuthCallbackError,
   parseGoogleProviderEnabled,
+  peekPendingSignupNickname,
   resolveAuthSyncAction,
+  savePendingSignupNickname,
 } from './authHelpers';
 
 describe('getAuthRedirectUrl', () => {
@@ -270,5 +273,50 @@ describe('resolveAuthSyncAction', () => {
     expect(resolveAuthSyncAction(null, 'user-1', 'PASSWORD_RECOVERY')).toBe('password_recovery');
     expect(resolveAuthSyncAction('user-1', null, 'SIGNED_OUT')).toBe('sign_out');
     expect(resolveAuthSyncAction(null, null, 'INITIAL_SESSION')).toBe('sign_out');
+  });
+});
+
+describe('pending signup nickname helpers', () => {
+  function createMemoryStorage(): Storage {
+    const map = new Map<string, string>();
+    return {
+      get length() {
+        return map.size;
+      },
+      clear() {
+        map.clear();
+      },
+      getItem(key: string) {
+        return map.has(key) ? (map.get(key) ?? null) : null;
+      },
+      key(index: number) {
+        return Array.from(map.keys())[index] ?? null;
+      },
+      removeItem(key: string) {
+        map.delete(key);
+      },
+      setItem(key: string, value: string) {
+        map.set(key, value);
+      },
+    };
+  }
+
+  it('stores and retrieves pending nickname for matching email (case-insensitive)', () => {
+    const store = createMemoryStorage();
+    savePendingSignupNickname('User@Example.com', 'cinephile_2026', store, 1000);
+    expect(peekPendingSignupNickname('user@example.com', store, 2000)).toBe('cinephile_2026');
+    expect(peekPendingSignupNickname('other@example.com', store, 2000)).toBeNull();
+  });
+
+  it('expires pending nickname after 24 hours and supports explicit clear', () => {
+    const store = createMemoryStorage();
+    savePendingSignupNickname('user@example.com', 'cinephile_2026', store, 1000);
+    expect(
+      peekPendingSignupNickname('user@example.com', store, 1000 + 24 * 60 * 60 * 1000 + 1)
+    ).toBeNull();
+
+    savePendingSignupNickname('user@example.com', 'cinephile_2026', store, 5000);
+    clearPendingSignupNickname(store);
+    expect(peekPendingSignupNickname('user@example.com', store, 6000)).toBeNull();
   });
 });

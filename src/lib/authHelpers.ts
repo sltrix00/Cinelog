@@ -193,6 +193,102 @@ export type AuthSyncAction =
   | 'sign_out'
   | 'ignore';
 
+const PENDING_SIGNUP_NICKNAME_KEY = 'cinelog_pending_signup_nickname_v1';
+const PENDING_SIGNUP_NICKNAME_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface PendingSignupNicknameRecord {
+  email: string;
+  username: string;
+  createdAt: number;
+}
+
+function getSafeLocalStorage(storage?: Storage | null): Storage | null {
+  if (storage !== undefined) return storage;
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingSignupNickname(
+  email: string,
+  username: string | null | undefined,
+  storage?: Storage | null,
+  now: number = Date.now()
+): void {
+  const store = getSafeLocalStorage(storage);
+  if (!store) return;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const trimmedUsername = username?.trim() ?? '';
+  if (!normalizedEmail || !trimmedUsername) {
+    try {
+      store.removeItem(PENDING_SIGNUP_NICKNAME_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+    return;
+  }
+
+  const record: PendingSignupNicknameRecord = {
+    email: normalizedEmail,
+    username: trimmedUsername,
+    createdAt: now,
+  };
+  try {
+    store.setItem(PENDING_SIGNUP_NICKNAME_KEY, JSON.stringify(record));
+  } catch {
+    // Ignore storage quota or private-mode errors
+  }
+}
+
+export function peekPendingSignupNickname(
+  email: string | null | undefined,
+  storage?: Storage | null,
+  now: number = Date.now()
+): string | null {
+  const store = getSafeLocalStorage(storage);
+  const normalizedEmail = email?.trim().toLowerCase() ?? '';
+  if (!store || !normalizedEmail) return null;
+
+  try {
+    const raw = store.getItem(PENDING_SIGNUP_NICKNAME_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingSignupNicknameRecord>;
+    if (
+      typeof parsed.email !== 'string' ||
+      typeof parsed.username !== 'string' ||
+      typeof parsed.createdAt !== 'number'
+    ) {
+      store.removeItem(PENDING_SIGNUP_NICKNAME_KEY);
+      return null;
+    }
+    if (now - parsed.createdAt > PENDING_SIGNUP_NICKNAME_TTL_MS) {
+      store.removeItem(PENDING_SIGNUP_NICKNAME_KEY);
+      return null;
+    }
+    if (parsed.email !== normalizedEmail) {
+      return null;
+    }
+    const trimmed = parsed.username.trim();
+    return trimmed ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingSignupNickname(storage?: Storage | null): void {
+  const store = getSafeLocalStorage(storage);
+  if (!store) return;
+  try {
+    store.removeItem(PENDING_SIGNUP_NICKNAME_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 /**
  * Decides how the app should react to an auth state event so that background
  * token refreshes or repeated SIGNED_IN events emitted by Supabase on tab
